@@ -1,0 +1,425 @@
+[
+  {
+    "path": "brand/promo_app_mascot.png",
+    "w": 816,
+    "h": 575,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 258405,
+    "note": "官方 APP 宣传图（吉祥物 + 手写体）"
+  },
+  {
+    "path": "brand/wordmark_18comic_2019.png",
+    "w": 200,
+    "h": 63,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 22995,
+    "note": "横版 wordmark｜2019 早期小尺寸"
+  },
+  {
+    "path": "brand/wordmark_18comic_app.png",
+    "w": 837,
+    "h": 263,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 163624,
+    "note": "横版 wordmark｜APP 落地页新年版"
+  },
+  {
+    "path": "brand/wordmark_18comic_newyear.png",
+    "w": 837,
+    "h": 263,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 299941,
+    "note": "横版 wordmark｜新年金币版（禁漫天堂 + 18comic）"
+  },
+  {
+    "path": "brand/wordmark_18comic_pink_2020.png",
+    "w": 837,
+    "h": 263,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 158044,
+    "note": "横版 wordmark｜2020 粉色长条版"
+  },
+  {
+    "path": "brand/wordmark_18comic_sakura.png",
+    "w": 837,
+    "h": 263,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 155332,
+    "note": "横版 wordmark｜樱花版"
+  },
+  {
+    "path": "brand/wordmark_jmcomic_halloween.png",
+    "w": 837,
+    "h": 263,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 157013,
+    "note": "横版 wordmark｜万圣节版"
+  },
+  {
+    "path": "brand/wordmark_jmcomic_xmas.png",
+    "w": 837,
+    "h": 263,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 180700,
+    "note": "横版 wordmark｜圣诞版"
+  },
+  {
+    "path": "favicon/app_icon_multi.ico",
+    "w": 256,
+    "h": 256,
+    "format": "ICO",
+    "frames": 1,
+    "bytes": 183897,
+    "note": "多尺寸应用图标 ico（16/32/48/64/128/256）"
+  },
+  {
+    "path": "favicon/favicon_128.png",
+    "w": 128,
+    "h": 128,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 38076,
+    "note": "favicon PNG｜128px（由新年版方形标记缩放）"
+  },
+  {
+    "path": "favicon/favicon_16.png",
+    "w": 16,
+    "h": 16,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 961,
+    "note": "favicon PNG｜16px（由新年版方形标记缩放）"
+  },
+  {
+    "path": "favicon/favicon_180.png",
+    "w": 180,
+    "h": 180,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 69088,
+    "note": "favicon PNG｜180px（由新年版方形标记缩放）"
+  },
+  {
+    "path": "favicon/favicon_18comic.ico",
+    "w": 16,
+    "h": 16,
+    "format": "ICO",
+    "frames": 1,
+    "bytes": 1150,
+    "note": "站点原始 favicon（16x16，2019 归档原文件）"
+  },
+  {
+    "path": "favicon/favicon_32.png",
+    "w": 32,
+    "h": 32,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 3213,
+    "note": "favicon PNG｜32px（由新年版方形标记缩放）"
+  },
+  {
+    "path": "favicon/favicon_48.png",
+    "w": 48,
+    "h": 48,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 6654,
+    "note": "favicon PNG｜48px（由新年版方形标记缩放）"
+  },
+  {
+    "path": "favicon/favicon_64.png",
+    "w": 64,
+    "h": 64,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 11194,
+    "note": "favicon PNG｜64px（由新年版方形标记缩放）"
+  },
+  {
+    "path": "loading/loading_cat_160.gif",
+    "w": 160,
+    "h": 120,
+    "format": "GIF",
+    "frames": 41,
+    "bytes": 134741,
+    "note": "加载动画｜160px 宽（App 内指示器，灰底）"
+  },
+  {
+    "path": "loading/loading_cat_160_alpha.gif",
+    "w": 160,
+    "h": 120,
+    "format": "GIF",
+    "frames": 41,
+    "bytes": 98682,
+    "note": "加载动画｜160px 宽 透明底（推荐用于 Flutter）"
+  },
+  {
+    "path": "loading/loading_cat_480.gif",
+    "w": 480,
+    "h": 360,
+    "format": "GIF",
+    "frames": 41,
+    "bytes": 568090,
+    "note": "加载动画｜黑猫回首，41 帧 480x360（站点原版，灰底）"
+  },
+  {
+    "path": "loading/loading_cat_480_alpha.gif",
+    "w": 480,
+    "h": 360,
+    "format": "GIF",
+    "frames": 41,
+    "bytes": 514697,
+    "note": "加载动画｜480x360 透明底（抠掉灰底，推荐）"
+  },
+  {
+    "path": "loading/loading_cat_96.gif",
+    "w": 96,
+    "h": 72,
+    "format": "GIF",
+    "frames": 41,
+    "bytes": 69001,
+    "note": "加载动画｜96px 宽（小指示器，灰底）"
+  },
+  {
+    "path": "loading/loading_cat_96_alpha.gif",
+    "w": 96,
+    "h": 72,
+    "format": "GIF",
+    "frames": 41,
+    "bytes": 49814,
+    "note": "加载动画｜96px 宽 透明底"
+  },
+  {
+    "path": "loading/loading_cat_frame1.png",
+    "w": 480,
+    "h": 360,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 54330,
+    "note": "加载动画首帧静态图（骨架/占位）"
+  },
+  {
+    "path": "loading/loading_cat_frame1_256.png",
+    "w": 256,
+    "h": 192,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 22463,
+    "note": "加载动画首帧 256px 宽"
+  },
+  {
+    "path": "loading/loading_cat_frame1_alpha.png",
+    "w": 480,
+    "h": 360,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 46456,
+    "note": "加载动画首帧静态图（透明底）"
+  },
+  {
+    "path": "mascot/app_icon_512.png",
+    "w": 512,
+    "h": 512,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 391762,
+    "note": "应用图标 512x512（Android/iOS 主图标）"
+  },
+  {
+    "path": "mascot/mark_halloween_256.png",
+    "w": 256,
+    "h": 256,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 102212,
+    "note": "方形吉祥物标记｜万圣节版 256px"
+  },
+  {
+    "path": "mascot/mark_halloween_512.png",
+    "w": 512,
+    "h": 512,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 304017,
+    "note": "方形吉祥物标记｜万圣节版 512px"
+  },
+  {
+    "path": "mascot/mark_newyear_256.png",
+    "w": 256,
+    "h": 256,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 123579,
+    "note": "方形吉祥物标记｜新年版 256px"
+  },
+  {
+    "path": "mascot/mark_newyear_512.png",
+    "w": 512,
+    "h": 512,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 380553,
+    "note": "方形吉祥物标记｜新年版 512px"
+  },
+  {
+    "path": "mascot/mark_pink_256.png",
+    "w": 256,
+    "h": 256,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 115702,
+    "note": "方形吉祥物标记｜粉色版 256px"
+  },
+  {
+    "path": "mascot/mark_pink_512.png",
+    "w": 512,
+    "h": 512,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 349353,
+    "note": "方形吉祥物标记｜粉色版 512px"
+  },
+  {
+    "path": "mascot/mark_sakura_256.png",
+    "w": 256,
+    "h": 256,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 115035,
+    "note": "方形吉祥物标记｜樱花版 256px"
+  },
+  {
+    "path": "mascot/mark_sakura_512.png",
+    "w": 512,
+    "h": 512,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 355199,
+    "note": "方形吉祥物标记｜樱花版 512px"
+  },
+  {
+    "path": "mascot/mark_xmas_256.png",
+    "w": 256,
+    "h": 256,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 120732,
+    "note": "方形吉祥物标记｜圣诞版 256px"
+  },
+  {
+    "path": "mascot/mark_xmas_512.png",
+    "w": 512,
+    "h": 512,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 374014,
+    "note": "方形吉祥物标记｜圣诞版 512px"
+  },
+  {
+    "path": "ui/icon_bbs.png",
+    "w": 32,
+    "h": 32,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 2770,
+    "note": "论坛气泡图标 32x32"
+  },
+  {
+    "path": "ui/icon_day.png",
+    "w": 48,
+    "h": 48,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 1158,
+    "note": "日榜日历角标 48x48"
+  },
+  {
+    "path": "ui/icon_hot.png",
+    "w": 48,
+    "h": 48,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 1536,
+    "note": "热门火焰角标 48x48"
+  },
+  {
+    "path": "ui/icon_jcoin.png",
+    "w": 50,
+    "h": 50,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 1260,
+    "note": "J 币币种图标 50x50"
+  },
+  {
+    "path": "ui/icon_more.png",
+    "w": 128,
+    "h": 128,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 3105,
+    "note": "更多（加号）图标 128x128"
+  },
+  {
+    "path": "ui/icon_new.png",
+    "w": 64,
+    "h": 64,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 4639,
+    "note": "NEW 角标 64x64"
+  },
+  {
+    "path": "ui/icon_rocket_280.png",
+    "w": 280,
+    "h": 280,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 19733,
+    "note": "启动/发射火箭图标 280x280"
+  },
+  {
+    "path": "ui/icon_theme.png",
+    "w": 64,
+    "h": 64,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 1470,
+    "note": "主题切换图标 64x64"
+  },
+  {
+    "path": "ui/icon_week.png",
+    "w": 48,
+    "h": 48,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 895,
+    "note": "周榜日历角标 48x48"
+  },
+  {
+    "path": "ui/qr_app.png",
+    "w": 400,
+    "h": 400,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 28506,
+    "note": "官方 APP 下载二维码"
+  },
+  {
+    "path": "ui/social_sprite.png",
+    "w": 374,
+    "h": 26,
+    "format": "PNG",
+    "frames": 1,
+    "bytes": 34338,
+    "note": "社交平台图标雪碧图（14 枚）"
+  }
+]

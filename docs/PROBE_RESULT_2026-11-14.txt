@@ -1,0 +1,84 @@
+JM 移动端协议探测结果留档
+执行时间: 2026-11-14 (Asia/Shanghai)
+执行命令: pwsh -File .\tools\probe_api.ps1
+网络路径: 系统代理 FlClash http://127.0.0.1:7890（脚本自动从注册表识别）
+结果: 全绿（exit 0）
+
+--------------------------------------------------------------------------
+使用代理: http://127.0.0.1:7890
+API 线路: https://www.cdnbtd.cc
+
+=== 1. /setting（引导：cookie + img_host + 版本） ====================
+jm3_version = 2.1.13
+img_host    = https://cdn-msp.jmdanjonproxy.xyz
+cookies     = 5 个（会话内保留，后续请求自动携带）
+
+=== 2. /promote（首页分节横滑，App 首页主数据源） ============================
+模块数 = 8
+  id=26    type=promote              items=30  title=連載更新→右滑看更多→
+  id=29    type=promote              items=30  title=C108&推薦本本
+  id=30    type=promote              items=30  title=禁漫去碼&全彩化
+  id=998   type=not_in_category_id   items=30  title=禁漫漢化組
+  id=999   type=category_id          items=30  title=韓漫更新
+  id=1000  type=category_id          items=30  title=其他更新
+  id=1001  type=library              items=3   title=禁漫書庫
+  id=1002  type=novels               items=6   title=禁漫小說
+
+  首个条目字段样例:
+  {"id":"1485385","author":"N/A","name":"轉生到不認識的世界，作為母龍活下去[宮野金太郎]しらない世界でりっぱなメスドラゴンとして生きます！","image":"","category":{"id":"2","title":"單本"},"category_sub":{"id":null,"title":null},"liked":false,"is_favorite":false,"update_at":1794643443}
+
+=== 3. /latest?page=1（首页「最新上架」） ===============================
+返回条数 = 80，首条 id = 1490663
+  {"id":"1490663","author":"N/A","name":"榜一大哥的女主播收藏計劃 [中文插畫小說] Vol.4 [AI Generated]","image":"","category":{"id":"4","title":"其他類"},"category_sub":{"id":null,"title":null},"liked":false,"is_favorite":false,"update_at":1794624453}
+
+=== 4. /categories?page=1（首页分类 chips） =========================
+顶层分类 = 10
+  id=0    total=0        name=最新A漫
+  id=1    total=357417   name=同人
+  id=2    total=43543    name=單本
+  id=3    total=119982   name=短篇
+  id=4    total=53200    name=其他類
+  id=5    total=131914   name=韓漫
+  id=6    total=397295   name=English Manga
+  id=7    total=0        name=Cosplay
+  id=8    total=0        name=3D
+  id=9    total=0        name=禁漫漢化組
+  子分类样例: 1:漢化, 2:日語, 3:CG圖集, 20:禁漫去碼, 23:禁漫上色
+
+=== 5. /categories/filter（首页无限流，o 排序枚举） =======================
+  o=mr    total=10000  本页=80  首条=1490702
+  o=mv    total=10000  本页=80  首条=1114751
+  o=mv_m  total=2072   本页=80  首条=1114751
+  o=mv_w  total=795    本页=80  首条=1114751
+  o=mv_t  total=121    本页=80  首条=1114751
+  o=md    total=10000  本页=80  首条=566986
+  o=mp    total=10000  本页=80  首条=235953
+
+=== 6. /album?id=1490702（详情） ==================================
+name         = (C95) [いけちか (池下真上)] 子供を甘く見るな。 Peaceful days (子供を甘く見るな。總集編) (艦隊これくしょん -艦これ-) [中國翻譯]
+author       = 池下真上
+total_photos = 19
+series_id    = 0 / series 章节数 = 0
+
+=== 7. /chapter?id=1490702（章节图片清单） ============================
+images = 19 张，首张 = 00001.webp
+
+=== 8. /chapter_view_template（scramble_id，切片阈值） ===============
+scramble_id = 220980
+
+=== 9. 图床自检（封面 / 正文图） =========================================
+  封面 _3x4.jpg → 200 image/jpeg 87590 B
+  封面 .jpg     → 200 image/jpeg 65858 B
+  正文图 00001.webp → 200 image/webp 569044 B
+
+=== 完成 ========================================================
+--------------------------------------------------------------------------
+
+补充观察（同批次额外探测）:
+- /search?search_query=350234 → redirect_aid=350234（命中车号直达详情）
+- /serialization?page=1 → {"error":"參數錯誤"}（移动端没有该端点，别用）
+- /promote 解密结果为顶层数组；/latest 同样是顶层数组（原 Kotlin 客户端只解析对象，Dart 侧需兼容两种根类型）
+- 图床地址会漂移：同一天出现过 cdn-msp12 / tencent / cdn-msp 三个前缀，必须动态读 /setting.img_host
+- 后续复跑若出现 "SSL/TLS handshake" 全线路失败：属本机代理节点波动，换节点或手机热点后重跑即可
+
+留档用途: 作为 test/fixtures/*.json 的真实结构参照；协议变更时与新一次 probe 输出逐项对比。
