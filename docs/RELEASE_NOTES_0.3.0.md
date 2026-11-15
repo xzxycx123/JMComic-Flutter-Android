@@ -46,7 +46,22 @@
 - 0.2.0 的用户名/密码没有被保存过，升级后仍只需重新登录一次（cookie 若仍有效则自动恢复）。
 - 已知限制：点赞不可取消；评论不支持点赞/删除/举报（接口未验证）。
 
-## 校验
+## 下载与安装
+
+| 项 | 值 |
+|---|---|
+| 产物 | `JMComic-0.3.0-release.apk`（63.4 MB） |
+| 包名 / 版本 | `com.jmcomic.jm_comic` · versionName `0.3.0` · versionCode `4` |
+| minSdk / targetSdk | 29（Android 8.0） / 35 |
+| SHA256 | `756c2330fad389065ec80c24e36b11df34ffd0cfbf4afbdcb4f1c0692a5805fe` |
+
+```bash
+adb install -r JMComic-0.3.0-release.apk    # 覆盖安装；必要时 adb uninstall com.jmcomic.jm_comic
+```
+
+APK 使用 debug keystore 签名，仅自用 / 侧载，不上架应用商店。
+
+## 构建与校验
 
 ```powershell
 flutter analyze      # 0 issue
