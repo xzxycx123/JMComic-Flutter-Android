@@ -80,6 +80,39 @@ void main() {
   });
 
   group('ReaderHud', () {
+    testWidgets('顶部条避开系统状态栏（padding.top）', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(padding: EdgeInsets.only(top: 28)),
+            child: Scaffold(
+              body: SizedBox(
+                height: 500,
+                child: ReaderHud(
+                  title: '测试',
+                  page: 1,
+                  total: 2,
+                  mode: ReaderMode.paged,
+                  visible: true,
+                  onExit: () {},
+                  onToggleMode: () {},
+                  onJump: (_) {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final titleRect = tester.getRect(find.textContaining('第 1/2 页'));
+      expect(
+        titleRect.top,
+        greaterThanOrEqualTo(28),
+        reason: 'HUD 文字必须在状态栏之下，不能与时间/信号图标重叠',
+      );
+    });
+
     testWidgets('显示页码与百分比，拖动回调触发', (tester) async {
       var jumped = 0;
       await tester.pumpWidget(

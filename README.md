@@ -82,8 +82,9 @@ flutter doctor -v
 flutter config --android-sdk "$ANDROID_SDK_ROOT"   # Windows 示例：C:\Users\<你>\AppData\Local\Android\Sdk
 flutter doctor --android-licenses
 
-# 3) 依赖 + 素材派生（品牌位图 / 桌面图标 / 启动图）
+# 3) 依赖 + 素材派生（品牌位图 / 桌面图标 / 启动图；脚本需要 Pillow）
 flutter pub get
+pip install pillow            # 仅素材派生脚本需要
 python tools/build_app_assets.py
 
 # 4) 静态检查与测试
