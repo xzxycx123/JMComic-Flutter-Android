@@ -1,6 +1,7 @@
 # JMComic for Android（非官方 Flutter 客户端）
 
-一个 Android 优先、**本地优先**的 JM 客户端：首页浏览、搜索、阅读器、PDF 下载归档，以及**登录后可双向同步的收藏夹**。
+一个 Android 优先、**本地优先**的 JM 客户端：首页浏览、搜索、阅读器、PDF 下载归档，以及登录后可双向同步的收藏夹。
+（主要是JM官方的太丑太卡了，所以重做了一个）
 
 > 本项目是非官方第三方客户端，与站点运营方无关；所有内容版权归原作者与站点所有，本客户端仅做浏览与个人离线备份，不提供内容源、不绕过任何付费/权限。
 > 仅支持 Android 8.0+（minSdk 29）。iOS 目录保留但未验收。
@@ -16,14 +17,14 @@
 
 | 模块 | 说明 |
 |---|---|
-| 首页 | 轮播 + 分类 chips + 排序（最新/日榜/周榜/月榜/人气）+ 无限流；**冷启动先用上次缓存秒开，再后台刷新替换** |
+| 首页 | 轮播 + 分类 chips + 排序（最新/日榜/周榜/月榜/人气）+ 无限流；**冷启动先用上次缓存秒开**；**标签页内存缓存 + 空闲预热**：点回已看过的分类立刻出内容，超过 5 分钟才在后台静默刷新 |
 | 搜索 | 纯车号（`350234` / `JM350234` / 链接）直达详情；关键词走 `/search` 分页 |
-| 详情 | 模糊封面头、章节列表、统计与标签、相关推荐、双 CTA（阅读 / 下载） |
-| 阅读器 | 上下滚动 / 左右翻页双模式，三分区点击、HUD 进度、双击缩放、进度记忆；HUD 已避开系统状态栏 |
+| 详情 | 模糊封面头、章节列表、统计与标签、**点赞按钮**、**评论区（列表 + 发评论 + 剧透标记）**、相关推荐、双 CTA（阅读 / 下载） |
+| 阅读器 | 上下滚动 / 左右翻页双模式，三分区点击、HUD 进度、**双指缩放 + 双击放大**、进度记忆；「翻页动画」开关关掉即瞬切 |
 | 下载 | 批量车号 → 队列（3 并发）→ 切片还原 → PNG → PDF，落到 `Documents/JMComics/`，同名自动 `(2)` |
 | 前台服务 | 下载中锁屏/切后台不中断，通知栏显示进度 |
-| 收藏 | **本地账本 + 服务端镜像**：断网可收藏、撤销、分文件夹、按更新时间排序；登录后对账并自愈 toggle |
-| 账号 | 会话 cookie 为主，**不保存密码**；冷启动一次校验，失效回本地模式 |
+| 收藏 | **五角星一键收藏**；**本地账本 + 服务端镜像**：断网可收藏、撤销、分文件夹、按更新时间排序；登录后对账并自愈 toggle |
+| 账号 | 会话 cookie 为主，**不保存密码**；登录成功即**自动双向同步收藏**（云端拉回 + 本地补推）；冷启动一次校验，失效回本地模式 |
 | 历史 | 下载记录按「全部 / 已完成 / 失败 / 已取消」筛选，可打开、重试、删除 |
 | 其它 | 深浅主题、线路健康度与测速、本地搜索历史、GPL-3.0 |
 
@@ -31,26 +32,27 @@
 
 ## 截图
 
-| 首页 | 详情 | 阅读器 |
-|---|---|---|
-| ![](docs/ui-draft-home.png) | ![](docs/ui-draft-detail.png) | ![](docs/ui-draft-reader.png) |
+实机截图（Android 14，1080×2408），原图见 [`ref img/`](ref%20img/)。
 
-| 搜索 | 下载 | 我的 |
-|---|---|---|
-| ![](docs/ui-draft-search.png) | ![](docs/ui-draft-download.png) | ![](docs/ui-draft-mine.png) |
+| 首页 | 搜索 |
+|---|---|
+| ![](ref%20img/Screenshot_20261115_145850.jpg) | ![](ref%20img/Screenshot_20261115_150122.jpg) |
+| **详情** | **我的** |
+| ![](ref%20img/Screenshot_20261115_150147.jpg) | ![](ref%20img/Screenshot_20261115_150025.jpg) |
 
-> 截图来自 `docs/ui-draft.html` 的交互草稿，实际界面以真机为准。
+> 截图取自 0.2.x 实机；0.3.0 新增的**五角星收藏、点赞按钮、评论区、自动同步**见
+> [`docs/INTERACTION.md`](docs/INTERACTION.md) 与 [`docs/RELEASE_NOTES_0.3.0.md`](docs/RELEASE_NOTES_0.3.0.md)。
 
 ---
 
 ## 下载安装
 
-1. 打开仓库的 **Releases** 页，下载最新 `JMComic-x.y.z-release.apk`；
+1. 打开仓库的 **Releases** 页，下载最新 `JMComic-0.3.0-release.apk`；
 2. 允许「安装未知来源应用」后安装（APK 使用 debug keystore 签名，仅自用，不上架应用商店）；
 3. 首次启动如提示通知权限，建议允许（下载进度通知需要它）。
 
 ```bash
-adb install -r JMComic-0.2.0-release.apk
+adb install -r JMComic-0.3.0-release.apk
 ```
 
 ---
@@ -134,9 +136,9 @@ lib/
 ├─ data/       模型、协议源（crypto/api/catalog/probe/parser）、Hive 存储、仓储（home/album/favorites/auth/…）
 └─ features/   shell（两 tab）、home、album、reader、search、mine、download（含 engine）、collect、auth
 test/          单元 + widget 测试（139 通过 / 2 实网 skip）+ fixtures
-tools/         probe_api.ps1 / probe_hosts.ps1 / scaffold.ps1 / apply_android_config.ps1 / build_app_assets.py
+tools/         probe_api.ps1 / probe_forum.ps1 / probe_hosts.ps1 / scaffold.ps1 / apply_android_config.ps1 / build_app_assets.py
 Plan/          交接文档 PLAN.md、网络层修复记录 Fix Plan.md
-docs/          设计文档（NETWORK_MODULE / FAVORITES）、UI 草稿、审查记录
+docs/          设计文档（NETWORK_MODULE / FAVORITES / INTERACTION）、UI 草稿、审查记录
 ```
 
 ### 协议与实现说明
@@ -144,7 +146,8 @@ docs/          设计文档（NETWORK_MODULE / FAVORITES）、UI 草稿、审查
 - API：移动端 JSON 接口，`token = md5(ts + salt)`，响应 `AES-256-ECB/PKCS7`（key = md5hex 的 32 个 ASCII 字节）；线路与图床地址会漂移，客户端内置种子 + 多源发现 + 健康度排序。
 - 下载：与 [JmScript](https://github.com/hect0x7) 的 Kotlin 实现 1:1 对齐（切片段数算法、PNG 重编码、PDF 页尺寸上限 14400、`IS_PENDING` 写 MediaStore）。
 - 收藏：`POST /favorite` 是 **toggle**，因此同步时必须核对返回的 `type`，不符就反向补发一次（防静默丢收藏）。
-- 站点域名与字段随时可能变化，协议争议以 `tools/probe_api.ps1` 的实时输出为准。
+- 互动：点赞 `POST /like {id}`（只回 `{code,msg,status}`、不回计数）、评论列表 `GET /forum?page&aid&mode=manhua`（游客可读）、发评论 `POST /comment`（multipart `comment/aid/status/comment_id`，需登录，未登录返回 401）。
+- 站点域名与字段随时可能变化，协议争议以 `tools/probe_api.ps1` / `tools/probe_forum.ps1` 的实时输出为准。
 
 ---
 
@@ -169,8 +172,5 @@ pwsh -File tools/check_ui_rules.ps1                                             
 全文见 [LICENSE](LICENSE)；你也可以在 App 内「我的 → 关于 → 开源许可」查看。
 
 主要参考与致谢：
-
-- [JmScript](https://github.com/hect0x7)（Kotlin 下载/PDF 实现，行为基准）
 - [JMComic-Crawler-Python](https://github.com/hect0x7/JMComic-Crawler-Python)（协议字段核对）
 - [jm-mobile](https://github.com/Dedicatus546/jm-mobile)（登录/收藏流程参考，GPL-3.0）
-- Flutter / Riverpod / Dio / pdf / image 等开源项目

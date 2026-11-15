@@ -12,6 +12,7 @@ import '../models/jm_album_detail.dart';
 import '../models/jm_album_summary.dart';
 import '../models/jm_category.dart';
 import '../models/jm_chapter.dart';
+import '../models/jm_comment.dart';
 import '../models/jm_favorite_list.dart';
 import '../models/jm_host_entry.dart';
 import '../models/jm_promote_module.dart';
@@ -87,6 +88,25 @@ abstract class JmApi {
 
   /// 用收藏列表探一次会话是否还有效（true=有效，false=未登录/失效；网络错误会抛出）。
   Future<bool> pingFavorite();
+
+  // ---------------------------------------------------------------- 互动（1.0）
+  /// `POST /like {id}`：点赞。返回体是明文 `{code,msg,status}`，无计数。
+  Future<void> likeAlbum(String albumId);
+
+  /// `GET /forum?page&aid&mode`：评论列表（未登录也可读）。
+  Future<JmCommentPage> fetchComments({
+    required String albumId,
+    int page = 1,
+    String mode = 'manhua',
+  });
+
+  /// `POST /comment`（multipart `comment` / `aid` / `status` / `comment_id`）；需要登录。
+  Future<String> postComment({
+    required String albumId,
+    required String content,
+    bool spoiler = false,
+    String? parentId,
+  });
 
   Future<void> setCookie(String name, String value);
 
@@ -508,6 +528,71 @@ class JmApiClient implements JmApi {
 
   @override
   void restoreCookies(Map<String, String> cookies) => _jar.restore(cookies);
+
+  // ---------------------------------------------------------------- 互动（点赞 / 评论）
+  @override
+  Future<void> likeAlbum(String albumId) async {
+    // 返回体是明文 {code,msg,status}，不带计数：调用方乐观 +1，失败再回滚。
+    final decoded = await _requestApi(
+      '/like',
+      method: 'POST',
+      form: <String, String>{'id': albumId},
+    );
+    final map = asMap(decoded);
+    final status = (asString(map?['status']) ?? '').toLowerCase();
+    final code = asInt(map?['code'], 200);
+    if (status.isNotEmpty && status != 'success' && status != 'ok') {
+      throw JmContentException('点赞失败：${asString(map?['msg']) ?? status}');
+    }
+    if (code != 200) {
+      throw JmContentException('点赞失败：${asString(map?['msg']) ?? 'code=$code'}');
+    }
+  }
+
+  @override
+  Future<JmCommentPage> fetchComments({
+    required String albumId,
+    int page = 1,
+    String mode = 'manhua',
+  }) async {
+    final decoded = await _requestApi(
+      '/forum',
+      query: <String, String>{'page': '$page', 'aid': albumId, 'mode': mode},
+    );
+    return JmResponseParser.comments(decoded, page: page);
+  }
+
+  @override
+  Future<String> postComment({
+    required String albumId,
+    required String content,
+    bool spoiler = false,
+    String? parentId,
+  }) async {
+    final trimmed = content.trim();
+    if (trimmed.isEmpty) {
+      throw const JmContentException('评论内容不能为空');
+    }
+    final decoded = await _requestApi(
+      '/comment',
+      method: 'POST',
+      form: <String, String>{
+        'comment': trimmed,
+        'aid': albumId,
+        'status': spoiler ? '1' : '0',
+        if (parentId != null && parentId.isNotEmpty && parentId != '0')
+          'comment_id': parentId,
+      },
+    );
+    final map = asMap(decoded);
+    final status = (asString(map?['status']) ?? '').toLowerCase();
+    final message = asString(map?['msg']) ?? '评论已提交';
+    if (status.isNotEmpty && status != 'ok' && status != 'success') {
+      throw JmContentException(message);
+    }
+    return message;
+  }
+
   @override
   Future<Uint8List> downloadImage(String photoId, String filename) async {
     final hosts = _preferActive(
@@ -738,6 +823,17 @@ class JmApiClient implements JmApi {
         ),
       );
     } on DioException catch (error) {
+      final status = error.response?.statusCode ?? 0;
+      if (status == 401) {
+        // 401 是「会话失效」而不是线路故障：不换线、不记失败，直接交给 UI 提示重登。
+        throw JmContentException(
+          '登录状态已失效，请重新登录',
+          cause: error,
+        );
+      }
+      if (status == 429) {
+        throw const JmContentException('请求太频繁，请稍后再试', cause: null);
+      }
       throw JmApiException(
         'API 线路 $host 返回异常：${_describe(error)}',
         cause: error,

@@ -41,6 +41,10 @@
 | `check.svg` / `alert.svg` | 成功 / 失败状态 | 任务卡状态、提示 |
 | `scroll-mode.svg` | 阅读器：上下滚动模式 | 阅读器 HUD 切换 |
 | `page-mode.svg` | 阅读器：左右翻页模式 | 阅读器 HUD 切换 |
+| `star.svg` / `star-filled.svg` | **收藏（五角星）**：描边未收藏 / 实心已收藏 | 详情页 AppBar、我的页收藏行、收藏页同步角标 |
+| `heart.svg` / `heart-filled.svg` | 点赞：描边未赞 / 实心已赞 | 详情页动作条、评论点赞数 |
+| `comment.svg` | 评论 / 写评论入口 | 详情页动作条、评论区输入条 |
+| `send.svg` | 发送评论 | 评论区输入条、写评论面板 |
 
 ## 插画清单
 
@@ -56,8 +60,9 @@
 |---|---|---|
 | `app_icon.png` (512²) | `mascot/app_icon_512.png` | 关于页图标；Android 桌面图标由脚本派生到 `mipmap-*/ic_launcher.png`；启动屏居中位图 |
 | `mark_default.png` | `mascot/app_icon_512.png` | 方形吉祥物兜底 |
-| `mark_newyear.png` / `mark_halloween.png` / `mark_xmas.png` / `mark_sakura.png` / `mark_pink.png` | `mascot/mark_*_256.png` | 首页 AppBar 左侧、我的页头像：按月份自动切换（1 月新年 / 3–4 月樱花 / 10 月万圣 / 12 月圣诞） |
+| `mark_newyear.png` / `mark_halloween.png` / `mark_xmas.png` / `mark_sakura.png` / `mark_pink.png` | `mascot/mark_*_256.png` | 我的页头像等：按月份自动切换（1 月新年 / 3-4 月樱花 / 10 月万圣 / 12 月圣诞）；首页 AppBar 改用 `brand_logo.png` |
 | `brand_banner.png` (1000×400) | `brand/brand.png`（容器是 PNG、内容是 WebP，脚本转真 PNG） | 关于页顶部品牌横幅 |
+| `brand_logo.png` (128²) | `brand/brand.png` 左侧方形 mark 按 alpha 紧裁后居中补方 | **首页 AppBar 品牌标记**（`BrandMark(asset: AppImages.brandLogo)`） |
 | `loading_cat.gif` (96×72) | `loading/loading_cat_96_alpha.gif` | 紧凑内联加载（阅读器 HUD 附近） |
 | `loading_cat_large.gif` (160×120) | `loading/loading_cat_160_alpha.gif` | 详情页 / 章节加载中的黑猫动图 |
 | `loading_cat_frame.png` | `loading/loading_cat_frame1_alpha.png` | 动图解码失败时的静态兜底 |

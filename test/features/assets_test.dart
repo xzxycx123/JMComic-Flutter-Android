@@ -10,6 +10,7 @@ void main() {
   const images = <String>[
     AppImages.appIcon,
     AppImages.brandBanner,
+    AppImages.brandLogo,
     AppImages.loadingCat,
     AppImages.loadingCatLarge,
     AppImages.loadingCatFrame,
@@ -51,6 +52,12 @@ void main() {
     AppIcons.alert,
     AppIcons.scrollMode,
     AppIcons.pageMode,
+    AppIcons.star,
+    AppIcons.starFilled,
+    AppIcons.heart,
+    AppIcons.heartFilled,
+    AppIcons.comment,
+    AppIcons.send,
   ];
 
   test('位图素材全部可加载', () async {

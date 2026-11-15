@@ -112,7 +112,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                 ? EmptyState(
                     imageAsset: AppImages.rocket,
                     title: _filter == HistoryFilter.all ? '还没有下载记录' : '这个筛选下没有记录',
-                    description: '去「下载」输入车号，完成的本子会归档到 Documents/JMComics/',
+                    description: '输入车号，完成的本子会归档到 Documents/JMComics/',
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),

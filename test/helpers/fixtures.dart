@@ -10,6 +10,7 @@ import 'package:jm_comic/data/models/jm_album_detail.dart';
 import 'package:jm_comic/data/models/jm_album_summary.dart';
 import 'package:jm_comic/data/models/jm_category.dart';
 import 'package:jm_comic/data/models/jm_chapter.dart';
+import 'package:jm_comic/data/models/jm_comment.dart';
 import 'package:jm_comic/data/models/jm_favorite_list.dart';
 import 'package:jm_comic/data/models/jm_promote_module.dart';
 import 'package:jm_comic/data/models/jm_search_page.dart';
@@ -233,6 +234,69 @@ class FakeJmApi implements JmApi {
 
   @override
   Future<bool> pingFavorite() async => loggedIn;
+
+  // ---------------------------------------------------------------- 互动
+  /// 点赞记录（测试断言用）。
+  final Set<String> likedAlbums = <String>{};
+
+  /// 发出去的评论（测试断言用）。
+  final List<JmComment> postedComments = <JmComment>[];
+
+  @override
+  Future<void> likeAlbum(String albumId) async {
+    if (!loggedIn) {
+      throw const JmContentException('登录状态已失效，请重新登录');
+    }
+    likedAlbums.add(albumId);
+  }
+
+  @override
+  Future<JmCommentPage> fetchComments({
+    required String albumId,
+    int page = 1,
+    String mode = 'manhua',
+  }) async {
+    if (page > 1) {
+      return const JmCommentPage(items: <JmComment>[], total: 3, page: 2);
+    }
+    return JmCommentPage(
+      total: 3,
+      page: 1,
+      items: <JmComment>[
+        JmComment(
+          id: '9001',
+          albumId: albumId,
+          nickname: '测试用户',
+          content: '第一条测试评论',
+          likes: 2,
+          createdAt: DateTime.now().millisecondsSinceEpoch ~/ 1000 - 120,
+        ),
+        const JmComment(id: '9002', albumId: '1', content: '第二条测试评论'),
+        const JmComment(
+          id: '9003',
+          albumId: '1',
+          content: '剧透评论',
+          spoiler: true,
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<String> postComment({
+    required String albumId,
+    required String content,
+    bool spoiler = false,
+    String? parentId,
+  }) async {
+    if (!loggedIn) {
+      throw const JmContentException('登录状态已失效，请重新登录');
+    }
+    postedComments.add(
+      JmComment(id: '${postedComments.length + 1}', albumId: albumId, content: content),
+    );
+    return '評論成功!';
+  }
 
   @override
   Future<void> setCookie(String name, String value) async {

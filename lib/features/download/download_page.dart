@@ -149,7 +149,7 @@ class _DownloadPageState extends ConsumerState<DownloadPage> {
                   ? EmptyState(
                       imageAsset: AppImages.rocket,
                       title: filter == DownloadFilter.all ? '输入车号开始下载' : '这个分组还没有任务',
-                      description: '车号可从本子链接 /album/350234/ 中获取',
+                      description: '车号可从本子链接 /album/[JMCODE]/ 中获取',
                     )
                   : ListView.builder(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),

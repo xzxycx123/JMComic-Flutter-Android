@@ -9,6 +9,7 @@ import '../../data/models/favorite_item.dart';
 import '../home/widgets/album_card.dart';
 import '../home/widgets/feed_skeleton.dart';
 import 'collect_providers.dart';
+import 'favorites_sync.dart';
 
 /// 收藏页：本地账本优先，登录后可与服务端对账。
 class CollectPage extends ConsumerStatefulWidget {
@@ -21,7 +22,6 @@ class CollectPage extends ConsumerStatefulWidget {
 class _CollectPageState extends ConsumerState<CollectPage> {
   String _folderId = 'all';
   bool _sortByUpdate = false;
-  bool _syncing = false;
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +30,8 @@ class _CollectPageState extends ConsumerState<CollectPage> {
     final folders = ref.watch(favoritesFoldersProvider);
     final session = ref.watch(accountSessionProvider).valueOrNull;
     final loggedIn = session?.isLoggedIn ?? false;
+    final syncState = ref.watch(favoritesSyncProvider);
+    final syncing = syncState.busy;
 
     final visible = _filtered(items);
     final activeCount = items.where((item) => item.hasUpdate).length;
@@ -49,8 +51,8 @@ class _CollectPageState extends ConsumerState<CollectPage> {
           if (loggedIn)
             IconButton(
               tooltip: '同步收藏',
-              onPressed: _syncing ? null : _sync,
-              icon: _syncing
+              onPressed: syncing ? null : _sync,
+              icon: syncing
                   ? const SizedBox(
                       width: 18,
                       height: 18,
@@ -128,7 +130,7 @@ class _CollectPageState extends ConsumerState<CollectPage> {
                 ? EmptyState(
                     illustration: AppIllustrations.emptySearch,
                     title: items.isEmpty ? '还没有收藏' : '这个文件夹还没有收藏',
-                    description: '在详情页点右上角书签即可收藏；登录后还能同步到账号。',
+                    description: '在详情页点右上角五角星即可收藏；登录后会自动双向同步。',
                   )
                 : GridView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
@@ -182,7 +184,7 @@ class _CollectPageState extends ConsumerState<CollectPage> {
                                 child: SvgIcon(
                                   item.sync == FavoriteSyncState.conflict
                                       ? AppIcons.alert
-                                      : AppIcons.bookmark,
+                                      : AppIcons.star,
                                   size: 14,
                                 ),
                               ),
@@ -210,26 +212,23 @@ class _CollectPageState extends ConsumerState<CollectPage> {
   }
 
   Future<void> _sync() async {
-    setState(() => _syncing = true);
     final messenger = ScaffoldMessenger.of(context);
-    try {
-      final repository = ref.read(favoritesRepositoryProvider);
-      final report = await repository.sync();
-      ref.read(favoritesItemsProvider.notifier).reload();
-      await ref.read(accountSessionProvider.notifier).updateCount(report.serverCount);
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            '同步完成：推送 ${report.pushed} 条'
-            '${report.conflicts > 0 ? '，${report.conflicts} 条冲突已自愈' : ''}',
-          ),
-        ),
-      );
-    } catch (error) {
+    final report = await ref.read(favoritesSyncProvider.notifier).syncNow();
+    if (!mounted) return;
+    if (report == null) {
+      final error = ref.read(favoritesSyncProvider).lastError ?? '未知错误';
       messenger.showSnackBar(SnackBar(content: Text('同步失败：$error')));
-    } finally {
-      if (mounted) setState(() => _syncing = false);
+      return;
     }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          '同步完成：云端 ${report.serverCount} 本 · 拉回 ${report.addedToLocal} 本'
+          ' · 上传 ${report.pushed} 本'
+          '${report.conflicts > 0 ? '，${report.conflicts} 条冲突已自愈' : ''}',
+        ),
+      ),
+    );
   }
 
   Future<void> _createFolder() async {

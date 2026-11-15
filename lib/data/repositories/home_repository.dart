@@ -11,6 +11,7 @@ import '../models/home_feed.dart';
 import '../models/jm_album_summary.dart';
 import '../models/jm_category.dart';
 import '../models/jm_promote_module.dart';
+import '../models/jm_search_page.dart';
 import '../sources/jm_api_client.dart';
 
 /// 首页聚合 + 分页 + 缓存 + 降级（PLAN §6.1/§6.2）。
@@ -142,6 +143,13 @@ class HomeRepository {
     await _writeCache(feed);
     return feed;
   }
+
+  /// 只拉第一页瀑布流：分类标签预热用（1 次请求，不重复取 promote/latest/categories）。
+  Future<JmSearchPage> categoryPage({
+    String category = '0',
+    AlbumOrder order = AlbumOrder.latestUpdate,
+  }) =>
+      _api.fetchFilter(page: 1, category: category, order: order);
 
   /// 加载下一页瀑布流；失败时返回原 feed（UI 底部给"重试"条）。
   ///

@@ -2,7 +2,7 @@
 abstract final class AppConfig {
   /// 应用展示名 / 关于页版本前缀，实际版本号来自 pubspec（package_info 未接入时用此常量）。
   static const String appName = 'JMComic';
-  static const String appVersion = '0.2.0';
+  static const String appVersion = '0.3.0';
 
   /// 版权与许可证（关于页展示；仓库根 LICENSE 为全文，assets/licenses 里是同一份）。
   static const String copyright = 'Copyright (C) 2026 xzxycx';
@@ -24,6 +24,15 @@ abstract final class AppConfig {
 
   /// 首页 feed 缓存有效期。
   static const Duration feedCacheTtl = Duration(minutes: 30);
+
+  /// 分类标签页（内存缓存）有效期：这段时间内切回来直接出缓存、不打网络。
+  static const Duration categoryCacheTtl = Duration(minutes: 5);
+
+  /// 首屏出来后空闲预热几个分类（每个只发 1 次 `/categories/filter`）。
+  static const int homePrewarmCategories = 3;
+
+  /// 预热请求间隔（错开首屏并发，也避开风控）。
+  static const Duration homePrewarmSpacing = Duration(milliseconds: 700);
 
   /// 触底加载阈值（scrollController.offset > maxScrollExtent - 500）。
   static const double loadMoreThreshold = 500;

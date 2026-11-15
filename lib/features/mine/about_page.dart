@@ -54,8 +54,8 @@ class AboutPage extends StatelessWidget {
           const SizedBox(height: 20),
           Text(
             '首页内容来自 JM 移动端接口（/promote、/latest、/categories、/categories/filter），'
-            '下载引擎按 JmScript 的 Kotlin 实现 1:1 移植：批量车号、切片还原、PNG、PDF，'
-            '最后落到 Documents/JMComics/。',
+            '作者：xzxycx'
+            '使用Dart开发',
             style: AppTypography.body.copyWith(color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 22),
@@ -191,11 +191,7 @@ class _QrCard extends StatelessWidget {
                   '官方 APP 二维码',
                   style: AppTypography.bodyStrong.copyWith(color: scheme.onSurface),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '站点侧下载入口留档；本客户端为本地 PDF 下载版，不依赖登录。',
-                  style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
-                ),
+                const SizedBox(height: 4)
               ],
             ),
           ),

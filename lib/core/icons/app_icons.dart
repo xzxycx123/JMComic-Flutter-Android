@@ -26,6 +26,18 @@ abstract final class AppIcons {
   static const String alert = 'assets/icons/alert.svg';
   static const String scrollMode = 'assets/icons/scroll-mode.svg';
   static const String pageMode = 'assets/icons/page-mode.svg';
+
+  /// 收藏：五角星（描边 = 未收藏，实心 = 已收藏）。
+  static const String star = 'assets/icons/star.svg';
+  static const String starFilled = 'assets/icons/star-filled.svg';
+
+  /// 点赞：爱心（描边 = 未赞，实心 = 已赞）。
+  static const String heart = 'assets/icons/heart.svg';
+  static const String heartFilled = 'assets/icons/heart-filled.svg';
+
+  /// 评论 / 发送。
+  static const String comment = 'assets/icons/comment.svg';
+  static const String send = 'assets/icons/send.svg';
 }
 
 /// 插画（空态 / 错误态）。

@@ -39,7 +39,7 @@ class SearchField extends StatelessWidget {
               style: AppTypography.body.copyWith(color: scheme.onSurface),
               decoration: InputDecoration(
                 isDense: true,
-                hintText: '车号 / 关键词',
+                hintText: '车号 or 关键词',
                 prefixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 40),
                 prefixIcon: Padding(
                   padding: const EdgeInsets.only(left: 14, right: 8),

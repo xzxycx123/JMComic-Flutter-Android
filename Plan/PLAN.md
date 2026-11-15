@@ -294,8 +294,11 @@ const kDomainServerUrls = <String>[
 | 11 | `/favorite`（POST，multipart） | `aid` | `{msg,status:"ok",type:"add"\|"remove"}` | **切换**收藏（需登录） |
 | 12 | `/login`（POST，multipart） | `username`、`password` | `{uid,username,album_favorites,album_favorites_max,…}` + cookie（含 `AVS`） | 登录，取收藏上限 |
 | 13 | `/watch_list` | `page` | 与 #10 同构 | 观看历史（需登录） |
+| 14 | `/like`（POST，multipart） | `id`（专辑 id） | `{code,msg,status:"success"}`（**明文 JSON**，不带计数、无取消接口） | 点赞（客户端要求登录后调用） |
+| 15 | `/forum` | `page`、`aid`、`mode=manhua` | `{list:[{CID,UID,username,nickname,likes,addtime,parent_CID,content,photo,spoiler,replys[]}],total:"12"}` | 评论列表（游客可读） |
+| 16 | `/comment`（POST，multipart） | `comment`、`aid`、`status`（`1`=剧透）、`comment_id`（回复父 id） | `{msg,status:"ok",aid,cid,spoiler}` | 发评论（需登录，未登录返回 401） |
 
-> #10–#13 的字段与参数取自 `Dedicatus546/jm-mobile` 的 Retrofit 定义与 `hect0x7/JMComic-Crawler-Python` 的 `favorite_folder`；设计细节见 `docs/FAVORITES.md`。
+> #10–#16 的字段与参数取自 `Dedicatus546/jm-mobile` 的 Retrofit 定义与 `hect0x7/JMComic-Crawler-Python` 的 `favorite_folder`，并由 `tools/probe_forum.ps1` 实测复核；收藏/会话见 `docs/FAVORITES.md`，互动见 `docs/INTERACTION.md`。
 
 `/categories` 实测 10 个顶层分类（`total_albums` 为服务端计数）：
 
@@ -530,6 +533,8 @@ class HomeFeed {
 - 下一页失败：保留已有内容 + 底部「重试」条，不弹全屏错误。
 - `grid` 用「按 id 去重 + 保序」合并（`/latest` 与 `filter` 会有重叠）。
 - 缓存：`HomeFeed` 以 JSON 存 Hive（TTL 30 分钟）；冷启动先渲染缓存（顶部标一条「缓存内容 · 12:31 更新」），再后台刷新。
+- **标签页内存缓存（0.3.0 起强制）**：`homeFeedProvider` 只 `build()` 一次，用 `ref.listen` 监听分类/排序；切到已缓存的组合立刻 `AsyncData(cached)`（不闪骨架屏、不清滚动位置），只有超过 `AppConfig.categoryCacheTtl`（5 分钟）才后台静默刷一页；刷新失败保留旧内容并给一行「刷新失败，先看上次内容」。
+- **空闲预热**：首屏出来后按 700ms 间隔给前 3 个分类各发 **1 次** `/categories/filter`（不重复取 promote/latest/categories），预热条目复用当前轮播/分节、只替换网格；provider 销毁时取消计时器。
 - 空/错态：整页错误态（插画 + 重试），分区级失败只隐藏该分区。
 
 ### 6.3 HTML 兜底（`JmHtmlScraper`）
@@ -558,9 +563,9 @@ class HomeFeed {
 
 | 目录 | 放什么 | 约定 |
 |---|---|---|
-| `assets/icons/` | **所有 UI 图标**，一个图标一个 `.svg` | Dock、AppBar、任务卡、阅读器 HUD 全部从这里取；现有 22 个 |
+| `assets/icons/` | **所有 UI 图标**，一个图标一个 `.svg` | Dock、AppBar、任务卡、阅读器 HUD 全部从这里取；现有 28 个（0.3.0 新增 `star` / `star-filled` / `heart` / `heart-filled` / `comment` / `send`） |
 | `assets/illustrations/` | 空态 / 错误态 / 引导插画 `.svg` | 160×120 起，现 3 张（`empty-search` / `empty-download` / `error-network`） |
-| `assets/images/` | 位图（启动图、分享二维码等） | **加载占位不放这里** |
+| `assets/images/` | 位图（品牌标记、加载动画、角标、二维码） | 由 `tools/build_app_assets.py` 从 `img/` 派生；**加载占位不放这里** |
 | `assets/fonts/` | 自托管正文字体（可选） | **不放图标字体** |
 
 **三条硬规则**
@@ -738,12 +743,14 @@ abstract final class AppColors {
 ### 7.5 详情页
 
 - 结构：`CustomScrollView`；`SliverAppBar(expandedHeight: 260, pinned: true)`，背景 = 封面 + `blur(28)` + 遮罩，前景小封面 96×128 圆角 12。
-- 信息区：标题 20 w700（最多 3 行）、作者、`tags` 流式 chips；统计条四列（页数 / 浏览 / 收藏 / 评论）。
+- 信息区：标题 20 w700（最多 3 行）、作者、`tags` 流式 chips；统计条四列（页数 / 浏览 / **喜欢** / 评论）。`/album.likes` 是站点的「喜歡」数，不要标成「收藏」。
+- **动作条（统计条下方，0.3.0）**：`heart.svg`「点赞 N」+ `comment.svg`「评论 N / 写评论」；点赞未登录先弹「登录后才能操作」→ 去登录；服务端 `/like` 不回计数，客户端乐观 +1 且不提供取消。
+- **评论区（章节之后、相关推荐之前）**：`CommentSection`，先铺 5 条 + 「查看全部 N 条评论」展开 + 「加载更多评论」分页（每页 20）；每条含头像（无头像用昵称首字）、昵称、相对时间、正文、`剧透` 标签、点赞数、`回复`；底部输入条「说点什么…」打开写评论面板（500 字上限 + 含剧透开关），发送成功回第 1 页并 toast 服务端文案。
 - 章节列表：`series` 非空按 `sort` 升序去重，每行「第 N 话 · 标题（XP）」+ `forward.svg`；`series` 为空时只有一行「全一话（XP）」。
 - **底部 CTA（两按钮）**：
   - 主按钮 **「开始阅读」**（`play.svg`，flex 撑满）→ 进阅读器；有记忆时文案变「继续阅读 · 第 12 页」，点击直达该页。
   - 次按钮「下载」（`download.svg`，108 宽）→ 投下载队列并切到下载 tab。
-- 右上角：`bookmark.svg`（v1 本地收藏，点后即时填充）、`share.svg`（系统分享链接）。
+- 右上角：**`star.svg` / `star-filled.svg`（五角星，描边=未收藏、实心=已收藏）**、`share.svg`（复制链接）。
 - 相关推荐：`related_list` 底部双列 6 个。
 
 ### 7.6 阅读器（双模式，核心交互）
@@ -770,7 +777,9 @@ abstract final class AppColors {
 - 右区 → `nextPage()`；最后一页同样回弹 + 轻震。
 - 中区 → 切换 HUD；HUD 显示后 3s 无操作自动隐藏（翻页、拖进度条都重置计时）。
 - 分区用 `GestureDetector(behavior: HitTestBehavior.opaque)` 叠在图片层上；**双指缩放时禁用分区点击**（`InteractiveViewer.onInteractionStart` 置 `zoomed=true`，缩回 1.0 才恢复），否则拖动会误翻页。
-- 双击任意位置：1.0 ↔ 2.0 缩放切换。
+- **双指缩放（0.3.0 起两种模式都支持）**：每页包一层 `InteractiveViewer(minScale: 1, maxScale: 4)`，缩放中把 `PageView` / 纵向 `ListView` 的 `physics` 切成 `NeverScrollableScrollPhysics`，把拖动让给图片平移；双击任意位置 1.0 ↔ 2.2（以双击点为中心）；缩回 1.0 附近自动 `Matrix4.identity()` 归位。
+- **翻页动画开关必须生效**：设置里的 `pageTurnAnimation` 为 false 时 `_goToPage` 走 `jumpToPage`（瞬切），为 true 才 `animateToPage(240ms, easeOutCubic)`；HUD 进度条跳页同样遵循该开关。
+- 双击任意位置：1.0 ↔ 2.2 缩放切换。
 - 与手势并存：左滑 = 下一页、右滑 = 上一页（`onHorizontalDragEnd`，阈值 40px）。
 
 **HUD（两模式共用 `reader_hud.dart`）**
@@ -828,11 +837,24 @@ abstract final class AppColors {
 - **定位**：cookie 为主、`/login` 换取账号信息为辅；**不存明文密码**（jm-mobile 存明文并在每次冷启动重登，我们不取）。
 - **存储**：新 box `jm_session` 只放会话快照 + cookie 列表（含 `AVS`）；密码若要记住，必须用户显式勾选并落 `flutter_secure_storage`。
 - **拦截器链顺序**：`SessionGate`（`/setting`、`/login` 放行）→ `Endpoint`（域名轮换）→ `Token`（**每请求现算** `md5(ts+secret)`，版本取 `/setting.jm3_version`）→ `Cookie` → `Decrypt`（`{code,data}`，**AES-256-ECB**）→ `LoginRequired`（401/HTML/`code!=200` → `needsLogin`）。
-- **登录时序**：`bootstrap()` → `POST /login`（multipart）→ 响应带 `s` 就补写 `AVS` cookie → `UserSession(state: valid)` → `GET /favorite?page=1` 校验 → 触发收藏对账。
+- **登录时序**：`bootstrap()` → `POST /login`（multipart）→ 响应带 `s` 就补写 `AVS` cookie → `UserSession(state: valid)` → `GET /favorite?page=1` 校验 → **登录成功立即做一次双向收藏同步**（先对账把云端拉回本地，再推 outbox 把本地补到云端），结果在提示框里报「云端 N 本 · 拉回 M 本 · 上传 K 本」。
+- **失败提示**：登录失败必须是对话框（图标 + 原因 + 排查提示 + 「重试」），不能只在输入框下塞一行红字；原因归一化：密码错 / 被限流 / 人机校验 / 线路异常四类文案。
 - **自动登录**：默认「cookie 恢复 + 一次校验」，失败一次即回 `local`，不打扰用户；不做每冷启动重登。
 - **失效**：`needsLogin` 时收藏继续本地可用，我的页顶栏给「登录已失效 · 重新登录」，只重试一次（仅当开启记住密码）。
 - **登出**：session + cookie + outbox 三处清空；本地收藏保留但 `synced → localOnly`，避免推到下一个账号。
 - **UI**（对齐 jm-mobile 的可抄部分）：用户名/密码 ASCII-only 过滤、用户名失焦 trim、IME Next/Done、按钮 loading「登录中」、成功后 `popUpTo` 不留在栈里。
+
+### 7.11 互动：点赞与评论（0.3.0）
+
+> 端点实测与字段表见 §5.4 #14–#16；完整契约、失败矩阵与测试用例见 **`docs/INTERACTION.md`**。
+
+- **模型**：`JmComment`（`CID/UID/username/nickname/likes/addtime/parent_CID/content/photo/spoiler/replys[]`）+ `JmCommentPage`（`items/total/page`，`hasMore(pageSize:20)`）；`addtime` 兼容秒级时间戳与 `yyyy-MM-dd HH:mm:ss`，展示成「刚刚 / N 分钟前 / N 小时前 / N 天前 / MM-DD」。
+- **点赞**：`POST /like` multipart `id=<专辑 id>`，响应是**明文** `{code,msg,status}`（不在 AES 信封外层语义里，但仍在 `data` 内）；无计数、无取消接口 → 客户端乐观 `likes + 1` 并锁成「已点赞」。状态源：`/album.liked`、`/album.likes`。
+- **评论列表**：`GET /forum?page&aid&mode=manhua`，游客可读；空结果 `{list:[],total:"0"}`；发评论后回第 1 页（新评论在前）。
+- **发评论**：`POST /comment` multipart `comment/aid/status/comment_id`；`status='1'` 表示剧透；**未登录返回 401**，客户端在请求层把 401 归一到 `JmContentException('登录状态已失效，请重新登录')`，UI 弹「登录后才能操作 → 去登录」，不静默失败。
+- **登录门槛**：点赞、发评论、回复都必须已登录；收藏不同（本地可用，见 §7.9）。
+- **不做**：评论点赞、删评论、举报、通知未读数 —— 接口未验证，宁缺不猜。
+- **限流**：评论与点赞都是用户手动触发，不做自动重试；失败只提示，避免重复发帖。
 
 ---
 
@@ -997,6 +1019,15 @@ flutter analyze
 - **F1–F3 收藏**：`FavoriteItem` + 迁移 + 收藏页 + 详情联动（详见 §7.9 与 `docs/FAVORITES.md` §9）。
 - **F4–F5 同步与批量**：对账 + outbox + 退避 + 上限 + 多选批量 + 追更角标。
 - 验收：见 `docs/FAVORITES.md` §10 的 15 条测试矩阵，登录/失效/登出/断网四条必须有真机 case。
+
+### M4.6 互动与体验收尾（1 天，0.3.0）
+
+- **点赞 / 评论**：`/like`、`/forum`、`/comment` 三层打通（模型 → API → 仓储 → provider → UI），详情页动作条与评论区（展开/翻页/写评论/剧透/回复）。
+- **登录**：失败对话框（原因归一化）+ 登录成功自动双向同步（`favoritesSyncProvider.syncNow()`），同步结果在成功框里给出统计。
+- **阅读器**：双模式双指缩放 + 双击放大；`pageTurnAnimation` 开关真正生效（关=瞬切）。
+- **首页**：标签页内存缓存（5 分钟 TTL）+ 空闲预热 3 个分类，切回不闪骨架屏。
+- **视觉**：收藏图标从书签换成五角星（`star.svg` / `star-filled.svg`），点赞用爱心，首页 AppBar 品牌标记改用 `img/brand/brand.png` 切出的 `brand_logo.png`。
+- 验收：`flutter analyze` 0 issue、`flutter test` 全绿、`tools/check_ui_rules.ps1` 通过；真机手测：登录 → 点赞 → 发评论 → 收藏 → 同步一轮闭环。
 
 ### M5 我的（0.5 天）
 

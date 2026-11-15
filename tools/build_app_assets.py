@@ -61,6 +61,28 @@ def copy_file(src: Path, dst: Path) -> None:
     print(f"copy {dst.relative_to(ROOT)}  <- {src.relative_to(ROOT)}")
 
 
+def save_brand_mark(src: Path, dst: Path, *, square: int = 128, mark_width: int = 300) -> None:
+    """从横版合成图里切出左侧方形 mark（首页 AppBar 图标用）。
+
+    `img/brand/brand.png` 是 1000x400 的「mark + 禁漫天堂/18comic 文字」合成图，
+    直接缩到 28dp 会把文字压成噪点；这里按 alpha 通道取左侧 mark 的紧边界，
+    再居中补成正方形后缩放。
+    """
+    with Image.open(src) as image:
+        frame = image.convert("RGBA")
+    box = frame.crop((0, 0, mark_width, frame.height)).getbbox()
+    if box is None:
+        raise ValueError(f"{src} 左侧没有可用的 mark 像素")
+    mark = frame.crop(box)
+    side = max(mark.size)
+    canvas = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    canvas.paste(mark, ((side - mark.width) // 2, (side - mark.height) // 2))
+    canvas = canvas.resize((square, square), Image.LANCZOS)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(dst, "PNG", optimize=True)
+    print(f"mark {dst.relative_to(ROOT)}  {square}x{square}  <- {src.relative_to(ROOT)} box={box}")
+
+
 def build_flutter_assets() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
 
@@ -74,6 +96,9 @@ def build_flutter_assets() -> None:
 
     # 品牌合成图（About 横幅高 96dp）
     save_image(IMG / "brand" / "brand.png", OUT / "brand_banner.png", width=640)
+
+    # 首页 AppBar 的品牌标记：从合成图切左侧方形 mark（26–28dp 展示，128 足够 4x）
+    save_brand_mark(IMG / "brand" / "brand.png", OUT / "brand_logo.png", square=128)
 
     # 加载动画（透明底）：96 小号 + 160 大号 + 静态首帧
     copy_file(IMG / "loading" / "loading_cat_96_alpha.gif", OUT / "loading_cat.gif")

@@ -11,6 +11,9 @@ abstract final class AppImages {
   /// 品牌合成图（About 页横幅，含「禁漫天堂 18comic」标）。
   static const String brandBanner = 'assets/images/brand_banner.png';
 
+  /// 品牌方形标记（从 `img/brand/brand.png` 左侧 mark 切出，首页 AppBar 用）。
+  static const String brandLogo = 'assets/images/brand_logo.png';
+
   /// 黑猫加载动画（透明底 96px，列表/阅读器内联用）。
   static const String loadingCat = 'assets/images/loading_cat.gif';
 

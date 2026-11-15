@@ -6,6 +6,7 @@ import '../../core/utils/logger.dart';
 import '../local/progress_store.dart';
 import '../models/jm_album_detail.dart';
 import '../models/jm_chapter.dart';
+import '../models/jm_comment.dart';
 import '../sources/jm_api_client.dart';
 
 /// 专辑详情 + 章节 + 阅读器图片（含切片还原）。
@@ -22,6 +23,26 @@ class AlbumRepository {
   Future<JmAlbumDetail> album(String albumId) => _api.getAlbum(albumId);
 
   Future<JmChapter> chapter(JmChapterRef reference) => _api.getChapter(reference);
+
+  // ---------------------------------------------------------------- 互动
+  /// 点赞（`POST /like`，需要登录；服务端不返回计数，UI 侧乐观 +1）。
+  Future<void> like(String albumId) => _api.likeAlbum(albumId);
+
+  Future<JmCommentPage> comments(String albumId, {int page = 1}) =>
+      _api.fetchComments(albumId: albumId, page: page);
+
+  Future<String> postComment({
+    required String albumId,
+    required String content,
+    bool spoiler = false,
+    String? parentId,
+  }) =>
+      _api.postComment(
+        albumId: albumId,
+        content: content,
+        spoiler: spoiler,
+        parentId: parentId,
+      );
 
   /// 同一 album 内 photoId == chapterId，scramble 阈值只需取一次。
   Future<int> scrambleId(String photoId) async {

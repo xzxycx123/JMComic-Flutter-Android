@@ -14,6 +14,7 @@ import '../../core/icons/app_images.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../data/local/endpoint_store.dart';
+import '../../data/local/settings_store.dart';
 import '../../data/repositories/album_repository.dart';
 import 'reader_mode.dart';
 import 'reader_page_loader.dart';
@@ -159,6 +160,10 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   DateTime _lastProgressWrite = DateTime.fromMillisecondsSinceEpoch(0);
   double _bounceOffset = 0;
 
+  /// 每页一个缩放控制器（由本 State 持有并释放）：双击缩放要能跨「三分区」触发。
+  final Map<int, TransformationController> _pageZoom =
+      <int, TransformationController>{};
+
   int get _total => widget.data.total;
 
   @override
@@ -192,10 +197,18 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
     _bounceController.dispose();
     _pageController.dispose();
     _scrollController.dispose();
+    for (final controller in _pageZoom.values) {
+      controller.dispose();
+    }
+    _pageZoom.clear();
     unawaited(_persistProgress());
     unawaited(_applySystemUi(false));
     super.dispose();
   }
+
+  /// 取该页的缩放控制器（第一次用到时创建，随 State 一起释放）。
+  TransformationController _zoomControllerOf(int page) =>
+      _pageZoom.putIfAbsent(page, TransformationController.new);
 
   Future<void> _applySystemUi(bool immersive) async {
     try {
@@ -227,7 +240,8 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   }
 
   // ---------------------------------------------------------------- 翻页
-  void _goToPage(int page, {bool animate = true}) {
+  /// [animate] 为 null 时按设置里的「翻页动画」开关决定：关掉就是瞬切。
+  void _goToPage(int page, {bool? animate}) {
     final target = page.clamp(1, _total == 0 ? 1 : _total).toInt();
     if (target == _page) {
       if (target <= 1 || target >= _total) {
@@ -241,8 +255,9 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
     unawaited(_persistProgress(throttle: true));
     _restartHudTimer();
 
+    final smooth = animate ?? ref.read(settingsProvider).pageTurnAnimation;
     if (_mode == ReaderMode.paged) {
-      if (animate) {
+      if (smooth) {
         _pageController.animateToPage(
           target - 1,
           duration: const Duration(milliseconds: 240),
@@ -493,13 +508,17 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   Widget _buildReaderBody() {
     if (_mode == ReaderMode.paged) {
       return ReaderTapZones(
+        // 缩放中只关单击（防误翻页），双击仍可缩回 1.0。
         enabled: !_zoomed,
+        onDoubleTap: _toggleZoomCurrent,
         onPrevious: _previousPage,
         onNext: _nextPage,
         onToggleHud: _toggleHud,
         child: PageTurnView(
           controller: _pageController,
           total: _total,
+          // 缩放中把横向拖动让给图片平移，否则会一边放大一边翻页。
+          physics: _zoomed ? const NeverScrollableScrollPhysics() : null,
           onPageChanged: (page) {
             if (page == _page) return;
             setState(() => _page = page);
@@ -507,10 +526,8 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
             unawaited(_persistProgress(throttle: true));
           },
           itemBuilder: (context, index) => _ZoomablePage(
-            onZoomChanged: (zoomed) {
-              if (_zoomed == zoomed) return;
-              setState(() => _zoomed = zoomed);
-            },
+            controller: _zoomControllerOf(index + 1),
+            onZoomChanged: _setZoomed,
             child: _pageContent(index + 1),
           ),
         ),
@@ -520,18 +537,41 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: _toggleHud,
+      onDoubleTap: _toggleZoomCurrent,
       child: ScrollReaderView(
         controller: _scrollController,
         total: _total,
+        // 条漫模式同样支持双指缩放 / 双击放大；缩放时锁住纵向滚动。
+        physics: _zoomed ? const NeverScrollableScrollPhysics() : null,
         onPageChanged: (page) {
           if (page == _page) return;
           setState(() => _page = page);
           _loader.setFocus(page);
           unawaited(_persistProgress(throttle: true));
         },
-        itemBuilder: (context, index) => _pageContent(index + 1),
+        itemBuilder: (context, index) => _ZoomablePage(
+          controller: _zoomControllerOf(index + 1),
+          onZoomChanged: _setZoomed,
+          child: _pageContent(index + 1),
+        ),
       ),
     );
+  }
+
+  void _setZoomed(bool zoomed) {
+    if (_zoomed == zoomed) return;
+    setState(() => _zoomed = zoomed);
+    if (!zoomed) _restartHudTimer();
+  }
+
+  /// 双击当前页：1.0 与 2.2 之间切换（居中放大）。
+  void _toggleZoomCurrent() {
+    final controller = _zoomControllerOf(_page);
+    if (controller.value.getMaxScaleOnAxis() > 1.01) {
+      controller.value = Matrix4.identity();
+      return;
+    }
+    controller.value = Matrix4.identity()..scale(_ZoomablePage.doubleTapScale);
   }
 
   Widget _pageContent(int page) => _pageImage(page);
@@ -585,10 +625,21 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   }
 }
 
-/// 单页缩放：双击 1.0 <-> 2.0，并把缩放状态回传给外层以禁用三分区点击。
+/// 单页缩放：双指捏合 1.0–4.0（双击由阅读器统一处理，避免和三分区争手势）。
+///
+/// 控制器由外层持有：双击缩放要在「三分区」的中间区触发，控制器必须能跨层访问；
+/// 缩放状态通过 [onZoomChanged] 回传，用来禁用分区单击 / 翻页 / 纵向滚动。
 class _ZoomablePage extends StatefulWidget {
-  const _ZoomablePage({required this.child, required this.onZoomChanged});
+  const _ZoomablePage({
+    required this.controller,
+    required this.child,
+    required this.onZoomChanged,
+  });
 
+  static const double doubleTapScale = 2.2;
+  static const double maxScale = 4;
+
+  final TransformationController controller;
   final Widget child;
   final ValueChanged<bool> onZoomChanged;
 
@@ -597,41 +648,52 @@ class _ZoomablePage extends StatefulWidget {
 }
 
 class _ZoomablePageState extends State<_ZoomablePage> {
-  final TransformationController _controller = TransformationController();
   bool _zoomed = false;
 
   @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onTransformChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ZoomablePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onTransformChanged);
+      widget.controller.addListener(_onTransformChanged);
+    }
+  }
+
+  @override
   void dispose() {
-    _controller.dispose();
+    widget.controller.removeListener(_onTransformChanged);
     super.dispose();
   }
 
-  void _toggleZoom() {
-    setState(() {
-      _zoomed = !_zoomed;
-      _controller.value =
-          _zoomed ? (Matrix4.identity()..scale(2.0)) : Matrix4.identity();
-    });
-    widget.onZoomChanged(_zoomed);
+  double get _scale => widget.controller.value.getMaxScaleOnAxis();
+
+  void _onTransformChanged() {
+    final zoomed = _scale > 1.01;
+    if (zoomed == _zoomed) return;
+    setState(() => _zoomed = zoomed);
+    widget.onZoomChanged(zoomed);
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onDoubleTap: _toggleZoom,
-      child: InteractiveViewer(
-        transformationController: _controller,
-        minScale: 1,
-        maxScale: 3,
-        onInteractionUpdate: (details) {
-          final next = details.scale > 1.01;
-          if (next != _zoomed) {
-            setState(() => _zoomed = next);
-            widget.onZoomChanged(next);
-          }
-        },
-        child: widget.child,
-      ),
+    return InteractiveViewer(
+      transformationController: widget.controller,
+      minScale: 1,
+      maxScale: _ZoomablePage.maxScale,
+      // 未放大时不吃拖动，保证翻页手势优先。
+      panEnabled: _zoomed,
+      scaleEnabled: true,
+      onInteractionEnd: (_) {
+        // 缩回 1.0 附近就彻底归位，避免留下半个像素的偏移。
+        if (_scale <= 1.01) widget.controller.value = Matrix4.identity();
+      },
+      child: widget.child,
     );
   }
 }

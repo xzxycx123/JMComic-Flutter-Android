@@ -20,6 +20,7 @@ import '../home/widgets/section_header.dart';
 import '../collect/collect_providers.dart';
 import 'album_providers.dart';
 import 'widgets/chapter_tile.dart';
+import 'widgets/comment_section.dart';
 
 class AlbumPage extends ConsumerWidget {
   const AlbumPage({required this.albumId, super.key});
@@ -182,7 +183,11 @@ class _AlbumContent extends ConsumerWidget {
                       data: IconThemeData(
                         color: isFavorite ? scheme.primary : scheme.onSurface,
                       ),
-                      child: const SvgIcon(AppIcons.bookmark, size: 20),
+                      // 收藏图标是五角星：描边未收藏 / 实心已收藏。
+                      child: SvgIcon(
+                        isFavorite ? AppIcons.starFilled : AppIcons.star,
+                        size: 22,
+                      ),
                     ),
                     onPressed: () => _toggleFavorite(context, ref, album),
                   ),
@@ -201,6 +206,7 @@ class _AlbumContent extends ConsumerWidget {
                 ),
               ),
               SliverToBoxAdapter(child: _InfoSection(album: album)),
+              SliverToBoxAdapter(child: _InteractionBar(album: album)),
               SliverToBoxAdapter(
                 child: SectionHeader(title: album.isSingleChapter ? '单行本' : '章节'),
               ),
@@ -229,9 +235,14 @@ class _AlbumContent extends ConsumerWidget {
                   childCount: album.chapters.length,
                 ),
               ),
+              SliverToBoxAdapter(
+                child: CommentSection(
+                  albumId: album.id,
+                  totalHint: album.commentTotal,
+                ),
+              ),
               if (album.related.isNotEmpty) ...<Widget>[
-                const SliverToBoxAdapter(child: SectionHeader(title: '相关推荐')),
-                SliverPadding(
+                const SliverToBoxAdapter(child: SectionHeader(title: '相关推荐')),                SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   sliver: SliverGrid(
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -303,6 +314,132 @@ class _AlbumContent extends ConsumerWidget {
                     ],
                   ),
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 点赞 / 评论两个动作条：点赞需要登录（服务端不返回计数，本地乐观 +1）。
+class _InteractionBar extends ConsumerWidget {
+  const _InteractionBar({required this.album});
+
+  final JmAlbumDetail album;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final like = ref.watch(albumLikeProvider(album.id));
+    final comments = ref.watch(albumCommentsProvider(album.id)).valueOrNull;
+    final commentCount =
+        (comments?.total ?? 0) > 0 ? comments!.total : album.commentTotal;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+      child: Row(
+        children: <Widget>[
+          _Pill(
+            icon: like.liked ? AppIcons.heartFilled : AppIcons.heart,
+            label: like.liked ? '已点赞 ${like.likes}' : '点赞 ${like.likes}',
+            active: like.liked,
+            busy: like.busy,
+            onTap: () => _like(context, ref, like),
+          ),
+          const SizedBox(width: 10),
+          _Pill(
+            icon: AppIcons.comment,
+            label: commentCount > 0 ? '评论 $commentCount' : '写评论',
+            onTap: () => _comment(context, ref),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _like(
+    BuildContext context,
+    WidgetRef ref,
+    AlbumLikeState state,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (state.liked) {
+      messenger.showSnackBar(const SnackBar(content: Text('你已经点过赞了')));
+      return;
+    }
+    if (!(ref.read(accountSessionProvider).valueOrNull?.isLoggedIn ?? false)) {
+      await askForLogin(context);
+      return;
+    }
+    final ok = await ref.read(albumLikeProvider(album.id).notifier).like();
+    if (!context.mounted) return;
+    if (!ok) {
+      final error = ref.read(albumLikeProvider(album.id)).error ?? '未知错误';
+      messenger.showSnackBar(SnackBar(content: Text('点赞失败：$error')));
+      return;
+    }
+    messenger.showSnackBar(const SnackBar(content: Text('已点赞')));
+  }
+
+  Future<void> _comment(BuildContext context, WidgetRef ref) async {
+    if (!(ref.read(accountSessionProvider).valueOrNull?.isLoggedIn ?? false)) {
+      await askForLogin(context);
+      return;
+    }
+    final message = await showCommentComposer(context, albumId: album.id);
+    if (message == null || !context.mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _Pill extends StatelessWidget {
+  const _Pill({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.active = false,
+    this.busy = false,
+  });
+
+  final String icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool active;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final foreground =
+        active ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
+    return Material(
+      color: active ? scheme.primaryContainer : scheme.surfaceContainer,
+      borderRadius: BorderRadius.circular(AppColors.radiusPill),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppColors.radiusPill),
+        onTap: busy ? null : onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (busy)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                IconTheme(
+                  data: IconThemeData(color: foreground),
+                  child: SvgIcon(icon, size: 16),
+                ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: AppTypography.caption.copyWith(color: foreground),
               ),
             ],
           ),
@@ -389,7 +526,8 @@ class _InfoSection extends StatelessWidget {
     final stats = <({String label, String value})>[
       (label: '页数', value: album.totalPages > 0 ? '${album.totalPages}' : '--'),
       (label: '浏览', value: _compact(album.totalViews)),
-      (label: '收藏', value: _compact(album.likes)),
+      // `/album.likes` 是站点的「喜歡」数（点赞），收藏数在收藏夹里按本地账本算。
+      (label: '喜欢', value: _compact(album.likes)),
       (label: '评论', value: _compact(album.commentTotal)),
     ];
     return Padding(

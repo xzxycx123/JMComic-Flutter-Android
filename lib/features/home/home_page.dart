@@ -85,7 +85,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                 title: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    const BrandMark(size: 26),
+                    // 品牌标记走 img/brand 切出来的方形 mark（不是季节吉祥物）。
+                    const BrandMark(asset: AppImages.brandLogo, size: 26),
                     const SizedBox(width: 8),
                     Text(
                       AppConfig.appName,

@@ -14,9 +14,13 @@
 |---|---|---|
 | 会话 | **cookie（含 `AVS`）为主、`/login` 换取账号信息为辅** | 不存明文密码；请求头 token 每请求现算 |
 | 自动登录 | 默认「cookie 校验」，不是「每次冷启动重登」 | 失败一次即回本地模式，不打扰用户 |
+| 登录后同步 | **登录成功立即双向同步一次**（云端拉回 + 本地补推），0.3.0 已实现 | 失败不阻塞登录，提示框里给统计与「稍后手动同步」 |
 | 收藏 | **本地账本 + 服务端镜像**，服务端只镜像「在不在收藏里」 | `POST /favorite` 是 **toggle**，必须反向对账 |
+| 收藏图标 | **五角星**（`star` / `star-filled`），点赞是爱心 | 图标语义别混：星=收藏、心=点赞 |
 | 文件夹 | v1 **只做本地** | 移动端 `folder_id` 仅固定 0，建夹接口未验证 |
 | 上限 | 来自登录响应的 `album_favorites_max` | ≥90% 时告警、超限禁用 |
+
+相关文档：点赞/评论见 **`docs/INTERACTION.md`**（同一套会话与登录门槛）。
 
 三条红线：
 
@@ -247,8 +251,18 @@ dio.interceptors = [
      ├─ 校验：GET /favorite?page=1&o=mr&folder_id=0
      │     ├─ 200 + JSON → 会话可用
      │     └─ 否则 → state=needsLogin，回滚 cookie，报「登录校验失败」
-     └─ 触发收藏对账（见 §7），并把 favoritesMax 写进会话
+     ├─ 登录成功即自动同步（0.3.0 落地）：FavoritesSyncNotifier.syncNow()
+     │     ├─ 先对账：云端 -> 本地（§7.2）
+     │     ├─ 再推送：本地 outbox -> 云端（§7.3）
+     │     └─ 结果写会话 favoritesCount + 提示框报「云端 N · 拉回 M · 上传 K」
+     └─ 失败提示走对话框（原因归一化：密码错 / 限流 / 人机校验 / 线路异常）
 ```
+
+> 实现位置：`lib/features/auth/login_page.dart`（对话框与同步编排）、
+> `lib/features/collect/favorites_sync.dart`（全局同步状态 `favoritesSyncProvider`）、
+> `lib/data/repositories/auth_repository.dart`（`describeLoginFailure` 文案归一）。
+> 收藏/评论/点赞三条链路共用一个登录门槛：未登录时点赞与评论弹「登录后才能操作」，
+> 收藏仍本地可用（见 `docs/INTERACTION.md` §3）。
 
 ### 4.4 自动登录策略（默认不存密码）
 
@@ -378,7 +392,7 @@ Future<void> migrateIfNeeded(Box box) async {
 
 ### 6.1 收藏按钮（详情页已有，改造）
 
-- 未收藏：`bookmark` 描边；已收藏：实心 + `primary` + 180ms 缩放（1→1.15→1）+ 轻震。
+- **图标是五角星**（0.3.0 起）：未收藏 `star.svg` 描边、已收藏 `star-filled.svg` 实心 + `primary` + 180ms 缩放（1→1.15→1）+ 轻震。点赞用爱心（`heart.svg` / `heart-filled.svg`），两者不要混用。
 - 点击：**乐观更新**（本地先写、UI 立即变），再按 `session.state` 决定是否入 outbox。
 - 长按：底部弹「加到文件夹」——本地文件夹列表 + 「新建文件夹」。
 - SnackBar：「已收藏 · 撤销 / 查看」3 秒；撤销 = 反向写回并**删掉对应 outbox 项**（别把撤销同步出去）。

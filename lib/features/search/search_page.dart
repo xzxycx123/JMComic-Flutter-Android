@@ -118,7 +118,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   if (results.isEmpty) {
                     return EmptyState(
                       illustration: AppIllustrations.emptySearch,
-                      title: '没有找到相关本子',
+                      title: '没有相关本子',
                       description: '换个关键词试试，或直接输入车号',
                       actionLabel: '换个关键词',
                       onAction: () {

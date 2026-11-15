@@ -1,4 +1,4 @@
-# ---------------------------------------------------------------- Flutter / Dart
+# ================================================================ Flutter / Dart
 .dart_tool/
 .packages
 .pub-cache/
@@ -6,61 +6,125 @@
 build/
 .flutter-plugins
 .flutter-plugins-dependencies
+pubspec_overrides.yaml
 *.iml
+*.lock.bak
 
-# ---------------------------------------------------------------- IDE / 编辑器
+# ================================================================ IDE / 编辑器
 .idea/
 .vscode/
+.fleet/
+.history/
+*.swp
+*.swo
+*~
 *.sublime-workspace
+*.sublime-project
 
-# ---------------------------------------------------------------- Android
+# ================================================================ Android
 android/.gradle/
 android/.cxx/
+.cxx/
 android/.kotlin/
+android/build/
+android/app/build/
+android/captures/
 android/local.properties
+local.properties
 android/app/debug/
 android/app/profile/
 android/app/release/
 android/key.properties
+key.properties
+signing.properties
 *.jks
 *.keystore
 
-# ---------------------------------------------------------------- iOS
+# ================================================================ iOS / macOS
 ios/Pods/
 ios/.symlinks/
+ios/.generated/
 ios/Flutter/Flutter.framework
+ios/Flutter/App.framework
 ios/Flutter/Flutter.podspec
+ios/Flutter/flutter_assets/
 ios/Flutter/ephemeral/
 ios/Flutter/Generated.xcconfig
 ios/Flutter/flutter_export_environment.sh
 ios/Runner/GeneratedPluginRegistrant.*
+ios/ServiceDefinitions.json
+ios/Flutter/.last_build_id
 **/xcuserdata/
+**/DerivedData/
+*.mobileprovision
+*.cer
+*.certSigningRequest
+*.dSYM/
 
-# ---------------------------------------------------------------- 产物 / 归档
+# ================================================================ 签名 / 密钥 / 环境变量（发布前务必确认未入库）
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+secrets.properties
+*.hprof
+
+# ================================================================ 产物 / 归档
 dist/
+out/
+output/
 *.apk
 *.aab
 *.ipa
 coverage/
+*.lcov
 *.log
 .recover/
 
-# ---------------------------------------------------------------- 设计源文件与草稿（非运行时必需）
+# ================================================================ 参考图 / 设计草稿（非运行时必需）
+ref img/
+ref-img/
 img/*.psd
 img/*.psb
 img/*.ai
 img/*.sketch
 img/未标题-*.png
 img/*副本*.png
+docs/*.psd
 
-# ---------------------------------------------------------------- Python / 脚本缓存
+# ================================================================ Python / Node 脚本缓存
 __pycache__/
 *.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 tools/**/__pycache__/
+node_modules/
+.pnpm-store/
+tools/**/node_modules/
 
-# ---------------------------------------------------------------- 本机杂项
+# ================================================================ 测试产物
+test/failures/
+test/**/failures/
+**/goldens/failures/
+
+# ================================================================ 本机杂项
 *.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*.stackdump
 Thumbs.db
+ehthumbs.db
 desktop.ini
 .DS_Store
+._*
+$RECYCLE.BIN/
+.Trashes/

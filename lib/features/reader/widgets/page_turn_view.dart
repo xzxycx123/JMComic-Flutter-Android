@@ -8,12 +8,16 @@ class PageTurnView extends StatelessWidget {
     required this.itemBuilder,
     required this.onPageChanged,
     super.key,
+    this.physics,
   });
 
   final PageController controller;
   final int total;
   final IndexedWidgetBuilder itemBuilder;
   final ValueChanged<int> onPageChanged;
+
+  /// 缩放中传 [NeverScrollableScrollPhysics]：把拖动让给图片平移。
+  final ScrollPhysics? physics;
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +26,7 @@ class PageTurnView extends StatelessWidget {
       itemCount: total,
       onPageChanged: (index) => onPageChanged(index + 1),
       allowImplicitScrolling: true,
+      physics: physics,
       itemBuilder: (context, index) => itemBuilder(context, index),
     );
   }

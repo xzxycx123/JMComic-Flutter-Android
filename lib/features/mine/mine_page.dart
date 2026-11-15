@@ -12,6 +12,7 @@ import '../../data/local/settings_store.dart';
 import '../../data/models/account_session.dart';
 import '../../data/models/user_session.dart';
 import '../collect/collect_providers.dart';
+import '../collect/favorites_sync.dart';
 import '../download/download_providers.dart';
 import '../home/widgets/section_header.dart';
 
@@ -33,6 +34,7 @@ class MinePage extends ConsumerWidget {
         .length;
     final progressCount = ref.watch(progressStoreProvider).historyCount;
     final session = ref.watch(sessionProvider).valueOrNull;
+    final syncState = ref.watch(favoritesSyncProvider);
 
     return Scaffold(
       body: SafeArea(
@@ -40,7 +42,7 @@ class MinePage extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
           children: <Widget>[
-            _ProfileCard(session: session),
+            _ProfileCard(session: session, account: account),
             const SizedBox(height: 16),
             _StatsRow(
               items: <({String label, String value})>[
@@ -57,11 +59,26 @@ class MinePage extends ConsumerWidget {
               onLogout: () => _confirmLogout(context, ref),
             ),
             _SettingTile(
-              icon: AppIcons.bookmark,
+              // 收藏图标是五角星（与详情页一致）。
+              icon: AppIcons.star,
               title: '我的收藏',
               value: favoriteCount > 0 ? '$favoriteCount 本' : '暂无收藏',
               onTap: () => context.push('/collect'),
             ),
+            if (account?.isLoggedIn ?? false)
+              _SettingTile(
+                icon: AppIcons.refresh,
+                title: '同步收藏',
+                value: syncState.busy
+                    ? '同步中…'
+                    : syncState.lastError != null
+                        ? '上次失败'
+                        : syncState.lastReport != null
+                            ? '云端 ${syncState.lastReport!.serverCount} 本'
+                            : '未同步',
+                onTap:
+                    syncState.busy ? null : () => _syncFavorites(context, ref),
+              ),
             const SizedBox(height: 10),
             const SectionHeader(title: '下载与历史'),
             _SettingTile(
@@ -139,10 +156,26 @@ class MinePage extends ConsumerWidget {
             ),
             const SizedBox(height: 14),
             Text(
-              '本地模式：v1 不接入登录 / 收藏同步 / 评论。',
+              '收藏本地优先：登录后自动双向同步，点赞与评论也需要登录。',
               style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _syncFavorites(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final report = await ref.read(favoritesSyncProvider.notifier).syncNow();
+    if (!context.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          report == null
+              ? '同步失败：${ref.read(favoritesSyncProvider).lastError ?? '未知错误'}'
+              : '同步完成：云端 ${report.serverCount} 本 · 拉回 ${report.addedToLocal} 本'
+                  ' · 上传 ${report.pushed} 本',
         ),
       ),
     );
@@ -317,13 +350,20 @@ class _AccountCard extends StatelessWidget {
 }
 
 class _ProfileCard extends StatelessWidget {
-  const _ProfileCard({this.session});
+  const _ProfileCard({this.session, this.account});
 
   final UserSession? session;
+  final AccountSession? account;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final loggedIn = account?.isLoggedIn ?? false;
+    final title = loggedIn
+        ? (account!.username.isEmpty ? '已登录' : account!.username)
+        : account?.needsLogin == true
+            ? '登录已失效 · 本地模式'
+            : '未登录 · 本地模式';
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -348,7 +388,7 @@ class _ProfileCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 Text(
-                  '未登录 · 本地模式',
+                  title,
                   style: AppTypography.bodyStrong.copyWith(color: scheme.onSurface),
                 ),
                 const SizedBox(height: 4),

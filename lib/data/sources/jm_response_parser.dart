@@ -3,6 +3,7 @@ import '../models/jm_album_detail.dart';
 import '../models/jm_album_summary.dart';
 import '../models/jm_category.dart';
 import '../models/jm_chapter.dart';
+import '../models/jm_comment.dart';
 import '../models/jm_promote_module.dart';
 import '../models/jm_search_page.dart';
 import '../models/json_field.dart';
@@ -133,6 +134,24 @@ abstract final class JmResponseParser {
       page: page,
       fallbackQuery: query,
       searchType: searchType,
+    );
+  }
+
+  // ---------------------------------------------------------------- 评论
+  /// `GET /forum` 解密后是 `{list:[...], total:"12"}`（total 是字符串）。
+  static JmCommentPage comments(dynamic root, {required int page}) {
+    final map = asMap(root);
+    if (map == null) return JmCommentPage(page: page);
+    final items = asList(map['list'])
+        .map(asMap)
+        .whereType<Map<String, dynamic>>()
+        .map(JmComment.fromJson)
+        .where((item) => item.content.isNotEmpty)
+        .toList(growable: false);
+    return JmCommentPage(
+      items: items,
+      total: asInt(map['total']),
+      page: page,
     );
   }
 }

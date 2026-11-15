@@ -10,12 +10,16 @@ class ScrollReaderView extends StatelessWidget {
     required this.itemBuilder,
     required this.onPageChanged,
     super.key,
+    this.physics,
   });
 
   final ScrollController controller;
   final int total;
   final IndexedWidgetBuilder itemBuilder;
   final ValueChanged<int> onPageChanged;
+
+  /// 缩放中传 [NeverScrollableScrollPhysics]：避免双指拖动同时翻页。
+  final ScrollPhysics? physics;
 
   bool _onScroll(ScrollNotification notification) {
     if (notification.metrics.axis != Axis.vertical || total <= 1) return false;
@@ -34,7 +38,7 @@ class ScrollReaderView extends StatelessWidget {
       child: ListView.builder(
         controller: controller,
         itemCount: total,
-        physics: const ClampingScrollPhysics(),
+        physics: physics ?? const ClampingScrollPhysics(),
         itemBuilder: (context, index) => itemBuilder(context, index),
       ),
     );
