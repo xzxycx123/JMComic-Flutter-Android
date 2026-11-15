@@ -1,9 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/di/providers.dart';
+import '../../core/network/api_exception.dart';
 import '../../data/local/progress_store.dart';
 import '../../data/models/jm_album_detail.dart';
 import '../../data/models/jm_comment.dart';
+import '../collect/collect_providers.dart';
 
 /// 专辑详情（按 albumId 缓存，切走再回不重复请求）。
 final FutureProviderFamily<JmAlbumDetail, String> albumDetailProvider =
@@ -25,26 +27,22 @@ class AlbumLikeState {
   const AlbumLikeState({
     this.liked = false,
     this.likes = 0,
-    this.busy = false,
     this.error,
   });
 
   final bool liked;
   final int likes;
-  final bool busy;
   final String? error;
 
   AlbumLikeState copyWith({
     bool? liked,
     int? likes,
-    bool? busy,
     String? error,
     bool clearError = false,
   }) =>
       AlbumLikeState(
         liked: liked ?? this.liked,
         likes: likes ?? this.likes,
-        busy: busy ?? this.busy,
         error: clearError ? null : (error ?? this.error),
       );
 }
@@ -55,10 +53,12 @@ final NotifierProviderFamily<AlbumLikeNotifier, AlbumLikeState, String>
   AlbumLikeNotifier.new,
 );
 
-/// 点赞：服务端 `POST /like` 只回 `{msg,status}`、不回计数，所以本地乐观 +1。
+/// 点赞：**先亮成功、后台发送**（服务端 `/like` 不回计数，失败再回滚）。
 ///
 /// 不 `watch` 详情：否则详情一刷新就把刚点上的赞覆盖回旧值。
 class AlbumLikeNotifier extends FamilyNotifier<AlbumLikeState, String> {
+  bool _inFlight = false;
+
   @override
   AlbumLikeState build(String albumId) {
     final detail = ref.read(albumDetailProvider(albumId)).valueOrNull;
@@ -68,22 +68,22 @@ class AlbumLikeNotifier extends FamilyNotifier<AlbumLikeState, String> {
     );
   }
 
+  /// 返回 false 表示后台发送失败（状态已自动回滚）。
   Future<bool> like() async {
-    if (state.liked || state.busy) return false;
-    state = state.copyWith(busy: true, clearError: true);
+    if (state.liked || _inFlight) return false;
+    _inFlight = true;
+    final before = state;
+    // 前台立刻成功：不转圈、不等网络。
+    state = AlbumLikeState(liked: true, likes: before.likes + 1);
     try {
       final repository = await ref.read(albumRepositoryProvider.future);
       await repository.like(arg);
-      state = state.copyWith(
-        liked: true,
-        likes: state.likes + 1,
-        busy: false,
-        clearError: true,
-      );
       return true;
     } catch (error) {
-      state = state.copyWith(busy: false, error: '$error');
+      state = before.copyWith(error: '$error');
       return false;
+    } finally {
+      _inFlight = false;
     }
   }
 
@@ -214,20 +214,71 @@ class AlbumCommentsNotifier
     }
   }
 
-  /// 发评论：成功后回到第 1 页（新评论在最上面）。
+  /// 发评论：**先把评论插到列表顶部（发送中），再后台提交**。
+  ///
+  /// 成功：把 `pending` 摘掉（正文保留，不清空用户的评论）；
+  /// 失败：撤掉这条并抛出原因，由调用方提示。
   Future<String> post(
     String content, {
     bool spoiler = false,
     String? parentId,
   }) async {
-    final repository = await ref.read(albumRepositoryProvider.future);
-    final message = await repository.postComment(
+    final text = content.trim();
+    if (text.isEmpty) throw const JmContentException('评论内容不能为空');
+
+    final pendingId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
+    final before = state.valueOrNull ?? const AlbumCommentsState();
+    final author = ref.read(accountSessionProvider).valueOrNull?.username ?? '';
+    final optimistic = JmComment(
+      id: pendingId,
       albumId: arg,
-      content: content,
+      username: author,
+      nickname: author,
+      content: text,
       spoiler: spoiler,
-      parentId: parentId,
+      parentId: parentId ?? '0',
+      createdAt: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      pending: true,
     );
-    await refresh();
-    return message;
+    state = AsyncValue<AlbumCommentsState>.data(
+      before.copyWith(
+        items: <JmComment>[optimistic, ...before.items],
+        total: before.total + 1,
+        clearError: true,
+      ),
+    );
+
+    try {
+      final repository = await ref.read(albumRepositoryProvider.future);
+      final message = await repository.postComment(
+        albumId: arg,
+        content: text,
+        spoiler: spoiler,
+        parentId: parentId,
+      );
+      // 成功后只摘掉「发送中」标记，不用整页刷新（避免服务端还没收录时评论凭空消失）。
+      final current = state.valueOrNull ?? before;
+      state = AsyncValue<AlbumCommentsState>.data(
+        current.copyWith(
+          items: current.items
+              .map((item) =>
+                  item.id == pendingId ? item.copyWith(pending: false) : item,)
+              .toList(growable: false),
+        ),
+      );
+      return message;
+    } catch (error) {
+      final current = state.valueOrNull ?? before;
+      state = AsyncValue<AlbumCommentsState>.data(
+        current.copyWith(
+          items: current.items
+              .where((item) => item.id != pendingId)
+              .toList(growable: false),
+          total: current.total > 0 ? current.total - 1 : 0,
+          error: '$error',
+        ),
+      );
+      rethrow;
+    }
   }
 }

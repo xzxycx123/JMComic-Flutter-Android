@@ -276,12 +276,20 @@ dio.interceptors = [
 
 ### 4.5 失效判定与静默重试
 
-判定信号（任一命中即 `needsLogin`）：
+**0.3.1 起收紧（0.3.0 的「每次退出 App 都掉登录」就是这里放太宽）**：
 
-1. 响应 `Content-Type` 含 `text/html`（被重定向到登录/风控页）；
-2. HTTP 401/403；
-3. `code != 200` 且 `errorMsg`/`msg` 含「登录 / login / 未登入」；
-4. cookie 里 `AVS` 缺失且请求是收藏类接口。
+判定信号（任一命中才 `needsLogin`）：
+
+1. HTTP **401**（请求层已统一转成 `JmContentException('登录状态已失效，请重新登录')`）；
+2. `code != 200` 且 `errorMsg`/`msg` **明确**含「未登入 / 未登录 / 请先登录 / 登录已失效 / not login / unauthorized」；
+3. 会话里 `uid > 0` 但 `jm_session.cookies` 为空（真的没 cookie 可用）。
+
+**不再**作为失效信号：HTML 响应、其它 `code != 200` 的业务错误、线路超时/非 JSON —— 这些只记录并保持登录态，等用户真正操作时再报错。
+
+另外两条配套（同版本）：
+
+- **cookie 每次响应后回写**：`JmApiClient.onCookiesChanged`（节流 2s）→ `SessionStore.writeCookies`；`/setting`、`/login` 后立刻写。否则退出 App 留下的是登录那一刻的旧快照，冷启动必被判失效。
+- **冷启动先 `/setting` 再校验**：`恢复 cookie → prepare()（刷新轮换 cookie / 版本）→ GET /favorite?page=1`。
 
 重试：**只重试一次**，且仅当策略 B 开启。重试流程 = 重新 `/login` → 拿新 cookie → 重放原请求；仍失败则 `needsLogin` 并提示，不循环。
 

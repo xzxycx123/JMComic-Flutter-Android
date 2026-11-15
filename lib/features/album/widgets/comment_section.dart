@@ -157,14 +157,20 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       await askForLogin(context);
       return;
     }
-    final message = await showCommentComposer(
+    final draft = await showCommentComposer(
       context,
       albumId: widget.albumId,
       parentId: parentId,
     );
-    if (message == null || !context.mounted) return;
+    if (draft == null || !context.mounted) return;
     setState(() => _expanded = true);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    sendCommentOptimistically(
+      context,
+      ref,
+      albumId: widget.albumId,
+      draft: draft,
+      parentId: parentId,
+    );
   }
 
   static bool _isLoggedIn(WidgetRef ref) =>
@@ -178,6 +184,27 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     if (host.isEmpty) return '';
     return 'https://$host${value.startsWith('/') ? '' : '/'}$value';
   }
+}
+
+/// 前台先给「已发送」，网络请求在后台跑；失败再弹错误并把那条撤回。
+void sendCommentOptimistically(
+  BuildContext context,
+  WidgetRef ref, {
+  required String albumId,
+  required CommentDraft draft,
+  String? parentId,
+}) {
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.showSnackBar(const SnackBar(content: Text('评论已发送')));
+  unawaited(
+    ref
+        .read(albumCommentsProvider(albumId).notifier)
+        .post(draft.content, spoiler: draft.spoiler, parentId: parentId)
+        .catchError((Object error) {
+      messenger.showSnackBar(SnackBar(content: Text('发送失败：$error')));
+      return '';
+    }),
+  );
 }
 
 /// 登录门槛：没登录就弹「去登录」，不静默失败。
@@ -227,11 +254,15 @@ class _ComposerEntry extends ConsumerWidget {
             await askForLogin(context);
             return;
           }
-          final message = await showCommentComposer(context, albumId: albumId);
-          if (message == null || !context.mounted) return;
+          final draft = await showCommentComposer(context, albumId: albumId);
+          if (draft == null || !context.mounted) return;
           onDone();
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(message)));
+          sendCommentOptimistically(
+            context,
+            ref,
+            albumId: albumId,
+            draft: draft,
+          );
         },
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
@@ -312,6 +343,10 @@ class CommentTile extends StatelessWidget {
                     if (comment.spoiler) ...<Widget>[
                       const SizedBox(width: 6),
                       _Tag(text: '剧透', color: scheme.error),
+                    ],
+                    if (comment.pending) ...<Widget>[
+                      const SizedBox(width: 6),
+                      _Tag(text: '发送中', color: scheme.onSurfaceVariant),
                     ],
                     const SizedBox(width: 6),
                     Text(
@@ -430,13 +465,21 @@ class _Tag extends StatelessWidget {
   }
 }
 
-/// 打开写评论面板；成功返回服务端提示文案，取消返回 null。
-Future<String?> showCommentComposer(
+/// 写评论面板的返回值：面板一关就把草稿交给调用方，网络请求在后台跑。
+class CommentDraft {
+  const CommentDraft(this.content, {this.spoiler = false});
+
+  final String content;
+  final bool spoiler;
+}
+
+/// 打开写评论面板；填好后立即返回草稿（不阻塞在网络请求上），取消返回 null。
+Future<CommentDraft?> showCommentComposer(
   BuildContext context, {
   required String albumId,
   String? parentId,
 }) {
-  return showModalBottomSheet<String>(
+  return showModalBottomSheet<CommentDraft>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
@@ -459,9 +502,7 @@ class _ComposerSheet extends ConsumerStatefulWidget {
 
 class _ComposerSheetState extends ConsumerState<_ComposerSheet> {
   final TextEditingController _controller = TextEditingController();
-  bool _busy = false;
   bool _spoiler = false;
-  String? _error;
 
   @override
   void initState() {
@@ -478,26 +519,11 @@ class _ComposerSheetState extends ConsumerState<_ComposerSheet> {
 
   void _onChanged() => setState(() {});
 
-  Future<void> _submit() async {
+  /// 立刻关闭面板并把草稿带出去：发送在列表侧后台进行，用户不用等转圈。
+  void _submit() {
     final text = _controller.text.trim();
-    if (text.isEmpty || _busy) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      final message = await ref
-          .read(albumCommentsProvider(widget.albumId).notifier)
-          .post(text, spoiler: _spoiler, parentId: widget.parentId);
-      if (!mounted) return;
-      Navigator.of(context).pop(message);
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _error = '$error';
-      });
-    }
+    if (text.isEmpty) return;
+    Navigator.of(context).pop(CommentDraft(text, spoiler: _spoiler));
   }
 
   @override
@@ -547,29 +573,16 @@ class _ComposerSheetState extends ConsumerState<_ComposerSheet> {
                 ),
               ),
               TextButton(
-                onPressed: _busy ? null : () => Navigator.of(context).pop(),
+                onPressed: () => Navigator.of(context).pop(),
                 child: const Text('取消'),
               ),
               const SizedBox(width: 6),
               FilledButton(
-                onPressed: _busy || _controller.text.trim().isEmpty ? null : _submit,
-                child: _busy
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2.2),
-                      )
-                    : const Text('发送'),
+                onPressed: _controller.text.trim().isEmpty ? null : _submit,
+                child: const Text('发送'),
               ),
             ],
           ),
-          if (_error != null) ...<Widget>[
-            const SizedBox(height: 4),
-            Text(
-              _error!,
-              style: AppTypography.caption.copyWith(color: scheme.error),
-            ),
-          ],
         ],
       ),
     );

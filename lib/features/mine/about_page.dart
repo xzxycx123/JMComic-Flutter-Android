@@ -191,7 +191,7 @@ class _QrCard extends StatelessWidget {
                   '官方 APP 二维码',
                   style: AppTypography.bodyStrong.copyWith(color: scheme.onSurface),
                 ),
-                const SizedBox(height: 4)
+                const SizedBox(height: 4),
               ],
             ),
           ),

@@ -7,6 +7,7 @@ import '../../data/local/download_store.dart';
 import '../../data/local/endpoint_store.dart';
 import '../../data/local/hive_init.dart';
 import '../../data/local/progress_store.dart';
+import '../../data/local/session_store.dart';
 import '../../data/local/settings_store.dart';
 import '../../data/repositories/album_repository.dart';
 import '../../data/repositories/catalog_repository.dart';
@@ -85,6 +86,9 @@ final Provider<JmApi> jmApiProvider = Provider<JmApi>(
     cookieJar: ref.watch(cookieJarProvider),
     resolver: ref.watch(endpointResolverProvider),
     autoSwitchHost: () => ref.read(settingsProvider).autoSwitchHost,
+    // 站点每次响应都可能轮换会话 cookie（/setting 尤其频繁）。只存登录那一刻的
+    // 快照，退出 App 后就变成一串过期 cookie，冷启动会被判「登录失效」。
+    onCookiesChanged: ref.read(sessionStoreProvider).writeCookies,
   ),
 );
 
@@ -107,6 +111,11 @@ final FutureProvider<UserSession> sessionProvider =
 // ---------------------------------------------------------------- 本地存储
 final Provider<ProgressStore> progressStoreProvider = Provider<ProgressStore>(
   (ref) => ProgressStore(Hive.box<dynamic>(HiveBoxes.readerProgress)),
+);
+
+/// 会话 / cookie 持久化（`jm_session`）。放在 DI 层，网络层与账号层都要用。
+final Provider<SessionStore> sessionStoreProvider = Provider<SessionStore>(
+  (ref) => SessionStore(Hive.box<dynamic>(HiveBoxes.session)),
 );
 
 final Provider<SearchHistoryStore> searchHistoryStoreProvider =

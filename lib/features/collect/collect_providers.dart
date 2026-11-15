@@ -3,12 +3,16 @@ import 'package:hive_ce/hive.dart';
 
 import '../../data/local/favorites_store.dart';
 import '../../data/local/hive_init.dart';
-import '../../data/local/session_store.dart';
 import '../../data/models/account_session.dart';
 import '../../data/models/favorite_item.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/favorites_repository.dart';
 import '../../core/di/providers.dart';
+import '../../core/utils/logger.dart';
+
+/// `sessionStoreProvider` 已迁到 core/di（网络层要持续回写 cookie），这里再导出一次，
+/// 老的 `import 'collect_providers.dart'` 不受影响。
+export '../../core/di/providers.dart' show sessionStoreProvider;
 
 /// 收藏 box 的存储层（per-album 账本 + 文件夹 + outbox）。
 final Provider<FavoritesStore> favoritesStoreProvider = Provider<FavoritesStore>(
@@ -17,10 +21,6 @@ final Provider<FavoritesStore> favoritesStoreProvider = Provider<FavoritesStore>
     folders: Hive.box<dynamic>(HiveBoxes.favoriteFolders),
     outbox: Hive.box<dynamic>(HiveBoxes.favoriteOutbox),
   ),
-);
-
-final Provider<SessionStore> sessionStoreProvider = Provider<SessionStore>(
-  (ref) => SessionStore(Hive.box<dynamic>(HiveBoxes.session)),
 );
 
 final Provider<AuthRepository> authRepositoryProvider = Provider<AuthRepository>(
@@ -40,7 +40,15 @@ class AccountSessionNotifier extends AsyncNotifier<AccountSession> {
   @override
   Future<AccountSession> build() async {
     final repository = ref.watch(authRepositoryProvider);
-    final session = await repository.restore();
+    final AccountSession session;
+    try {
+      session = await repository.restore();
+    } catch (error) {
+      // 恢复链路出任何意外都不要表现为「未登录」：用 Hive 里的快照兜底，
+      // 真正的失效判定留给下一次真实请求。
+      Log.w('会话恢复异常，按上次快照展示：$error');
+      return repository.snapshot;
+    }
     // 会话恢复成功后把 cookie 落盘（可能已被服务端刷新）。
     if (session.state == SessionState.valid) {
       await repository.persistCookies();

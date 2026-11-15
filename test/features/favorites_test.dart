@@ -190,6 +190,21 @@ void main() {
       expect(again.state, SessionState.valid);
     });
 
+    test('冷启动：非鉴权业务错误不把用户踢下线（0.3.1 回归）', () async {
+      final api = FakeJmApi(loggedIn: true)
+        ..favoritesError = 'JM 接口错误：服务器繁忙，请稍后再试';
+      final repository = AuthRepository(api: api, session: sessions, favorites: store);
+
+      await sessions.writeSession(
+        const AccountSession(uid: 42, username: 'tester', state: SessionState.valid),
+      );
+      await sessions.writeCookies(<String, String>{'AVS': 'fresh'});
+
+      final restored = await repository.restore();
+      expect(restored.state, SessionState.valid);
+      expect(restored.uid, 42);
+    });
+
     test('登出：清会话与 cookie，收藏降级为仅本地', () async {
       final api = FakeJmApi(loggedIn: true);
       final repository = AuthRepository(api: api, session: sessions, favorites: store);

@@ -1,3 +1,5 @@
+import 'package:html/parser.dart' as html_parser;
+
 import 'json_field.dart';
 
 /// 一条专辑评论（`GET /forum` 的 `list` 项）。
@@ -20,6 +22,7 @@ class JmComment {
     this.spoiler = false,
     this.parentId = '0',
     this.replies = const <JmComment>[],
+    this.pending = false,
   });
 
   final String id;
@@ -39,7 +42,32 @@ class JmComment {
   final String parentId;
   final List<JmComment> replies;
 
+  /// 乐观发送中（还没拿到服务端确认），列表里给一条灰色标记。
+  final bool pending;
+
   bool get isReply => parentId.isNotEmpty && parentId != '0';
+
+  JmComment copyWith({
+    String? id,
+    String? content,
+    bool? pending,
+    int? createdAt,
+  }) =>
+      JmComment(
+        id: id ?? this.id,
+        albumId: albumId,
+        userId: userId,
+        username: username,
+        nickname: nickname,
+        content: content ?? this.content,
+        avatar: avatar,
+        likes: likes,
+        createdAt: createdAt ?? this.createdAt,
+        spoiler: spoiler,
+        parentId: parentId,
+        replies: replies,
+        pending: pending ?? this.pending,
+      );
 
   String get displayName {
     for (final candidate in <String>[nickname, username]) {
@@ -80,9 +108,9 @@ class JmComment {
       id: asString(json['CID']) ?? '',
       albumId: asString(json['AID']) ?? '',
       userId: asString(json['UID']) ?? '',
-      username: (asString(json['username']) ?? '').trim(),
-      nickname: (asString(json['nickname']) ?? '').trim(),
-      content: (asString(json['content']) ?? '').trim(),
+      username: cleanText(asString(json['username']) ?? ''),
+      nickname: cleanText(asString(json['nickname']) ?? ''),
+      content: cleanText(asString(json['content']) ?? ''),
       avatar: (asString(json['photo']) ?? '').trim(),
       likes: asInt(json['likes']),
       createdAt: _parseTimestamp(json['addtime']),
@@ -90,6 +118,36 @@ class JmComment {
       parentId: asString(json['parent_CID']) ?? '0',
       replies: replies,
     );
+  }
+
+  /// 评论正文/昵称里会夹带 `<div>`、`<br>`、`&nbsp;` 这类 HTML（站点后台直接吐富文本），
+  /// 直接丢到 `Text` 上就会看到 `<div></div>`。这里统一压成纯文本。
+  static String cleanText(String raw) {
+    var value = raw.replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim();
+    if (value.isEmpty) return '';
+    if (value.contains('<') || value.contains('&')) {
+      // 先给块级标签补换行，再解析，否则 `a<br>b` 会被拼成 `ab`。
+      value = value
+          .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+          .replaceAll(
+            RegExp(r'</(p|div|li|blockquote)\s*>', caseSensitive: false),
+            '\n',
+          );
+      try {
+        value = html_parser.parseFragment(value).text ?? '';
+      } catch (_) {
+        value = value.replaceAll(RegExp(r'<[^>]*>'), '');
+      }
+    }
+    value = value.replaceAll('\u00a0', ' ');
+    final lines = value
+        .split('\n')
+        .map((line) => line.trim())
+        .toList(growable: false);
+    return lines
+        .join('\n')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
   }
 
   /// `addtime` 既可能是秒级时间戳，也可能是 `2026-11-14 20:01:33`。

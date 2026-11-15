@@ -132,6 +132,9 @@ class FakeJmApi implements JmApi {
   /// 强制返回与操作相反的 toggle 结果（用于验证反向自愈）。
   String? forcedToggleType;
 
+  /// 收藏列表返回业务错误（用于验证「非鉴权错误不踢下线」）。
+  String? favoritesError;
+
   /// 服务端收藏集合（toggle 会真实增删）。
   final Set<String> serverFavorites;
 
@@ -203,6 +206,8 @@ class FakeJmApi implements JmApi {
     String order = 'mr',
     int folderId = 0,
   }) async {
+    final failure = favoritesError;
+    if (failure != null) throw JmContentException(failure);
     if (!loggedIn) {
       throw const JmContentException('JM 接口错误：请先登录');
     }

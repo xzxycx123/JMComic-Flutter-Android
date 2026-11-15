@@ -344,7 +344,6 @@ class _InteractionBar extends ConsumerWidget {
             icon: like.liked ? AppIcons.heartFilled : AppIcons.heart,
             label: like.liked ? '已点赞 ${like.likes}' : '点赞 ${like.likes}',
             active: like.liked,
-            busy: like.busy,
             onTap: () => _like(context, ref, like),
           ),
           const SizedBox(width: 10),
@@ -372,14 +371,13 @@ class _InteractionBar extends ConsumerWidget {
       await askForLogin(context);
       return;
     }
-    final ok = await ref.read(albumLikeProvider(album.id).notifier).like();
-    if (!context.mounted) return;
-    if (!ok) {
-      final error = ref.read(albumLikeProvider(album.id)).error ?? '未知错误';
-      messenger.showSnackBar(SnackBar(content: Text('点赞失败：$error')));
-      return;
-    }
+    // 前台立刻成功（notifier 在第一个 await 之前就把状态改成已赞），网络在后台跑。
+    final pending = ref.read(albumLikeProvider(album.id).notifier).like();
     messenger.showSnackBar(const SnackBar(content: Text('已点赞')));
+    final ok = await pending;
+    if (!context.mounted || ok) return;
+    final error = ref.read(albumLikeProvider(album.id)).error ?? '未知错误';
+    messenger.showSnackBar(SnackBar(content: Text('点赞失败：$error')));
   }
 
   Future<void> _comment(BuildContext context, WidgetRef ref) async {
@@ -387,10 +385,9 @@ class _InteractionBar extends ConsumerWidget {
       await askForLogin(context);
       return;
     }
-    final message = await showCommentComposer(context, albumId: album.id);
-    if (message == null || !context.mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    final draft = await showCommentComposer(context, albumId: album.id);
+    if (draft == null || !context.mounted) return;
+    sendCommentOptimistically(context, ref, albumId: album.id, draft: draft);
   }
 }
 
@@ -400,14 +397,12 @@ class _Pill extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.active = false,
-    this.busy = false,
   });
 
   final String icon;
   final String label;
   final VoidCallback onTap;
   final bool active;
-  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -419,23 +414,16 @@ class _Pill extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppColors.radiusPill),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppColors.radiusPill),
-        onTap: busy ? null : onTap,
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              if (busy)
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                IconTheme(
-                  data: IconThemeData(color: foreground),
-                  child: SvgIcon(icon, size: 16),
-                ),
+              IconTheme(
+                data: IconThemeData(color: foreground),
+                child: SvgIcon(icon, size: 16),
+              ),
               const SizedBox(width: 6),
               Text(
                 label,

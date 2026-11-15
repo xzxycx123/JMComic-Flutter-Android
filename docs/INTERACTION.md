@@ -86,9 +86,9 @@ Body(multipart): comment=<正文>, aid=<专辑 id>, status=<1 剧透 | 0 正常>
 
 ```
 [idle] --tap(未登录)--> 弹「登录后才能操作」→ /login
-[idle] --tap(已登录)--> busy=true
-   ├─ 成功 --> liked=true, likes+1, 按钮锁成「已点赞 N」（无取消）
-   └─ 失败 --> busy=false, error=<原因>，SnackBar「点赞失败：…」，可再点
+[idle] --tap(已登录)--> 立刻 liked=true, likes+1（前台成功，不转圈）
+   ├─ 后台成功 --> 保持已赞（无取消）
+   └─ 后台失败 --> 回滚 liked=false, likes-1 + SnackBar「点赞失败：…」，可再点
 ```
 
 ### 2.2 评论列表状态机
@@ -97,17 +97,32 @@ Body(multipart): comment=<正文>, aid=<专辑 id>, status=<1 剧透 | 0 正常>
 build   --> GET /forum page=1  (loading → data)
 展开     --> preview(5) → 全部（本地，不发请求）
 加载更多 --> page+1 追加，按 CID 去重；返回空页即 hasMore=false
-发送成功 --> 重置到 page=1（新评论在最前）
-失败     --> 保留已有条目 + 行内错误 + 「重试」
+发送     --> 立刻关面板：列表顶部插入 pending 条目（「发送中」标记）+ total+1
+   ├─ 后台成功 --> 只摘掉 pending 标记（不整页刷新，避免服务端未收录时评论凭空消失）
+   └─ 后台失败 --> 撤回该条 + total-1 + SnackBar「发送失败：…」
 ```
+
+> 0.3.1 起点赞与发评论都是「前台先成功、后台发」：用户不转圈等待，失败才回滚。
+
+### 2.3 正文清洗（HTML）
+
+站点评论的 `content` / `nickname` 是富文本，实测会带 `<div>`、`<br>`、`&nbsp;`、`&lt;`：
+直接塞进 `Text` 就会看到 `<div></div>`。统一在 `JmComment.fromJson` 里过 `cleanText()`：
+
+1. `<br>` → 换行；`</p|div|li|blockquote>` → 换行（否则 `a<br>b` 会被拼成 `ab`）；
+2. `html.parseFragment(...).text` 解析并解码实体（`&nbsp;` → 空格、`&lt;` → `<`）；
+3. 逐行 trim、把 3 个以上连续换行压成 2 个。
+
+纯文本无 `<`/`&` 时直接跳过解析，避免无谓开销。
 
 ---
 
 ## 3. 登录门槛与失败提示
 
 - 点赞 / 写评论 / 回复：`accountSessionProvider.isLoggedIn` 为假时弹 `AlertDialog`（`user.svg` + 「登录后才能操作」+ 「先不登录 / 去登录」），**不静默失败**。
-- 401（会话过期）：请求层抛 `JmContentException`，调用方把原因显示在 SnackBar/行内错误里，并把 `AccountSession` 标 `needsLogin`（`pingFavorite` 的现有链路）。
+- 401（会话过期）：请求层抛 `JmContentException`，调用方把原因显示在 SnackBar/行内错误里，并把 `AccountSession` 标 `needsLogin`。
 - 登录失败本身走 `LoginPage` 的失败对话框（图标 + 原因归一化 + 排查提示 + 「重试」），原因映射在 `AuthRepository.describeLoginFailure()`。
+- 登录态持久化策略见 `docs/FAVORITES.md` §4.5（cookie 每次响应回写；只有明确的鉴权失败才降级），0.3.1 起点赞/评论的失败提示与「是否已登录」判断都依赖它。
 
 ---
 
@@ -135,10 +150,12 @@ build   --> GET /forum page=1  (loading → data)
 | 4 | 评论首屏 | 只渲染 5 条 + 「查看全部 N 条评论」 |
 | 5 | 展开 | 渲染全部条目，不再发请求 |
 | 6 | 加载更多 | 第 2 页追加、CID 去重、`hasMore=false` 后按钮消失 |
-| 7 | 发评论成功 | 面板关闭、回第 1 页、SnackBar 显示服务端 `msg` |
-| 8 | 发评论失败 | 面板不关、行内红字、可重试 |
+| 7 | 发评论（0.3.1 乐观） | 面板立即关闭、顶部出现「发送中」条目，后台成功后标记消失 |
+| 8 | 发评论失败 | 条目撤回、SnackBar 报原因，可重发 |
 | 9 | `addtime` 两种格式 | 都能出相对时间，不抛异常 |
 | 10 | 空评论 | 显示「还没有评论，来说两句」，不是错误态 |
+| 11 | HTML 正文 | `<div>/<br>/&nbsp;/&lt;` 全部清洗，列表里没有尖括号 |
+| 12 | 点赞（0.3.1 乐观） | 点下即「已点赞 N」，无 loading；后台失败才回滚 |
 
 自动化覆盖：`test/helpers/fixtures.dart` 的 `FakeJmApi` 已实现 `likeAlbum` / `fetchComments` / `postComment`（记录 `likedAlbums`、`postedComments`），可直接写 widget 测试。
 

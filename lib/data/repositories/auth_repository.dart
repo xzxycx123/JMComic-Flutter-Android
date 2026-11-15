@@ -26,7 +26,13 @@ class AuthRepository {
 
   AccountSession get snapshot => _session.readSession();
 
-  /// 冷启动：恢复 cookie -> 探一次收藏接口。网络错误不改变登录态。
+  /// 冷启动：恢复 cookie -> 跑一次 /setting -> 探一次收藏接口。
+  ///
+  /// 0.3.1 修复「每次退出 App 就掉登录」：
+  /// 1. 校验前**必须**先跑 `/setting`（站点会轮换它下发的 cookie，只拿上次的快照
+  ///    去打 `/favorite` 很容易被判未登录）；
+  /// 2. 只有服务端**明确**说未登录 / 401 / 会话失效才降级成 `needsLogin`，
+  ///    其它业务错误与网络错误一律保持登录态（宁可下次操作报错，也不把用户踢下线）。
   Future<AccountSession> restore() async {
     final stored = _session.readSession();
     if (stored.uid <= 0) return AccountSession.local;
@@ -35,16 +41,56 @@ class AuthRepository {
     if (cookies.isEmpty) {
       return _session.markNeedsLogin();
     }
-    _api.restoreCookies(cookies);
+    // 本进程内如果已经跑过 /setting（jar 里是新 cookie），不要用 Hive 的旧快照覆盖它。
+    if (_api.cookieSnapshot.isEmpty) {
+      _api.restoreCookies(cookies);
+    }
 
     try {
-      final ok = await _api.pingFavorite();
-      if (!ok) return await _session.markNeedsLogin();
+      // 已经引导过（本进程）就不再重复 discovery + /setting。
+      if (!_api.session.ready) await _api.prepare();
+    } on JmApiException catch (error) {
+      Log.w('冷启动 /setting 失败，保持登录态：$error');
+      return stored;
+    }
+
+    try {
+      await _api.fetchFavorites(page: 1);
+      // /setting / /favorite 这一轮很可能已经把 cookie 轮换了，立刻回写。
+      await persistCookies();
+      return stored.copyWith(state: SessionState.valid);
+    } on JmContentException catch (error) {
+      if (_looksLikeAuthFailure(error.message)) {
+        return _session.markNeedsLogin();
+      }
+      Log.w('冷启动校验返回业务错误，保持登录态：${error.message}');
       return stored.copyWith(state: SessionState.valid);
     } on JmApiException {
       // 只是当前没网：保持上次状态，不要逼用户重登。
       return stored;
     }
+  }
+
+  /// 业务文案里出现这些才算「会话真的失效」；其余都当作可重试错误。
+  static bool _looksLikeAuthFailure(String message) {
+    final text = message.toLowerCase();
+    for (final needle in const <String>[
+      '未登入',
+      '未登录',
+      '未登錄',
+      '请先登入',
+      '请先登录',
+      '請先登入',
+      '請先登錄',
+      '登录已失效',
+      '登录状态已失效',
+      'not login',
+      'unauthorized',
+      '401',
+    ]) {
+      if (text.contains(needle.toLowerCase())) return true;
+    }
+    return false;
   }
 
   /// 登录：bootstrap -> /login（multipart）-> 校验收藏接口 -> 落 session + cookie。
@@ -87,8 +133,9 @@ class AuthRepository {
       return session;
     }
     if (!ok) {
-      await _session.clear();
-      throw const JmContentException('登录校验失败：会话没建立起来，请换线路后重试');
+      // 校验拿到的是业务错误（不是 401）：同样不推翻 /login 的成功结果，
+      // 只记一条日志；真失效了下次操作会再报，用户也能在「我的」里看到状态。
+      Log.w('登录后校验返回业务错误，仍按登录成功处理');
     }
 
     await _session.writeSession(session);

@@ -5,6 +5,7 @@ import 'package:hive_ce/hive.dart';
 import 'package:jm_comic/core/di/providers.dart';
 import 'package:jm_comic/data/local/hive_init.dart';
 import 'package:jm_comic/data/local/progress_store.dart';
+import 'package:jm_comic/data/models/jm_comment.dart';
 import 'package:jm_comic/data/repositories/album_repository.dart';
 import 'package:jm_comic/features/album/album_providers.dart';
 import 'package:jm_comic/features/album/widgets/comment_section.dart';
@@ -70,6 +71,26 @@ void main() {
 
     expect(find.text('登录后才能操作'), findsOneWidget);
     expect(api.postedComments, isEmpty);
+  });
+
+  test('评论正文剥离 HTML 标签（站点会吐 <div>/<br>/&nbsp;）', () {
+    expect(JmComment.cleanText('<div></div>'), '');
+    expect(JmComment.cleanText('好看<div>第二段</div>'), contains('第二段'));
+    expect(JmComment.cleanText('好看').contains('<'), isFalse);
+    expect(JmComment.cleanText('a<br>b'), 'a\nb');
+    expect(JmComment.cleanText('&nbsp;缩进'), '缩进');
+    expect(JmComment.cleanText('&lt;3'), '<3');
+    expect(JmComment.cleanText('  多行\n\n\n\n段落  '), '多行\n\n段落');
+
+    final parsed = JmComment.fromJson(<String, dynamic>{
+      'CID': '1',
+      'content': '<div>第一行</div><div>第二行</div>',
+      'nickname': '<b>阿B</b>',
+      'addtime': '1794625636',
+    });
+    expect(parsed.content.contains('<'), isFalse);
+    expect(parsed.content, contains('第一行'));
+    expect(parsed.displayName, '阿B');
   });
 
   test('已登录时发评论会写到服务端（provider 层）', () async {

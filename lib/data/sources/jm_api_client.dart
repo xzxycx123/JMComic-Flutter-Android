@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -124,6 +125,7 @@ class JmApiClient implements JmApi {
     JmEndpointResolver? resolver,
     bool Function()? autoSwitchHost,
     this.timestampProvider,
+    this.onCookiesChanged,
   })  : _store = store,
         _dio = dio,
         _jar = cookieJar ?? JmCookieJar(),
@@ -145,6 +147,22 @@ class JmApiClient implements JmApi {
 
   /// 单测注入固定时间戳（服务端响应要用同一 ts 解密）。
   final String Function()? timestampProvider;
+
+  /// cookie 轮换回调（节流 2s）：让 `jm_session` 里的 cookie 始终是最近一次响应后的值。
+  ///
+  /// 不接这个回调，App 退出后留下的就是登录那一刻的旧快照，冷启动很容易被判未登录。
+  final Future<void> Function(Map<String, String> cookies)? onCookiesChanged;
+
+  DateTime _lastCookieWrite = DateTime.fromMillisecondsSinceEpoch(0);
+
+  void _persistCookiesSoon() {
+    final callback = onCookiesChanged;
+    if (callback == null || _jar.length == 0) return;
+    final now = DateTime.now();
+    if (now.difference(_lastCookieWrite) < const Duration(seconds: 2)) return;
+    _lastCookieWrite = now;
+    unawaited(callback(_jar.snapshot()));
+  }
 
   String _activeHost = '';
   String _activeImageHost = '';
@@ -192,6 +210,11 @@ class JmApiClient implements JmApi {
     final decoded = await _requestApi('/setting');
     await _applySetting(decoded);
     _prepared = true;
+    // /setting 每次都会轮换 cookie，这里立刻落盘（冷启动掉登录的老根因）。
+    if (onCookiesChanged != null && _jar.length > 0) {
+      _lastCookieWrite = DateTime.now();
+      unawaited(onCookiesChanged!(_jar.snapshot()));
+    }
     Log.i(
       'prepare 完成：api=$apiHost img=$imageHost appVersion=${_store.appVersion} cookies=${_jar.length}',
     );
@@ -839,6 +862,9 @@ class JmApiClient implements JmApi {
         cause: error,
       );
     }
+
+    // 响应里的 Set-Cookie 由拦截器吸收，这里把轮换后的 cookie 写回 Hive。
+    _persistCookiesSoon();
 
     final text = response.data ?? '';
     final jsonText = extractJsonObject(text);
