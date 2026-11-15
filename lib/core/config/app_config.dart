@@ -2,7 +2,7 @@
 abstract final class AppConfig {
   /// 应用展示名 / 关于页版本前缀，实际版本号来自 pubspec（package_info 未接入时用此常量）。
   static const String appName = 'JMComic';
-  static const String appVersion = '0.3.1';
+  static const String appVersion = '0.3.2';
 
   /// 版权与许可证（关于页展示；仓库根 LICENSE 为全文，assets/licenses 里是同一份）。
   static const String copyright = 'Copyright (C) 2026 xzxycx';

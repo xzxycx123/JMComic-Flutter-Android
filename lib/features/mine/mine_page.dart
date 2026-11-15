@@ -156,7 +156,7 @@ class MinePage extends ConsumerWidget {
             ),
             const SizedBox(height: 14),
             Text(
-              '收藏本地优先：登录后自动双向同步，点赞与评论也需要登录。',
+              '收藏本地优先：登录后自动双向同步；开启「记住密码」后 cookie 失效会自动重登，点赞与评论也需要登录。',
               style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
             ),
           ],

@@ -835,11 +835,12 @@ abstract final class AppColors {
 > 完整解剖（jm-mobile 的拦截器链、自动登录、登出、UI 细节）与我们的实现骨架见 **`docs/FAVORITES.md` §2 / §4**。
 
 - **定位**：cookie 为主、`/login` 换取账号信息为辅；**不存明文密码**（jm-mobile 存明文并在每次冷启动重登，我们不取）。
-- **存储**：新 box `jm_session` 只放会话快照 + cookie 列表（含 `AVS`）；密码若要记住，必须用户显式勾选并落 `flutter_secure_storage`。
+- **存储**：新 box `jm_session` 放会话快照 + cookie 列表（含 `AVS`）；「记住密码」（默认开）把账号密码交 `flutter_secure_storage`（Keystore/Keychain），不落明文。
 - **拦截器链顺序**：`SessionGate`（`/setting`、`/login` 放行）→ `Endpoint`（域名轮换）→ `Token`（**每请求现算** `md5(ts+secret)`，版本取 `/setting.jm3_version`）→ `Cookie` → `Decrypt`（`{code,data}`，**AES-256-ECB**）→ `LoginRequired`（401/HTML/`code!=200` → `needsLogin`）。
 - **登录时序**：`bootstrap()` → `POST /login`（multipart）→ 响应带 `s` 就补写 `AVS` cookie → `UserSession(state: valid)` → `GET /favorite?page=1` 校验 → **登录成功立即做一次双向收藏同步**（先对账把云端拉回本地，再推 outbox 把本地补到云端），结果在提示框里报「云端 N 本 · 拉回 M 本 · 上传 K 本」。
 - **失败提示**：登录失败必须是对话框（图标 + 原因 + 排查提示 + 「重试」），不能只在输入框下塞一行红字；原因归一化：密码错 / 被限流 / 人机校验 / 线路异常四类文案。
-- **自动登录**：默认「cookie 恢复 + 一次校验」，失败一次即回 `local`，不打扰用户；不做每冷启动重登。
+- **自动登录**：默认「cookie 恢复 + 一次校验」；0.3.2 起校验判定失效时，用 `flutter_secure_storage` 里保存的账号密码**静默重登一次**（设置里可关，关掉即清空凭据；主动登出也清）。不做每冷启动无条件重登，失败不循环。
+- **凭据存储**：`CredentialVault` 抽象（`SecureCredentialVault` / 测试用 `MemoryCredentialVault`）；密码不落明文，读写异常自动降级为「未保存」。
 - **失效**：`needsLogin` 时收藏继续本地可用，我的页顶栏给「登录已失效 · 重新登录」，只重试一次（仅当开启记住密码）。
 - **登录态持久化（0.3.1 修）**：
   - cookie 必须**每次响应后回写** `jm_session`（节流 2s；`/setting`、`/login` 后立刻写）。只在登录那刻存一次快照的话，站点轮换 `/setting` cookie 后，退出 App 再进来就是一堆过期 cookie，会被判未登录。

@@ -4,6 +4,7 @@ import 'package:hive_ce/hive.dart';
 import '../../data/local/favorites_store.dart';
 import '../../data/local/hive_init.dart';
 import '../../data/models/account_session.dart';
+import '../../data/local/settings_store.dart';
 import '../../data/models/favorite_item.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/favorites_repository.dart';
@@ -28,6 +29,9 @@ final Provider<AuthRepository> authRepositoryProvider = Provider<AuthRepository>
     api: ref.watch(jmApiProvider),
     session: ref.watch(sessionStoreProvider),
     favorites: ref.watch(favoritesStoreProvider),
+    vault: ref.watch(credentialVaultProvider),
+    // 设置里关掉「记住密码」后，冷启动不再自动重登（已保存的密码也会被清掉）。
+    rememberPassword: () => ref.read(settingsProvider).rememberPassword,
   ),
 );
 
@@ -56,14 +60,29 @@ class AccountSessionNotifier extends AsyncNotifier<AccountSession> {
     return session;
   }
 
-  Future<void> login(String username, String password) async {
+  Future<void> login(String username, String password, {bool? remember}) async {
     state = const AsyncValue<AccountSession>.loading();
     state = await AsyncValue.guard(
-      () => ref.read(authRepositoryProvider).login(username: username, password: password),
+      () => ref.read(authRepositoryProvider).login(
+            username: username,
+            password: password,
+            remember: remember,
+          ),
     );
     if (state.hasValue) {
       ref.read(favoritesItemsProvider.notifier).reload();
     }
+  }
+
+  /// 会话失效时用保存的密码再试一次（同步失败、401 之后调用）。
+  ///
+  /// 成功返回 true，并把收藏账本重新加载一遍。
+  Future<bool> autoRelogin() async {
+    final session = await ref.read(authRepositoryProvider).autoLogin();
+    if (session == null || !session.isLoggedIn) return false;
+    state = AsyncValue<AccountSession>.data(session);
+    ref.read(favoritesItemsProvider.notifier).reload();
+    return true;
   }
 
   Future<void> logout() async {

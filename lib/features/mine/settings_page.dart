@@ -15,6 +15,7 @@ import '../../data/local/settings_store.dart';
 import '../../data/models/jm_host_entry.dart';
 import '../../data/repositories/session_repository.dart';
 import '../../data/sources/jm_host_probe.dart';
+import '../collect/collect_providers.dart';
 import '../download/download_providers.dart';
 import '../home/widgets/section_header.dart';
 
@@ -69,6 +70,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   .read(settingsProvider.notifier)
                   .setPageTurnAnimation(value),
             ),
+          ),
+          const SizedBox(height: 8),
+          const SectionHeader(title: '账号'),
+          _SettingsTile(
+            icon: AppIcons.user,
+            title: '记住密码（自动登录）',
+            value: settings.rememberPassword ? '已开启' : '已关闭',
+            trailing: Switch.adaptive(
+              value: settings.rememberPassword,
+              onChanged: (value) => _setRememberPassword(value),
+            ),
+          ),
+          _SettingsTile(
+            icon: AppIcons.trash,
+            title: '清除已保存的密码',
+            onTap: _clearSavedPassword,
           ),
           const SizedBox(height: 8),
           const SectionHeader(title: '外观'),
@@ -166,6 +183,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ],
       ),
     );
+  }
+
+  /// 关闭时顺手清掉已保存的密码，避免「关了却还能自动登」。
+  Future<void> _setRememberPassword(bool value) async {
+    await ref.read(settingsProvider.notifier).setRememberPassword(value);
+    if (!value) await ref.read(authRepositoryProvider).forgetPassword();
+  }
+
+  Future<void> _clearSavedPassword() async {
+    final messenger = ScaffoldMessenger.of(context);
+    await ref.read(authRepositoryProvider).forgetPassword();
+    messenger.showSnackBar(const SnackBar(content: Text('已清除保存的密码')));
   }
 
   Future<void> _rediscover() async {

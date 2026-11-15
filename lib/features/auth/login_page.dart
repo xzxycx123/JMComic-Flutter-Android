@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/icons/app_icons.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_typography.dart';
+import '../../data/local/settings_store.dart';
 import '../../data/models/account_session.dart';
 import '../../data/repositories/favorites_repository.dart';
 import '../collect/collect_providers.dart';
@@ -27,11 +28,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final FocusNode _passwordFocus = FocusNode();
   bool _busy = false;
   bool _syncing = false;
+  bool? _remember;
   String? _error;
 
   static final List<TextInputFormatter> _asciiOnly = <TextInputFormatter>[
     FilteringTextInputFormatter.allow(RegExp(r'[\x20-\x7E]')),
   ];
+
+  bool get _rememberPassword =>
+      _remember ?? ref.read(settingsProvider).rememberPassword;
 
   @override
   void dispose() {
@@ -56,7 +61,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     });
 
     try {
-      await ref.read(accountSessionProvider.notifier).login(username, password);
+      await ref.read(accountSessionProvider.notifier).login(
+            username,
+            password,
+            remember: _rememberPassword,
+          );
     } catch (_) {
       // 原因统一从 provider 里取，下面给出「像样的」提示框。
     }
@@ -187,7 +196,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               ],
               const SizedBox(height: 10),
               Text(
-                '会话保存在本机 cookie 里，密码不会被保存。',
+                '会话保存在本机 cookie 里；开启「记住密码」时密码在系统密钥库，用于 cookie 失效后自动重登。',
                 style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
               ),
             ],
@@ -222,7 +231,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
         children: <Widget>[
           Text(
-            '登录后会自动把本地收藏同步到云端，并把云端收藏拉回来；密码不会保存在本机。',
+            '登录后会自动把本地收藏同步到云端，并把云端收藏拉回来；勾选「记住密码」后，cookie 失效时会用密钥库里的密码自动重登。',
             style: AppTypography.caption.copyWith(color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 20),
@@ -256,7 +265,32 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               style: AppTypography.caption.copyWith(color: scheme.error),
             ),
           ],
-          const SizedBox(height: 22),
+          const SizedBox(height: 8),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: _rememberPassword,
+            onChanged: _busy
+                ? null
+                : (value) async {
+                    setState(() => _remember = value);
+                    await ref
+                        .read(settingsProvider.notifier)
+                        .setRememberPassword(value);
+                    if (!value) {
+                      await ref.read(authRepositoryProvider).forgetPassword();
+                    }
+                  },
+            title: Text(
+              '记住密码（cookie 失效时自动重登）',
+              style: AppTypography.body.copyWith(color: scheme.onSurface),
+            ),
+            subtitle: Text(
+              '账号密码存进系统密钥库（Android Keystore），退出 App 也不会掉登录。',
+              style: AppTypography.micro
+                  .copyWith(color: scheme.onSurfaceVariant),
+            ),
+          ),
+          const SizedBox(height: 14),
           FilledButton(
             onPressed: _busy ? null : _submit,
             child: _busy
@@ -276,7 +310,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           ),
           const SizedBox(height: 14),
           Text(
-            '账号与收藏接口由站点提供；本客户端只保存会话 cookie，不保存密码。',
+            '账号与收藏接口由站点提供；密码只在开启「记住密码」时存进系统密钥库，可随时在设置里清除。',
             style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
           ),
         ],

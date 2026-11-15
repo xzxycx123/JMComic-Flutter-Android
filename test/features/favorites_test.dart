@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:jm_comic/data/local/credential_store.dart';
 import 'package:jm_comic/data/local/favorites_store.dart';
 import 'package:jm_comic/data/local/hive_init.dart';
 import 'package:jm_comic/data/local/session_store.dart';
@@ -203,6 +204,75 @@ void main() {
       final restored = await repository.restore();
       expect(restored.state, SessionState.valid);
       expect(restored.uid, 42);
+    });
+
+    test('冷启动 cookie 失效：用保存的密码自动重登（0.3.2）', () async {
+      final vault = MemoryCredentialVault();
+      await vault.save(
+        const SavedCredential(username: 'tester', password: 'pw123456'),
+      );
+      final api = FakeJmApi(loggedIn: false);
+      final repository = AuthRepository(
+        api: api,
+        session: sessions,
+        favorites: store,
+        vault: vault,
+      );
+
+      await sessions.writeSession(
+        const AccountSession(uid: 42, username: 'tester', state: SessionState.valid),
+      );
+      await sessions.writeCookies(<String, String>{'AVS': 'expired'});
+
+      final restored = await repository.restore();
+      expect(restored.state, SessionState.valid);
+      expect(restored.username, 'tester');
+      expect(api.loginCalls, 1, reason: '应当用保存的密码重登一次');
+    });
+
+    test('关闭「记住密码」时不自动登录', () async {
+      final vault = MemoryCredentialVault();
+      await vault.save(
+        const SavedCredential(username: 'tester', password: 'pw123456'),
+      );
+      final api = FakeJmApi(loggedIn: false);
+      final repository = AuthRepository(
+        api: api,
+        session: sessions,
+        favorites: store,
+        vault: vault,
+        rememberPassword: () => false,
+      );
+
+      await sessions.writeSession(
+        const AccountSession(uid: 42, username: 'tester', state: SessionState.valid),
+      );
+      await sessions.writeCookies(<String, String>{'AVS': 'expired'});
+
+      final restored = await repository.restore();
+      expect(restored.state, SessionState.needsLogin);
+      expect(api.loginCalls, 0);
+    });
+
+    test('登出会清掉保存的密码，避免下次被自动登回去', () async {
+      final vault = MemoryCredentialVault();
+      await vault.save(
+        const SavedCredential(username: 'tester', password: 'pw123456'),
+      );
+      final api = FakeJmApi(loggedIn: true);
+      final repository = AuthRepository(
+        api: api,
+        session: sessions,
+        favorites: store,
+        vault: vault,
+      );
+      await sessions.writeSession(
+        const AccountSession(uid: 42, username: 'tester', state: SessionState.valid),
+      );
+
+      await repository.logout();
+
+      expect(await vault.read(), isNull);
     });
 
     test('登出：清会话与 cookie，收藏降级为仅本地', () async {

@@ -51,9 +51,7 @@ class FavoritesSyncNotifier extends Notifier<FavoriteSyncStatus> {
     if (state.busy) return null;
     state = state.copyWith(busy: true, clearError: true);
     try {
-      final report = await ref.read(favoritesRepositoryProvider).sync();
-      ref.read(favoritesItemsProvider.notifier).reload();
-      await ref.read(accountSessionProvider.notifier).updateCount(report.serverCount);
+      final report = await _syncOnce();
       state = FavoriteSyncStatus(
         busy: false,
         lastReport: report,
@@ -61,6 +59,29 @@ class FavoritesSyncNotifier extends Notifier<FavoriteSyncStatus> {
       );
       return report;
     } catch (error) {
+      // 会话过期：用保存的密码自动重登一次，再重试一轮对账（只试一次，不循环）。
+      final recovered = _looksLikeAuthFailure('$error')
+          ? await ref.read(accountSessionProvider.notifier).autoRelogin()
+          : false;
+      if (recovered) {
+        try {
+          final report = await _syncOnce();
+          state = FavoriteSyncStatus(
+            busy: false,
+            lastReport: report,
+            lastAt: DateTime.now(),
+          );
+          return report;
+        } catch (retryError) {
+          state = FavoriteSyncStatus(
+            busy: false,
+            lastReport: state.lastReport,
+            lastError: '$retryError',
+            lastAt: DateTime.now(),
+          );
+          return null;
+        }
+      }
       state = FavoriteSyncStatus(
         busy: false,
         lastReport: state.lastReport,
@@ -69,6 +90,30 @@ class FavoritesSyncNotifier extends Notifier<FavoriteSyncStatus> {
       );
       return null;
     }
+  }
+
+  Future<FavoriteSyncReport> _syncOnce() async {
+    final report = await ref.read(favoritesRepositoryProvider).sync();
+    ref.read(favoritesItemsProvider.notifier).reload();
+    await ref.read(accountSessionProvider.notifier).updateCount(report.serverCount);
+    return report;
+  }
+
+  static bool _looksLikeAuthFailure(String message) {
+    final text = message.toLowerCase();
+    for (final needle in const <String>[
+      '登录状态已失效',
+      '登录已失效',
+      '未登录',
+      '未登入',
+      '请先登录',
+      '请先登入',
+      '401',
+      'unauthorized',
+    ]) {
+      if (text.contains(needle.toLowerCase())) return true;
+    }
+    return false;
   }
 
   /// 本地有、云端没有的收藏还需要补推时用（登录后先对账再补推）。

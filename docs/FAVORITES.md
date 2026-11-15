@@ -12,8 +12,8 @@
 
 | 主题 | 一句话结论 | 关键约束 |
 |---|---|---|
-| 会话 | **cookie（含 `AVS`）为主、`/login` 换取账号信息为辅** | 不存明文密码；请求头 token 每请求现算 |
-| 自动登录 | 默认「cookie 校验」，不是「每次冷启动重登」 | 失败一次即回本地模式，不打扰用户 |
+| 会话 | **cookie（含 `AVS`）为主、`/login` 换取账号信息为辅** | 密码只在「记住密码」开启时进系统密钥库；请求头 token 每请求现算 |
+| 自动登录 | **cookie 校验 → 失效则用保存的密码静默重登一次**（0.3.2 默认开） | 重登失败才回 `needsLogin`，不循环 |
 | 登录后同步 | **登录成功立即双向同步一次**（云端拉回 + 本地补推），0.3.0 已实现 | 失败不阻塞登录，提示框里给统计与「稍后手动同步」 |
 | 收藏 | **本地账本 + 服务端镜像**，服务端只镜像「在不在收藏里」 | `POST /favorite` 是 **toggle**，必须反向对账 |
 | 收藏图标 | **五角星**（`star` / `star-filled`），点赞是爱心 | 图标语义别混：星=收藏、心=点赞 |
@@ -127,7 +127,7 @@ if (username.isNotEmpty() && password.isNotEmpty()) {
 
 | 坑 | 影响 | 我们的做法 |
 |---|---|---|
-| 明文存密码做自动登录 | 设备被 root / 备份导出即账号失守 | 默认 **只存 cookie + AVS**；要「记住密码」必须显式勾选并用 `flutter_secure_storage` |
+| 明文存密码做自动登录 | 设备被 root / 备份导出即账号失守 | 同样支持自动登录，但密码走 `flutter_secure_storage`（Keystore/Keychain），不落明文 |
 | token 用进程启动时的固定 ts + 写死版本 `1.8.2` | 服务端若做时间窗校验会整进程失效；版本落后拿不到新字段 | **每请求现算** `md5(ts+secret)`，版本取 `/setting.jm3_version` |
 | 只依赖 `Set-Cookie`，没有显式 `AVS` 处理 | 部分线路下 python 库需要手动补 `AVS = res_data["s"]` | 登录响应里若有 `s`，显式写 `AVS` cookie（见 4.3） |
 | 无「会话失效」判定 | 401/重定向时 UI 仍显示已登录，收藏静默失败 | 统一拦截：响应非 JSON / 被重定向 / `code!=200` 且要求登录 → 标 `needsLogin`（见 4.5） |
@@ -264,13 +264,20 @@ dio.interceptors = [
 > 收藏/评论/点赞三条链路共用一个登录门槛：未登录时点赞与评论弹「登录后才能操作」，
 > 收藏仍本地可用（见 `docs/INTERACTION.md` §3）。
 
-### 4.4 自动登录策略（默认不存密码）
+### 4.4 自动登录策略（0.3.2 起默认记住密码）
 
 | 策略 | 触发 | 行为 | 默认 |
 |---|---|---|---|
-| A. cookie 恢复 | 冷启动 | 读 `jm_session.cookies` → 打一次 `GET /favorite?page=1` 校验；通过即 `valid` | ✅ 默认 |
-| B. 记住密码（可选开关） | 冷启动且 A 失败 | 密码存 `flutter_secure_storage`（Keychain/Keystore），静默 `POST /login` 一次 | ❌ 默认关 |
-| C. 什么都不存 | 用户选「每次都要登录」 | 冷启动回 `local`，收藏按钮走本地 | 可选 |
+| A. cookie 恢复 | 冷启动 | 读 `jm_session.cookies` → `/setting` 刷新 → `GET /favorite?page=1` 校验 | ✅ |
+| B. 记住密码（0.3.2 默认开） | A 判定会话失效 | 账号密码存 `flutter_secure_storage`（Android Keystore / Keychain），静默 `POST /login` 一次 → 重写 session + cookie | ✅ 默认开（设置里可关，关掉即清空凭据） |
+| C. 什么都不存 | 用户关闭 B 后主动登出 | 冷启动回 `local`，收藏按钮走本地 | 可选 |
+
+> 为什么不照抄 jm-mobile 的「明文存密码」：行为一样（cookie 失效就静默重登），落盘位置换成系统密钥库。
+> `flutter_secure_storage` 读写失败时自动降级为「没保存过」，不会把登录流程带崩。
+> **主动登出会连凭据一起清**，否则下次冷启动又被自动登回去。
+
+运行时也会自愈：收藏同步遇到鉴权失败（401 / 未登录文案）时，`FavoritesSyncNotifier` 会调
+`AccountSessionNotifier.autoRelogin()` 重登一次再重试对账，只试一次、不循环。
 
 会话失效（`needsLogin`）时：不弹全屏登录，只在「我的」页顶栏显示「登录已失效 · 重新登录」，收藏仍可本地用。
 

@@ -143,6 +143,7 @@ class FakeJmApi implements JmApi {
   int downloadCalls = 0;
   int scrambleCalls = 0;
   int filterCalls = 0;
+  int loginCalls = 0;
 
   void _throwIfFailing() {
     if (failAll) {
@@ -187,6 +188,7 @@ class FakeJmApi implements JmApi {
     if (username.isEmpty || password.isEmpty) {
       throw const JmContentException('用户名和密码不能为空');
     }
+    loginCalls++;
     loggedIn = true;
     _cookies['AVS'] = 'fake-avs';
     return <String, dynamic>{

@@ -4,6 +4,7 @@ import 'package:hive_ce/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/local/download_store.dart';
+import '../../data/local/credential_store.dart';
 import '../../data/local/endpoint_store.dart';
 import '../../data/local/hive_init.dart';
 import '../../data/local/progress_store.dart';
@@ -117,6 +118,10 @@ final Provider<ProgressStore> progressStoreProvider = Provider<ProgressStore>(
 final Provider<SessionStore> sessionStoreProvider = Provider<SessionStore>(
   (ref) => SessionStore(Hive.box<dynamic>(HiveBoxes.session)),
 );
+
+/// 记住密码用的凭据仓库（系统密钥库）。默认实现失败时自动降级为「未保存」。
+final Provider<CredentialVault> credentialVaultProvider =
+    Provider<CredentialVault>((ref) => SecureCredentialVault());
 
 final Provider<SearchHistoryStore> searchHistoryStoreProvider =
     Provider<SearchHistoryStore>(

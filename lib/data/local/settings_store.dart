@@ -29,13 +29,14 @@ enum AppThemeMode {
   }
 }
 
-/// 应用设置（主题、默认阅读模式、翻页动画、自动切换线路）。
+/// 应用设置（主题、默认阅读模式、翻页动画、自动切换线路、自动登录）。
 class AppSettings {
   const AppSettings({
     this.themeMode = AppThemeMode.light,
     this.defaultReaderMode = 'paged',
     this.pageTurnAnimation = true,
     this.autoSwitchHost = true,
+    this.rememberPassword = true,
   });
 
   final AppThemeMode themeMode;
@@ -45,17 +46,22 @@ class AppSettings {
   final bool pageTurnAnimation;
   final bool autoSwitchHost;
 
+  /// 记住密码（系统密钥库）+ cookie 失效时自动重登。默认开：不然退出 App 就掉登录。
+  final bool rememberPassword;
+
   AppSettings copyWith({
     AppThemeMode? themeMode,
     String? defaultReaderMode,
     bool? pageTurnAnimation,
     bool? autoSwitchHost,
+    bool? rememberPassword,
   }) =>
       AppSettings(
         themeMode: themeMode ?? this.themeMode,
         defaultReaderMode: defaultReaderMode ?? this.defaultReaderMode,
         pageTurnAnimation: pageTurnAnimation ?? this.pageTurnAnimation,
         autoSwitchHost: autoSwitchHost ?? this.autoSwitchHost,
+        rememberPassword: rememberPassword ?? this.rememberPassword,
       );
 }
 
@@ -67,6 +73,7 @@ class SettingsStore {
   static const String _keyReaderMode = 'readerMode';
   static const String _keyPageTurnAnimation = 'pageTurnAnimation';
   static const String _keyAutoSwitchHost = 'autoSwitchHost';
+  static const String _keyRememberPassword = 'rememberPassword';
 
   final Box<dynamic> _box;
 
@@ -75,6 +82,7 @@ class SettingsStore {
         defaultReaderMode: (_box.get(_keyReaderMode) as String?) ?? 'paged',
         pageTurnAnimation: (_box.get(_keyPageTurnAnimation) as bool?) ?? true,
         autoSwitchHost: (_box.get(_keyAutoSwitchHost) as bool?) ?? true,
+        rememberPassword: (_box.get(_keyRememberPassword) as bool?) ?? true,
       );
 
   Future<void> write(AppSettings settings) async {
@@ -82,6 +90,7 @@ class SettingsStore {
     await _box.put(_keyReaderMode, settings.defaultReaderMode);
     await _box.put(_keyPageTurnAnimation, settings.pageTurnAnimation);
     await _box.put(_keyAutoSwitchHost, settings.autoSwitchHost);
+    await _box.put(_keyRememberPassword, settings.rememberPassword);
   }
 }
 
@@ -112,6 +121,9 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   Future<void> setAutoSwitchHost(bool enabled) =>
       _commit(state.copyWith(autoSwitchHost: enabled));
+
+  Future<void> setRememberPassword(bool enabled) =>
+      _commit(state.copyWith(rememberPassword: enabled));
 }
 
 /// 便捷派生：MaterialApp 的 ThemeMode。
