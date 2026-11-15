@@ -46,6 +46,7 @@
 - [ ] 下载：批量输入 3 个车号 → 队列并发 3 → 产出 3 个 PDF 在 `Documents/JMComics/`，命名 `JM{id} - {title}.pdf`，重复下载生成 `(2)`。
 - [ ] 下载中锁屏/切后台不中断（前台服务 + 通知进度），取消后临时文件清空。
 - [ ] 深/浅主题各跑一遍，系统字体放大 1.3 无溢出。
+- [ ] **配色符合 §7.1**：默认浅色白橙（底 `#FFFFFF`、主色 `#F26B0F`、正文 `#141413`），深色底 `#141413` 字 `#FAF9F5`，阅读器恒深色 `#0B0B0A`；页面里没有写死 hex（全部取自 `AppColors`）。
 - [ ] **UI 无 emoji、无 `Icons.*`**：所有图标来自 `assets/icons/*.svg`（手绘 24×24 / stroke 1.75），`tools\check_ui_rules.ps1` 扫描 0 命中。
 - [ ] 搜索：输入纯车号（`350234` / `JM350234` / 链接）→ 直接进详情页；输入关键词 → 发 GET 搜索请求并渲染结果页，可翻页。
 - [ ] 阅读器双模式：上下滚动 / 左右翻页可切换；翻页模式下点左侧上一页、点右侧下一页、点中间出 HUD（进度条 + 退出），进度可拖动跳页并回写记忆。
@@ -73,7 +74,7 @@ dependencies:
   go_router: ^14.6.2              # 路由 + 三 tab 壳（StatefulShellRoute）
   dio: ^5.7.0                     # HTTP；底层 dart:io 天然 HTTP/1.1
   crypto: ^3.0.6                  # MD5
-  pointycastle: ^3.9.1            # AES-128-ECB
+  pointycastle: ^3.9.1            # AES-256-ECB
   hive_ce: ^2.9.0                 # 下载记录 / feed 缓存
   hive_ce_flutter: ^2.2.0
   shared_preferences: ^2.3.3      # 线路表、主题模式
@@ -255,16 +256,25 @@ const kDomainServerUrls = <String>[
 
 ### 5.2 域名发现与线路切换
 
-1. 依次 GET 三个 TOS 地址 → 去掉开头非 ASCII 字符 → 用 `kDomainServerSecret`、`ts=""` 解密 → `{"Server":[...]}`。
-2. 成功则新域名表置顶，写入 `endpoint_store`；全部失败用 `kDefaultApiHosts`。
-3. 每次请求失败：记录该 host 失败计数 + 换下一个 host 重试（内置列表 + 持久化列表合并去重）。
-4. 成功的 host 提到表头并持久化（下次优先）。语义与 `JmScript/data/JmApiClient.kt` 的 `markApiHostWorking` 一致。
+> 2026-11-15 重写，实现见 `lib/data/sources/jm_endpoint_resolver.dart` / `jm_host_probe.dart` / `jm_host_catalog.dart`，说明见 `docs/NETWORK_MODULE.md`。
+
+1. 发现源（并发，单源 6s 超时，任一可用即可）：
+   - 内置种子 `assets/data/jm_hosts.json`（`tools\probe_hosts.ps1` 生成，含延迟/时间戳）；
+   - 三个 TOS `newsvr-2025.txt` → 去头非 ASCII → `kDomainServerSecret` + `ts=""` 解密 → `Setting` / `Server` / **`jm3_Server`（带线路标签，含第 5 条线路）**；
+   - 发布页 `jmcomictt.site` / `jmcomicgo.org` → 解析「國際通用 / 東南亞 / **內地 / 分流1 / 分流2**」→ 国内域名；
+   - 开源镜像 `JMComic-Crawler-Python` 的 `DOMAIN_API_LIST` / `DOMAIN_IMAGE_LIST`。
+2. 连通性判定必须跑完整链路：`GET /setting` + `token`/`tokenparam` → `code=200` → AES 解密 → 拿到 `jm3_version` / `img_host`。HTTP 200 但解不开 = 不可用（这正是旧实现的坑）。
+3. 合并去重后按健康度排序：手填线路 → 新鲜 ok 按延迟升序 → 未知 → 失败且冷却中（10 分钟）；健康记录 30 分钟 TTL，写入 `endpoint_store` 的 `jm_host_health`。
+4. 冷启动只要有一条新鲜 ok 线路就不阻塞探测；否则首批 4 台并发实测（5s/台），有 ok 即停。设置页「线路测速」可全量重测。
+5. 图床顺序：`/setting.img_host` → 种子实测 ok → **国内 `comic18j-*` 兜底** → 内置默认。
 
 ### 5.3 响应解密
 
 外层固定 `{"code":200,"data":"<base64>"}`，`code != 200` 时读 `errorMsg` / `msg` 抛可读异常。
-`data` 解密：**AES-128-ECB / PKCS7**，key = `ASCII(md5hex(ts + kTokenSecret))`，Base64 先去掉所有空白（MIME 容错），再按 4 取模补 `=`。
+`data` 解密：**AES-256-ECB / PKCS7**，key = `ASCII(md5hex(ts + kTokenSecret))` 的 **全部 32 个字节**（不是前 16 字节，也不是 md5 的 16 个原始字节），Base64 先去掉所有空白（MIME 容错），再按 4 取模补 `=`。
 
+> ⚠️ 2026-11-15 实网复核：旧实现按 `sublist(0, 16)` 走 AES-128，真实响应 PKCS7 去填充必失败 → 每条线路都「HTTP 200 但解密失败」，看起来就是「连通性检测有问题、全线路不可用」。现场证据：同一 ts 下 16 字节 key 抛 `Padding is invalid`，32 字节 key 解出 `{"version":"1.8.2",…}`；`test/fixtures/setting_envelope_live.json` + `test/data/jm_crypto_test.dart` 已固化该向量。
+>
 > ⚠️ 与原项目差异：`/promote`、`/latest` 解密后是**顶层 JSON 数组**（`[{...}]`），不是对象。`JmScript` 只处理对象，Dart 侧 `apiDecoded()` 必须返回 `dynamic`（`Map`/`List` 都可能），再由上层 parser 定型。
 
 ### 5.4 端点表（全部实测通过）
@@ -404,10 +414,10 @@ String md5Hex(String input) => crypto.md5.convert(utf8.encode(input)).toString()
 
 String buildToken(String ts, {String secret = '185Hcomic3PAPP7R'}) => md5Hex(ts + secret);
 
-/// Base64(MIME 容错) → AES-128-ECB/PKCS7 → UTF-8
+/// Base64(MIME 容错) → AES-256-ECB/PKCS7 → UTF-8
 String decryptPayload(String encoded, String ts, {String secret = '185Hcomic3PAPP7R'}) {
-  final key = ascii.encode(md5Hex(ts + secret)); // 32 个 ASCII 字符 = 32 字节，取前 16 位使用
-  final keyBytes = Uint8List.fromList(key.sublist(0, 16));
+  final key = ascii.encode(md5Hex(ts + secret)); // 32 个 ASCII 字符 = 32 字节 = AES-256 key
+  final keyBytes = Uint8List.fromList(key);
   var clean = encoded.replaceAll(RegExp(r'\s'), '');
   while (clean.length % 4 != 0) { clean += '='; }
   final cipherText = base64.decode(clean);
@@ -418,7 +428,7 @@ String decryptPayload(String encoded, String ts, {String secret = '185Hcomic3PAP
 }
 ```
 
-> 说明：`md5hex` 是 32 个十六进制字符；AES-128 需要 16 字节 key，原实现用 `md5hex(...).toByteArray(US_ASCII)` 直接喂给 `SecretKeySpec` → Java 取前 16 字节，故 Dart 侧同样 `sublist(0, 16)`。**不要**用 `md5.convert(ts+secret).bytes`（那是 16 个原始字节，值不同）。
+> 说明：`md5hex` 是 32 个十六进制字符；AES-256 需要 32 字节 key，直接把 `md5hex(...)` 的 ASCII 字节全量喂给 `AESEngine`。**不要**截断成 16 字节（旧版就是这么写的，实网必失败），也**不要**用 `md5.convert(ts+secret).bytes`（那是 16 个原始字节，值不同）。
 > `PaddedBlockCipherParameters` 的泛型在部分 pointycastle 版本上收得紧，编译报错时改成 `PaddedBlockCipherParameters<KeyParameter, Null>(KeyParameter(keyBytes), null)` 或 `as CipherParameters` 强转。
 
 ```dart
@@ -565,13 +575,110 @@ class HomeFeed {
 **CI 守卫**：`tools\check_ui_rules.ps1` 扫 `lib/` 与 `assets/`，命中 emoji 区字符（`U+2190-21FF`、`U+2300-27BF`、`U+1F300-1FAFF`、`U+FE0F`）、`Icons.` 调用、非 `.svg` 图标引用即失败并给出行号；M6 收尾必跑。
 
 
-### 7.1 主题
+### 7.1 主题与配色（已定稿，按此实现，不许自行改色）
 
-- seed：`#FF5C8A`；`ColorScheme.fromSeed(seedColor: seed, brightness: brightness)`。
-- 默认跟随系统；设置里可强制浅/深。
-- 圆角：卡片 16、封面 16/20、胶囊 999、面板 24。
-- 阴影：深色主题用 `surfaceContainerHighest` 描边代替阴影（更像原生现代 App）。
-- 动效：`PageTransitionsTheme` 用 `FadeForwardsPageTransitionsBuilder`；Hero 过渡封面；Dock 选中态 `elasticOut` 200ms。
+**默认外观 = 浅色「白橙」**；深色为第二外观。两套都是固定 token，**不从 seed 反推**（`ColorScheme.fromSeed` 会把橙色洗淡，也会让深色背景偏离 `#141413`），直接 `ColorScheme(...)` 显式赋值。
+
+**浅色（默认）：白底 + 橙主色**
+
+| token | 值 | 用途 |
+|---|---|---|
+| `background` / `surface` | `#FFFFFF` | 页面底色、卡片底色 |
+| `surfaceContainer` | `#FBF8F3` | 卡片/输入框第二层（暖白） |
+| `surfaceContainerHigh` | `#F5F0E8` | 骨架块、chip 未选中底 |
+| `outline` / `outlineVariant` | `#EBE3D8` / `#F2ECE2` | 1px 描边、分割线 |
+| `primary`（橙） | `#F26B0F` | 主按钮、选中态、链接、进度条 |
+| `onPrimary` | `#FFFFFF` | 橙底上的文字/图标 |
+| `primaryContainer` | `#FFE8D5` | 选中胶囊底、收藏高亮底 |
+| `onPrimaryContainer` | `#7A3200` | 橙容器上的文字 |
+| `secondary`（暖黄橙） | `#E89B2C` | 次强调、评分、榜单角标 |
+| `onSurface` / `onBackground`（正文） | `#141413` | 标题与正文 |
+| `onSurfaceVariant`（次要文字） | `#6B6862` | 作者、计数、说明 |
+| `error` | `#C6413A` | 失败、删除 |
+
+**深色：`#141413` 底 + `#FAF9F5` 字**
+
+| token | 值 | 用途 |
+|---|---|---|
+| `background` | `#141413` | **页面底色（硬要求）** |
+| `surface` | `#1B1B19` | 卡片底（比背景亮一档） |
+| `surfaceContainer` | `#232320` | 输入框、任务卡内层 |
+| `surfaceContainerHigh` | `#2C2C28` | 骨架块、未选中 chip |
+| `outline` / `outlineVariant` | `#3A3A35` / `#2A2A26` | 描边、分割线 |
+| `onSurface` / `onBackground`（正文） | `#FAF9F5` | **前景字（硬要求）** |
+| `onSurfaceVariant`（次要文字） | `#A9A69D` | 作者、计数、说明 |
+| `primary`（橙，深色下提亮） | `#FF8A3D` | 主按钮、选中态、进度条 |
+| `onPrimary` | `#1A0F05` | 橙底上的文字 |
+| `primaryContainer` | `#3B2412` | 选中胶囊底 |
+| `onPrimaryContainer` | `#FFD9BE` | 橙容器上的文字 |
+| `secondary` | `#FFB25C` | 次强调 |
+| `error` | `#FF6B5E` | 失败、删除 |
+
+**规则**
+
+1. 浅色是默认：首次启动 `ThemeMode.light`（不是 `system`）；设置里可切「浅色 / 深色 / 跟随系统」。
+2. 橙色只做强调，**不做大面积底色**：一屏内橙色面积 ≤ 15%，主按钮一屏最多一个。
+3. 圆角：卡片 16、封面 16/20、胶囊 999、面板 24。
+4. 浅色阴影用 `rgba(20,20,19,.06)`；深色不用阴影，用 `outline` 1px 描边 + `surface` 提亮层次。
+5. **阅读器永远是深色**（`#0B0B0A` 底 + `#FAF9F5` 字），不跟随主题，避免白底刺眼；HUD 用 `rgba(11,11,10,.9)`。
+6. 动效：`PageTransitionsTheme` 用 `FadeForwardsPageTransitionsBuilder`；Hero 过渡封面；Dock 选中态 `elasticOut` 200ms。
+7. 代码落点：`lib/core/theme/app_colors.dart` 只放上面两张表（常量 + `lightScheme` / `darkScheme`），`app_theme.dart` 只做组件主题映射，**禁止在 widget 里写死 hex**。
+
+```dart
+// lib/core/theme/app_colors.dart（照抄即可）
+abstract final class AppColors {
+  // 浅色（白橙）
+  static const lightBg = Color(0xFFFFFFFF);
+  static const lightSurfaceContainer = Color(0xFFFBF8F3);
+  static const lightSurfaceContainerHigh = Color(0xFFF5F0E8);
+  static const lightOutline = Color(0xFFEBE3D8);
+  static const lightPrimary = Color(0xFFF26B0F);
+  static const lightPrimaryContainer = Color(0xFFFFE8D5);
+  static const lightOnPrimaryContainer = Color(0xFF7A3200);
+  static const lightInk = Color(0xFF141413);
+  static const lightInkVariant = Color(0xFF6B6862);
+  static const lightError = Color(0xFFC6413A);
+
+  // 深色（#141413 底 + #FAF9F5 字）
+  static const darkBg = Color(0xFF141413);
+  static const darkSurface = Color(0xFF1B1B19);
+  static const darkSurfaceContainer = Color(0xFF232320);
+  static const darkSurfaceContainerHigh = Color(0xFF2C2C28);
+  static const darkOutline = Color(0xFF3A3A35);
+  static const darkPrimary = Color(0xFFFF8A3D);
+  static const darkPrimaryContainer = Color(0xFF3B2412);
+  static const darkOnPrimaryContainer = Color(0xFFFFD9BE);
+  static const darkInk = Color(0xFFFAF9F5);
+  static const darkInkVariant = Color(0xFFA9A69D);
+  static const darkError = Color(0xFFFF6B5E);
+
+  // 阅读器（恒定深色，不随主题）
+  static const readerBg = Color(0xFF0B0B0A);
+  static const readerInk = Color(0xFFFAF9F5);
+
+  static const lightScheme = ColorScheme(
+    brightness: Brightness.light,
+    primary: lightPrimary, onPrimary: Colors.white,
+    primaryContainer: lightPrimaryContainer, onPrimaryContainer: lightOnPrimaryContainer,
+    secondary: Color(0xFFE89B2C), onSecondary: Colors.white,
+    surface: lightBg, onSurface: lightInk,
+    surfaceContainerHighest: lightSurfaceContainerHigh,
+    onSurfaceVariant: lightInkVariant,
+    outline: lightOutline, error: lightError, onError: Colors.white,
+  );
+
+  static const darkScheme = ColorScheme(
+    brightness: Brightness.dark,
+    primary: darkPrimary, onPrimary: Color(0xFF1A0F05),
+    primaryContainer: darkPrimaryContainer, onPrimaryContainer: darkOnPrimaryContainer,
+    secondary: Color(0xFFFFB25C), onSecondary: Color(0xFF1A0F05),
+    surface: darkBg, onSurface: darkInk,
+    surfaceContainerHighest: darkSurfaceContainerHigh,
+    onSurfaceVariant: darkInkVariant,
+    outline: darkOutline, error: darkError, onError: Color(0xFF1A0F05),
+  );
+}
+```
 
 ### 7.2 壳体与 Dock（三档：首页 / 我的 / 下载）
 

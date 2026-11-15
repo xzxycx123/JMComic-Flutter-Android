@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    JM 移动端协议实网探测脚本（md5 token + AES-128-ECB 响应解密 + 关键端点自检）。
+    JM 移动端协议实网探测脚本（md5 token + AES-256-ECB 响应解密 + 关键端点自检）。
 
 .DESCRIPTION
     用途：
@@ -39,11 +39,22 @@ param(
 $ErrorActionPreference = 'Continue'
 
 # ---------------------------------------------------------------- 协议常量
-$TokenSecret      = '185Hcomic3PAPP7R'   # 普通接口 token / data 解密密钥前缀
+$TokenSecret      = '185Hcomic3PAPP7R'   # 普通接口 token / data 解密密钥前缀（AES-256 key = md5hex(ts+secret) 的 32 个 ASCII 字节）
 $ScrambleSecret   = '18comicAPPContent'  # /chapter_view_template 专用
 $AppVersion       = '2.1.13'
 $UserAgent        = 'Mozilla/5.0 (Linux; Android 9; V1938CT Build/PQ3A.190705.11211812; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile Safari/537.36'
-$FallbackApiHosts = @('www.cdnbtd.cc', 'www.cdnutc.cc', 'www.cdnhjk.net', 'www.cdngwc.cc', 'www.cdngwc.net', 'www.cdngwc.club')
+$FallbackApiHosts = @('www.cdnutc.cc', 'www.cdngwc.net', 'www.cdngwc.cc', 'www.cdngwc.club', 'www.cdnbtd.cc', 'www.cdnhjk.net', 'www.cdnutc.me')
+
+# 优先用 tools\probe_hosts.ps1 生成的实测种子（含最近一次 ok/延迟排序）
+$SeedPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'assets\data\jm_hosts.json'
+if (Test-Path $SeedPath) {
+    try {
+        $seed = Get-Content $SeedPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $fromSeed = @($seed.api | Where-Object { $_.status -eq 'ok' } | Select-Object -ExpandProperty host)
+        if ($fromSeed.Count -gt 0) { $FallbackApiHosts = @($fromSeed) + @($FallbackApiHosts | Where-Object { $_ -notin $fromSeed }) }
+    }
+    catch { Write-Warning "线路种子读取失败，回退内置表：$($_.Exception.Message)" }
+}
 
 $script:Session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 $script:ProxyUrl = $null

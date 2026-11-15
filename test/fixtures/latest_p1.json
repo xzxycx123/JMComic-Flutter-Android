@@ -1,0 +1,50 @@
+[
+  {
+    "id": "1490663",
+    "author": "N/A",
+    "name": "榜一大哥的女主播收藏計劃 Vol.4",
+    "image": "",
+    "category": { "id": "4", "title": "其他類" },
+    "category_sub": { "id": null, "title": null },
+    "liked": false,
+    "is_favorite": false,
+    "update_at": 1794624453,
+    "adddate": "2026-11-14"
+  },
+  {
+    "id": "1490664",
+    "author": "N/A",
+    "name": "短篇測試條目 A",
+    "image": "",
+    "category": { "id": "3", "title": "短篇" },
+    "category_sub": { "id": null, "title": null },
+    "liked": false,
+    "is_favorite": false,
+    "update_at": 1794624400,
+    "adddate": "2026-11-14"
+  },
+  {
+    "id": "1490665",
+    "author": "N/A",
+    "name": "短篇測試條目 B",
+    "image": "",
+    "category": { "id": "3", "title": "短篇" },
+    "category_sub": { "id": null, "title": null },
+    "liked": false,
+    "is_favorite": false,
+    "update_at": 1794624300,
+    "adddate": "2026-11-14"
+  },
+  {
+    "id": "1485385",
+    "author": "N/A",
+    "name": "轉生到不認識的世界，作為母龍活下去",
+    "image": "",
+    "category": { "id": "2", "title": "單本" },
+    "category_sub": { "id": null, "title": null },
+    "liked": false,
+    "is_favorite": false,
+    "update_at": 1794643443,
+    "adddate": "2026-11-14"
+  }
+]

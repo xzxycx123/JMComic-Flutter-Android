@@ -1,0 +1,33 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  language:
+    strict-casts: false
+    strict-inference: false
+    strict-raw-types: false
+  errors:
+    # 迁移期保留为提示，M6 收尾前逐条清零
+    unused_import: warning
+    unused_local_variable: warning
+    # Flutter 3.50 起 package:flutter/material.dart 整体标记 deprecated（迁移到 material_ui），
+    # 本项目按 PLAN 继续用 material.dart，这类提示不再阻断验收。
+    deprecated_member_use: ignore
+  exclude:
+    - build/**
+    - "**/*.g.dart"
+    - android/**
+    - ios/**
+
+linter:
+  rules:
+    - always_declare_return_types
+    - avoid_print
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - prefer_final_locals
+    - prefer_single_quotes
+    - require_trailing_commas
+    - unawaited_futures
+    - unnecessary_parenthesis
+    - use_super_parameters
+    - sort_child_properties_last

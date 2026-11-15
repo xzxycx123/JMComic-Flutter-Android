@@ -1,0 +1,622 @@
+{
+  "schema": 2,
+  "generatedAt": "2026-11-15T11:39:10+08:00",
+  "network": "proxy:http://127.0.0.1:7890",
+  "sampleAlbum": "1490702",
+  "api": [
+    {
+      "host": "www.cdnutc.cc",
+      "label": "線路2",
+      "status": "ok",
+      "latencyMs": 6202,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "tos:Setting",
+        "tos:Server",
+        "tos:jm3_Server",
+        "seed",
+        "builtin"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "settingImgHost": "https://cdn-msp.jmdanjonproxy.vip",
+      "appVersion": "2.1.13"
+    },
+    {
+      "host": "www.cdngwc.net",
+      "label": "線路3",
+      "status": "ok",
+      "latencyMs": 6214,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "tos:Setting",
+        "tos:Server",
+        "tos:jm3_Server",
+        "github:apiList",
+        "seed",
+        "builtin"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "settingImgHost": "https://cdn-msp3.jmapiproxy1.cc",
+      "appVersion": "2.1.13"
+    },
+    {
+      "host": "www.cdnhjk.net",
+      "label": "",
+      "status": "ok",
+      "latencyMs": 7307,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "github:apiList",
+        "seed",
+        "builtin"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "settingImgHost": "https://cdn-msp2.jmdanjonproxy.vip",
+      "appVersion": "2.1.13"
+    },
+    {
+      "host": "www.cdnbtd.cc",
+      "label": "線路1",
+      "status": "ok",
+      "latencyMs": 7386,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "tos:Setting",
+        "tos:Server",
+        "tos:jm3_Server",
+        "seed",
+        "builtin"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "settingImgHost": "https://cdn-msp3.jmapiproxy3.cc",
+      "appVersion": "2.1.13"
+    },
+    {
+      "host": "www.cdngwc.club",
+      "label": "線路4",
+      "status": "ok",
+      "latencyMs": 7418,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "tos:Setting",
+        "tos:Server",
+        "tos:jm3_Server",
+        "github:apiList",
+        "seed",
+        "builtin"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "settingImgHost": "https://cdn-msp3.jmdanjonproxy.vip",
+      "appVersion": "2.1.13"
+    },
+    {
+      "host": "www.cdngwc.cc",
+      "label": "",
+      "status": "ok",
+      "latencyMs": 8721,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "github:apiList",
+        "seed",
+        "builtin"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "settingImgHost": "https://cdn-msp3.jmapiproxy3.cc",
+      "appVersion": "2.1.13"
+    },
+    {
+      "host": "www.cdnutc.me",
+      "label": "線路5",
+      "status": "timeout",
+      "latencyMs": 15055,
+      "httpStatus": 0,
+      "domestic": false,
+      "sources": [
+        "tos:jm3_Server",
+        "seed",
+        "builtin"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "The request was canceled due to the configured HttpClient.Timeout of 15 seconds elapsing."
+    }
+  ],
+  "image": [
+    {
+      "host": "comic18j-nico.work",
+      "label": "分流1",
+      "status": "ok",
+      "latencyMs": 5981,
+      "httpStatus": 200,
+      "domestic": true,
+      "sources": [
+        "seed",
+        "media-from:web"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "cdn-msp2.jmapiproxy2.cc",
+      "label": "",
+      "status": "ok",
+      "latencyMs": 5987,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "github:imageList",
+        "seed",
+        "builtin"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "cdn-msp2.jmdanjonproxy.vip",
+      "label": "setting:img_host",
+      "status": "ok",
+      "latencyMs": 5988,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "setting:img_host"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "cdn-msp.jmdanjonproxy.vip",
+      "label": "setting:img_host",
+      "status": "ok",
+      "latencyMs": 5993,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "setting:img_host"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "www.cdnhjk.net",
+      "label": "",
+      "status": "ok",
+      "latencyMs": 5994,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "seed",
+        "media-from:api"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "settingImgHost": "https://cdn-msp2.jmdanjonproxy.vip",
+      "appVersion": "2.1.13",
+      "detail": "86KB"
+    },
+    {
+      "host": "cdn-msp.jmapinodeudzn.net",
+      "label": "",
+      "status": "ok",
+      "latencyMs": 5995,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "github:imageList",
+        "seed",
+        "builtin"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "cdn-msp2.jmapiproxy3.cc",
+      "label": "setting:img_host",
+      "status": "ok",
+      "latencyMs": 5996,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "seed"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "cdn-msp3.jmapiproxy3.cc",
+      "label": "setting:img_host",
+      "status": "ok",
+      "latencyMs": 5996,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "seed"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "cdn-msp.jmapiproxy1.cc",
+      "label": "",
+      "status": "ok",
+      "latencyMs": 6001,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "github:imageList",
+        "seed",
+        "builtin"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "cdn-msp3.jmdanjonproxy.vip",
+      "label": "setting:img_host",
+      "status": "ok",
+      "latencyMs": 6001,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "setting:img_host"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "cdn-msp12.jmdanjonproxy.xyz",
+      "label": "setting:img_host",
+      "status": "ok",
+      "latencyMs": 6002,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "seed"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "cdn-msp3.jmapiproxy1.cc",
+      "label": "setting:img_host",
+      "status": "ok",
+      "latencyMs": 6003,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "seed"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "cdn-msp3.jmapiproxy2.cc",
+      "label": "",
+      "status": "ok",
+      "latencyMs": 6003,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "github:imageList",
+        "seed",
+        "builtin"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "cdn-msp.jmapiproxy3.cc",
+      "label": "setting:img_host",
+      "status": "ok",
+      "latencyMs": 6004,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "seed"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "cdn-msp.jmapiproxy2.cc",
+      "label": "",
+      "status": "ok",
+      "latencyMs": 6005,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "github:imageList",
+        "seed",
+        "builtin"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "comic18j-neo.com",
+      "label": "分流2",
+      "status": "ok",
+      "latencyMs": 6008,
+      "httpStatus": 200,
+      "domestic": true,
+      "sources": [
+        "seed",
+        "media-from:web"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "www.cdngwc.net",
+      "label": "線路3",
+      "status": "ok",
+      "latencyMs": 6009,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "seed",
+        "media-from:api"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "settingImgHost": "https://cdn-msp3.jmapiproxy1.cc",
+      "appVersion": "2.1.13",
+      "detail": "86KB"
+    },
+    {
+      "host": "www.cdnutc.cc",
+      "label": "線路2",
+      "status": "ok",
+      "latencyMs": 6011,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "seed",
+        "media-from:api"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "settingImgHost": "https://cdn-msp.jmdanjonproxy.vip",
+      "appVersion": "2.1.13",
+      "detail": "86KB"
+    },
+    {
+      "host": "www.cdngwc.club",
+      "label": "線路4",
+      "status": "ok",
+      "latencyMs": 6014,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "seed",
+        "media-from:api"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "settingImgHost": "https://cdn-msp3.jmdanjonproxy.vip",
+      "appVersion": "2.1.13",
+      "detail": "86KB"
+    },
+    {
+      "host": "www.cdnbtd.cc",
+      "label": "線路1",
+      "status": "ok",
+      "latencyMs": 6017,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "seed",
+        "media-from:api"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "settingImgHost": "https://cdn-msp3.jmapiproxy3.cc",
+      "appVersion": "2.1.13",
+      "detail": "86KB"
+    },
+    {
+      "host": "18comic.ink",
+      "label": "國際通用",
+      "status": "ok",
+      "latencyMs": 6025,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "seed",
+        "media-from:web"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "cdn-msp3.jmapinodeudzn.net",
+      "label": "",
+      "status": "ok",
+      "latencyMs": 6028,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "github:imageList",
+        "seed",
+        "builtin"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "cdn-msp.jmdanjonproxy.xyz",
+      "label": "setting:img_host",
+      "status": "ok",
+      "latencyMs": 6035,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "seed"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    },
+    {
+      "host": "www.cdngwc.cc",
+      "label": "",
+      "status": "ok",
+      "latencyMs": 6035,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "seed",
+        "media-from:api"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "settingImgHost": "https://cdn-msp3.jmapiproxy3.cc",
+      "appVersion": "2.1.13",
+      "detail": "86KB"
+    },
+    {
+      "host": "comic18j-susu.com",
+      "label": "內地",
+      "status": "ok",
+      "latencyMs": 6050,
+      "httpStatus": 200,
+      "domestic": true,
+      "sources": [
+        "seed",
+        "media-from:web"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00",
+      "detail": "86KB"
+    }
+  ],
+  "web": [
+    {
+      "host": "18comic.ink",
+      "label": "國際通用",
+      "status": "ok",
+      "latencyMs": 6528,
+      "httpStatus": 200,
+      "domestic": false,
+      "sources": [
+        "pub:https://jmcomictt.site",
+        "seed"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00"
+    },
+    {
+      "host": "jmcomic-zzz.org",
+      "label": "東南亞",
+      "status": "cloudflare_challenge",
+      "latencyMs": 5862,
+      "httpStatus": 403,
+      "domestic": false,
+      "sources": [
+        "pub:https://jmcomictt.site",
+        "seed"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00"
+    },
+    {
+      "host": "jmcomic-zzz.one",
+      "label": "東南亞",
+      "status": "cloudflare_challenge",
+      "latencyMs": 5875,
+      "httpStatus": 403,
+      "domestic": false,
+      "sources": [
+        "pub:https://jmcomictt.site",
+        "seed"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00"
+    },
+    {
+      "host": "18comic.vip",
+      "label": "國際通用",
+      "status": "cloudflare_challenge",
+      "latencyMs": 5917,
+      "httpStatus": 403,
+      "domestic": false,
+      "sources": [
+        "pub:https://jmcomictt.site",
+        "seed"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00"
+    },
+    {
+      "host": "comic18j-susu.com",
+      "label": "內地",
+      "status": "cloudflare_challenge",
+      "latencyMs": 11767,
+      "httpStatus": 403,
+      "domestic": true,
+      "sources": [
+        "pub:https://jmcomictt.site",
+        "seed"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00"
+    },
+    {
+      "host": "comic18j-neo.com",
+      "label": "分流2",
+      "status": "cloudflare_challenge",
+      "latencyMs": 11775,
+      "httpStatus": 403,
+      "domestic": true,
+      "sources": [
+        "pub:https://jmcomictt.site",
+        "seed"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00"
+    },
+    {
+      "host": "comic18j-nico.work",
+      "label": "分流1",
+      "status": "cloudflare_challenge",
+      "latencyMs": 11784,
+      "httpStatus": 403,
+      "domestic": true,
+      "sources": [
+        "pub:https://jmcomictt.site",
+        "seed"
+      ],
+      "firstSeen": "2026-11-15",
+      "checkedAt": "2026-11-15T11:39:10+08:00"
+    }
+  ]
+}

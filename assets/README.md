@@ -6,7 +6,7 @@
 |---|---|---|
 | `assets/icons/` | **所有 UI 图标**（Dock、搜索、返回、下载、阅读器 HUD、任务卡操作……），一个功能一个文件 | `.svg`（24×24，stroke 1.75，`currentColor`） |
 | `assets/illustrations/` | 空态 / 错误态 / 引导插画，尺寸 160×120 或等比 | `.svg` |
-| `assets/images/` | 位图素材（启动图、截图、二维码等），仅在没有矢量必要时使用 | `.png` / `.webp`，@2x/@3x |
+| `assets/images/` | 品牌位图：应用图标、吉祥物、品牌横幅、加载动画、站点角标、二维码、火箭 | `.png` / `.gif`，由 `tools/build_app_assets.py` 从 `img/` 派生 |
 | `assets/fonts/` | 自托管字体（可选）；**不放图标字体** | `.ttf` / `.otf` |
 
 ## 硬规则（写进 PLAN §7.0，评审逐条对照）
@@ -47,5 +47,24 @@
 | 文件名 | 用途 |
 |---|---|
 | `empty-search.svg` | 搜索无结果 |
-| `empty-download.svg` | 下载列表为空 |
+| `empty-download.svg` | 下载列表为空（现由火箭位图接管，保留兜底） |
 | `error-network.svg` | 网络/线路错误态 |
+
+## 品牌位图清单（`assets/images/`，入口：`lib/core/icons/app_images.dart`）
+
+| 文件名 | 来源（`img/`） | 用途 / 出现位置 |
+|---|---|---|
+| `app_icon.png` (512²) | `mascot/app_icon_512.png` | 关于页图标；Android 桌面图标由脚本派生到 `mipmap-*/ic_launcher.png`；启动屏居中位图 |
+| `mark_default.png` | `mascot/app_icon_512.png` | 方形吉祥物兜底 |
+| `mark_newyear.png` / `mark_halloween.png` / `mark_xmas.png` / `mark_sakura.png` / `mark_pink.png` | `mascot/mark_*_256.png` | 首页 AppBar 左侧、我的页头像：按月份自动切换（1 月新年 / 3–4 月樱花 / 10 月万圣 / 12 月圣诞） |
+| `brand_banner.png` (1000×400) | `brand/brand.png`（容器是 PNG、内容是 WebP，脚本转真 PNG） | 关于页顶部品牌横幅 |
+| `loading_cat.gif` (96×72) | `loading/loading_cat_96_alpha.gif` | 紧凑内联加载（阅读器 HUD 附近） |
+| `loading_cat_large.gif` (160×120) | `loading/loading_cat_160_alpha.gif` | 详情页 / 章节加载中的黑猫动图 |
+| `loading_cat_frame.png` | `loading/loading_cat_frame1_alpha.png` | 动图解码失败时的静态兜底 |
+| `qr_app.png` (400²) | `ui/qr_app.png` | 关于页官方 APP 二维码卡片 |
+| `badge_new.png` | `ui/icon_new.png` | 列表卡片右上角 NEW 角标（`adddate` 7 天内） |
+| `badge_hot.png` / `badge_day.png` / `badge_week.png` | `ui/icon_hot|day|week.png` | 首页排序条（人气推荐 / 日榜 / 周榜） |
+| `rocket.png` (280²) | `ui/icon_rocket_280.png` | 下载页空态主图 |
+
+> 图标位规则不变：**交互图标一律 `assets/icons/*.svg`**；位图只做品牌、装饰、空态主图与加载动画。
+> 新增位图必须同步 `lib/core/icons/app_images.dart` + 本表，并跑 `python tools/build_app_assets.py` 重新派生。

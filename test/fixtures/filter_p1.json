@@ -1,0 +1,42 @@
+{
+  "search_query": "",
+  "total": 10000,
+  "content": [
+    {
+      "id": "1490702",
+      "author": "池下真上",
+      "name": "子供を甘く見るな。 總集編",
+      "image": "",
+      "category": { "id": "1", "title": "同人" },
+      "category_sub": { "id": "1", "title": "漢化" },
+      "liked": false,
+      "is_favorite": false,
+      "update_at": 1794643443,
+      "adddate": "2026-11-14"
+    },
+    {
+      "id": "1490703",
+      "author": "N/A",
+      "name": "瀑布流測試條目 B",
+      "image": "",
+      "category": { "id": "2", "title": "單本" },
+      "category_sub": { "id": null, "title": null },
+      "liked": false,
+      "is_favorite": false,
+      "update_at": 1794643400,
+      "adddate": "2026-11-14"
+    },
+    {
+      "id": "1490704",
+      "author": "N/A",
+      "name": "瀑布流測試條目 C",
+      "image": "",
+      "category": { "id": "2", "title": "單本" },
+      "category_sub": { "id": null, "title": null },
+      "liked": false,
+      "is_favorite": false,
+      "update_at": 1794643300,
+      "adddate": "2026-11-14"
+    }
+  ]
+}

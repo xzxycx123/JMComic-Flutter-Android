@@ -1,0 +1,54 @@
+[
+  {
+    "id": "26",
+    "title": "連載更新",
+    "type": "promote",
+    "filter_val": "26",
+    "content": [
+      {
+        "id": "1485385",
+        "author": "N/A",
+        "name": "轉生到不認識的世界，作為母龍活下去",
+        "image": "",
+        "category": { "id": "2", "title": "單本" },
+        "category_sub": { "id": null, "title": null },
+        "liked": false,
+        "is_favorite": false,
+        "update_at": 1794643443,
+        "adddate": "2026-11-14"
+      },
+      {
+        "id": "1485300",
+        "author": "池下真上",
+        "name": "子供を甘く見るな。 Peaceful days",
+        "image": "",
+        "category": { "id": "1", "title": "同人" },
+        "category_sub": { "id": "1", "title": "漢化" },
+        "liked": false,
+        "is_favorite": false,
+        "update_at": 1794643000,
+        "adddate": "2026-11-13"
+      }
+    ]
+  },
+  {
+    "id": "999",
+    "title": "韓漫更新",
+    "type": "category_id",
+    "filter_val": "5",
+    "content": [
+      {
+        "id": "1490001",
+        "author": "N/A",
+        "name": "韓國網路漫畫 測試條目",
+        "image": "",
+        "category": { "id": "5", "title": "韓漫" },
+        "category_sub": { "id": null, "title": null },
+        "liked": false,
+        "is_favorite": false,
+        "update_at": 1794600000,
+        "adddate": "2026-11-12"
+      }
+    ]
+  }
+]

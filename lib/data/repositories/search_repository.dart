@@ -1,0 +1,97 @@
+import '../../core/constants/jm_constants.dart';
+import '../../core/utils/jm_id_parser.dart';
+import '../local/progress_store.dart';
+import '../models/jm_search_page.dart';
+import '../sources/jm_api_client.dart';
+
+/// 搜索输入的本地判定结果（PLAN §7.4）。
+enum SearchQueryKind {
+  /// 空输入：显示历史 + 热门词，不发请求。
+  empty,
+
+  /// 识别为车号：直接进详情页。
+  album,
+
+  /// 关键词：走 GET /search。
+  keyword,
+}
+
+class SearchQuery {
+  const SearchQuery({
+    required this.kind,
+    this.raw = '',
+    this.albumId,
+    this.keyword,
+  });
+
+  final SearchQueryKind kind;
+  final String raw;
+  final String? albumId;
+  final String? keyword;
+
+  bool get isEmpty => kind == SearchQueryKind.empty;
+  bool get isAlbum => kind == SearchQueryKind.album;
+  bool get isKeyword => kind == SearchQueryKind.keyword;
+
+  /// 搜索框下方的实时提示文案。
+  String get hint => switch (kind) {
+        SearchQueryKind.empty => '输入车号或关键词',
+        SearchQueryKind.album => '识别为车号 JM$albumId · 回车直达详情',
+        SearchQueryKind.keyword => '关键词 · 回车搜索',
+      };
+}
+
+/// 纯本地判定：先判再发请求（双保险交给服务端 redirect_aid）。
+SearchQuery resolveSearchQuery(String input) {
+  final value = input.trim();
+  if (value.isEmpty) return const SearchQuery(kind: SearchQueryKind.empty);
+  final albumId = parseJmId(value);
+  if (albumId != null) {
+    return SearchQuery(
+      kind: SearchQueryKind.album,
+      raw: value,
+      albumId: albumId,
+    );
+  }
+  return SearchQuery(
+    kind: SearchQueryKind.keyword,
+    raw: value,
+    keyword: value,
+  );
+}
+
+class SearchRepository {
+  SearchRepository({
+    required JmApi api,
+    required SearchHistoryStore history,
+  })  : _api = api,
+        _history = history;
+
+  final JmApi _api;
+  final SearchHistoryStore _history;
+
+  List<String> get history => _history.read();
+
+  Future<List<String>> remember(String keyword) => _history.push(keyword);
+
+  Future<void> clearHistory() => _history.clear();
+
+  Future<JmSearchPage> search({
+    required String keyword,
+    int page = 1,
+    AlbumOrder order = AlbumOrder.latestUpdate,
+  }) =>
+      _api.search(query: keyword, page: page, order: order);
+
+  /// 服务端命中车号时返回 redirect_aid（关键词形态的双保险）。
+  Future<String?> resolveRedirect(String keyword) async {
+    final id = parseJmId(keyword);
+    if (id != null) return id;
+    try {
+      final page = await _api.search(query: keyword, page: 1);
+      return page.redirectAid;
+    } catch (_) {
+      return null;
+    }
+  }
+}

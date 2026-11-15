@@ -5,12 +5,38 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>JMComic App · UI 草稿 v1（按钮位置 + 操作逻辑 · 全图标自绘 SVG）</title>
 <style>
+  /* ===== 默认：浅色 · 白橙 ===== */
   :root{
-    --bg:#0d0f14; --panel:#151821; --panel2:#1c2029; --line:#272c38;
-    --text:#e8ecf3; --dim:#8b93a7; --accent:#ff5c8a; --accent2:#7c5cff;
-    --ok:#35d399; --warn:#ffb020;
+    --bg:#FFFFFF; --panel:#FFFFFF; --panel2:#FBF8F3; --line:#EBE3D8;
+    --text:#141413; --dim:#6B6862;
+    --accent:#F26B0F; --accent2:#E89B2C;
+    --accent-soft:#FFE8D5; --accent-on:#FFFFFF; --accent-ink:#7A3200;
+    --ok:#2E8B57; --warn:#B8791A;
+    --shadow:0 24px 60px rgba(20,20,19,.10);
+    --dock-bg:rgba(255,255,255,.78);
+    --profile-grad:linear-gradient(135deg,#FFF1E4,#FFDCC0);
+    --profile-ink:#141413; --profile-dim:#8A6A4E;
+    --hero-grad:linear-gradient(150deg,#F5A25B,#B7470A 60%,#3A2412);
+    --banner-grad:linear-gradient(120deg,#FFB877,#F26B0F 62%,#C64F09);
+    --reader-bg:#0B0B0A; --reader-ink:#FAF9F5;
+    --code-ink:#B4470A; --code-bg:#FFF3E8;
   }
-  body.light{--bg:#f4f5f8;--panel:#fff;--panel2:#eef0f5;--line:#dfe3ec;--text:#141821;--dim:#5c6478}
+  /* ===== 深色：#141413 底 + #FAF9F5 字 ===== */
+  body.dark{
+    --bg:#141413; --panel:#1B1B19; --panel2:#232320; --line:#3A3A35;
+    --text:#FAF9F5; --dim:#A9A69D;
+    --accent:#FF8A3D; --accent2:#FFB25C;
+    --accent-soft:#3B2412; --accent-on:#1A0F05; --accent-ink:#FFD9BE;
+    --ok:#57C98A; --warn:#FFB25C;
+    --shadow:0 24px 60px rgba(0,0,0,.45);
+    --dock-bg:rgba(27,27,25,.82);
+    --profile-grad:linear-gradient(135deg,#3B2412,#1B1B19);
+    --profile-ink:#FAF9F5; --profile-dim:#C9B7A4;
+    --hero-grad:linear-gradient(150deg,#4A2A12,#141413 70%);
+    --banner-grad:linear-gradient(120deg,#5A2F12,#3B2412 62%,#201811);
+    --reader-bg:#0B0B0A; --reader-ink:#FAF9F5;
+    --code-ink:#F0B27A; --code-bg:#2C2320;
+  }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);
     font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;transition:background .2s}
@@ -27,9 +53,9 @@
   .stage{display:flex;flex-direction:column;gap:12px;align-items:center}
   .switcher{display:flex;flex-wrap:wrap;justify-content:center;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px}
   .switcher button{background:none;border:0;color:var(--dim);font:inherit;font-size:12px;padding:6px 12px;border-radius:999px;cursor:pointer}
-  .switcher button.on{background:var(--accent);color:#fff}
+  .switcher button.on{background:var(--accent);color:var(--accent-on)}
   .phone{position:relative;width:414px;height:812px;border-radius:38px;background:var(--panel);
-    border:1px solid var(--line);padding:10px;box-shadow:0 30px 80px rgba(0,0,0,.45)}
+    border:1px solid var(--line);padding:10px;box-shadow:var(--shadow)}
   .phone::after{content:"";position:absolute;left:50%;top:16px;transform:translateX(-50%);
     width:96px;height:22px;background:#000;border-radius:999px;z-index:9;opacity:.85}
   .viewport{position:relative;width:100%;height:100%;border-radius:30px;overflow:hidden;background:var(--bg)}
@@ -41,8 +67,8 @@
 
   /* ---------- Dock ---------- */
   .dock{position:absolute;left:16px;right:16px;bottom:14px;height:62px;border-radius:22px;
-    background:color-mix(in srgb,var(--panel) 78%,transparent);backdrop-filter:blur(18px);
-    border:1px solid var(--line);display:flex;align-items:center;z-index:8;box-shadow:0 12px 30px rgba(0,0,0,.35)}
+    background:var(--dock-bg);backdrop-filter:blur(18px);
+    border:1px solid var(--line);display:flex;align-items:center;z-index:8;box-shadow:0 10px 24px rgba(20,20,19,.08)}
   .dock button{flex:1;background:none;border:0;color:var(--dim);font:inherit;display:flex;flex-direction:column;
     align-items:center;gap:3px;padding:8px 0;cursor:pointer;font-size:11px}
   .dock button.on{color:var(--accent)}
@@ -59,12 +85,12 @@
   .searchbox{flex:1;height:34px;border-radius:999px;border:1px solid var(--line);background:var(--panel2);
     color:var(--dim);display:flex;align-items:center;padding:0 12px;font-size:12px;gap:7px;cursor:pointer}
   .banner{margin:0 16px;height:158px;border-radius:20px;position:relative;overflow:hidden;
-    background:linear-gradient(120deg,#2a1b3d,#4a2040 55%,#7a2b48);border:1px solid var(--line)}
+    background:var(--banner-grad);border:1px solid var(--line)}
   .banner .slide{position:absolute;inset:0;padding:16px;display:none;flex-direction:column;justify-content:flex-end;
     background:linear-gradient(180deg,transparent 30%,rgba(0,0,0,.62))}
   .banner .slide.on{display:flex}
   .banner h3{margin:0;font-size:15px;line-height:1.35;color:#fff}
-  .banner .meta{font-size:11px;color:#ffd7e3;margin-top:4px}
+  .banner .meta{font-size:11px;color:rgba(255,255,255,.82);margin-top:4px}
   .dots{position:absolute;right:14px;bottom:12px;display:flex;gap:5px}
   .dots i{width:5px;height:5px;border-radius:9px;background:rgba(255,255,255,.45)}
   .dots i.on{width:16px;background:#fff}
@@ -84,26 +110,27 @@
     background:rgba(0,0,0,.55);color:#fff}
   .card p{margin:6px 0 0;font-size:11.5px;line-height:1.35;height:31px;overflow:hidden}
   .card small{color:var(--dim);font-size:10px}
-  .g1{background:linear-gradient(150deg,#3a2b5e,#6d2f57)}
-  .g2{background:linear-gradient(150deg,#1f3a4d,#2b6a63)}
-  .g3{background:linear-gradient(150deg,#4a2a24,#7a3a2e)}
-  .g4{background:linear-gradient(150deg,#2b2f5c,#4b2f7a)}
-  .g5{background:linear-gradient(150deg,#3c3a1f,#6b6730)}
-  .g6{background:linear-gradient(150deg,#22354f,#375b7d)}
-  .g7{background:linear-gradient(150deg,#43243a,#7b3a55)}
-  .g8{background:linear-gradient(150deg,#243f2f,#3f7351)}
+  .g1{background:linear-gradient(150deg,#F6C39A,#DE7A3C)}
+  .g2{background:linear-gradient(150deg,#F0D29B,#B98A3E)}
+  .g3{background:linear-gradient(150deg,#E7A184,#A8503A)}
+  .g4{background:linear-gradient(150deg,#F7D6B4,#C58A55)}
+  .g5{background:linear-gradient(150deg,#DCC08A,#8E6A2E)}
+  .g6{background:linear-gradient(150deg,#EFB49B,#A65B45)}
+  .g7{background:linear-gradient(150deg,#E3B5C8,#9C6079)}
+  .g8{background:linear-gradient(150deg,#BDD3B2,#6C8A61)}
+  body.dark .cover{filter:saturate(.82) brightness(.78)}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 12px;padding:4px 16px 8px}
   .more{padding:14px 16px 4px;text-align:center;color:var(--dim);font-size:11px}
   .hint{font-size:10.5px;color:var(--dim);padding:0 16px 8px;line-height:1.5}
 
   /* 详情 */
-  .hero{height:210px;position:relative;background:linear-gradient(150deg,#3a2b5e,#6d2f57 60%,#2a1b3d);
+  .hero{height:210px;position:relative;background:var(--hero-grad);
     display:flex;align-items:flex-end;padding:14px;border-bottom:1px solid var(--line)}
   .hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.15),rgba(0,0,0,.72))}
   .hero .mini{position:relative;z-index:2;display:flex;gap:12px;align-items:flex-end}
-  .hero .poster{width:78px;height:104px;border-radius:12px;background:linear-gradient(150deg,#6d2f57,#2a1b3d);border:1px solid #ffffff22}
+  .hero .poster{width:78px;height:104px;border-radius:12px;background:linear-gradient(150deg,#F6C39A,#8A3E14);border:1px solid #ffffff33}
   .hero h2{margin:0;font-size:15px;line-height:1.35;color:#fff}
-  .hero .by{font-size:11px;color:#e7c8d4;margin-top:4px}
+  .hero .by{font-size:11px;color:rgba(255,255,255,.8);margin-top:4px}
   .tags{display:flex;flex-wrap:wrap;gap:6px;padding:12px 16px 0}
   .tags span{font-size:10.5px;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:3px 8px;background:var(--panel2)}
   .stats{display:flex;gap:18px;padding:14px 16px;border-bottom:1px solid var(--line);margin-top:12px}
@@ -114,7 +141,7 @@
   .chlist .row span{color:var(--dim);font-size:11px;display:flex;align-items:center;gap:4px}
   .cta{position:absolute;left:16px;right:16px;bottom:14px;display:flex;gap:10px;z-index:8}
   .cta button{height:46px;border-radius:16px;border:0;font:inherit;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
-  .cta .primary{flex:1;background:var(--accent);color:#fff}
+  .cta .primary{flex:1;background:var(--accent);color:var(--accent-on)}
   .cta .ghost{flex:0 0 108px;background:var(--panel2);border:1px solid var(--line);color:var(--text)}
 
   /* 搜索页 */
@@ -124,24 +151,24 @@
   .sinput input{flex:1;background:none;border:0;outline:none;color:var(--text);font:inherit;font-size:13px}
   .scancel{font-size:12.5px;color:var(--dim);background:none;border:0;cursor:pointer}
   .judge{margin:0 16px 4px;font-size:11px;padding:7px 11px;border-radius:11px;display:flex;align-items:center;gap:7px}
-  .judge.id{background:rgba(255,92,138,.12);color:#ffa8c2;border:1px solid rgba(255,92,138,.35)}
-  .judge.kw{background:rgba(124,92,255,.12);color:#b8a8ff;border:1px solid rgba(124,92,255,.35)}
+  .judge.id{background:var(--accent-soft);color:var(--accent-ink);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent)}
+  .judge.kw{background:rgba(232,155,44,.14);color:#8A5A12;border:1px solid rgba(232,155,44,.4)}
   .sres-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 6px;font-size:11.5px;color:var(--dim)}
   .viewtoggle{display:flex;gap:6px}
   .viewtoggle button{width:28px;height:26px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--dim);display:grid;place-items:center;cursor:pointer;padding:0}
   .viewtoggle button.on{border-color:var(--accent);color:var(--accent)}
 
   /* 阅读器 */
-  .reader{position:absolute;inset:0;background:#07080b;display:flex;flex-direction:column;overflow:hidden}
+  .reader{position:absolute;inset:0;background:var(--reader-bg);display:flex;flex-direction:column;overflow:hidden}
   .rstage{position:relative;flex:1;overflow:hidden}
   .rpage{position:absolute;inset:0;display:grid;place-items:center;background:#0b0d12}
-  .rpage .art{width:76%;height:84%;border-radius:8px;background:linear-gradient(160deg,#2b2140,#5b2c47);
-    box-shadow:0 24px 60px rgba(0,0,0,.6);display:grid;place-items:center;color:rgba(255,255,255,.55);
+  .rpage .art{width:76%;height:84%;border-radius:8px;background:linear-gradient(160deg,#3A2412,#8A3E14);
+    box-shadow:0 24px 60px rgba(0,0,0,.6);display:grid;place-items:center;color:rgba(255,255,255,.6);
     font-size:44px;font-weight:800;letter-spacing:1px}
   .rpage .pn{position:absolute;top:96px;left:12px;font-size:10px;color:#ffffff66}
   .scrollstage{position:absolute;inset:0;overflow-y:auto;display:none;padding:8px 0 90px}
-  .scrollstage .sblk{height:210px;margin:8px 18px;border-radius:8px;background:linear-gradient(160deg,#221a33,#4a2440);
-    display:grid;place-items:center;color:rgba(255,255,255,.45);font-weight:800;font-size:26px}
+  .scrollstage .sblk{height:210px;margin:8px 18px;border-radius:8px;background:linear-gradient(160deg,#3A2412,#7A3A12);
+    display:grid;place-items:center;color:rgba(255,255,255,.5);font-weight:800;font-size:26px}
   .reader[data-mode="scroll"] .scrollstage{display:block}
   .reader[data-mode="scroll"] .rpage{display:none}
   .reader[data-mode="scroll"] .zones{display:none}
@@ -187,25 +214,25 @@
   .task .top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
   .task h5{margin:0;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .pill{font-size:9.5px;padding:2px 7px;border-radius:999px;white-space:nowrap}
-  .pill.run{background:rgba(124,92,255,.18);color:#b4a2ff}
-  .pill.done{background:rgba(53,211,153,.16);color:var(--ok)}
-  .pill.wait{background:rgba(255,176,32,.16);color:var(--warn)}
-  .pill.stop{background:rgba(255,255,255,.08);color:var(--dim)}
+  .pill.run{background:var(--accent-soft);color:var(--accent)}
+  .pill.done{background:rgba(46,139,87,.14);color:var(--ok)}
+  .pill.wait{background:rgba(232,155,44,.16);color:var(--warn)}
+  .pill.stop{background:var(--panel2);color:var(--dim)}
   .barline{height:5px;border-radius:9px;background:var(--panel2);margin:9px 0 6px;overflow:hidden}
   .barline i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0;transition:width .4s}
   .task .sub{font-size:10.5px;color:var(--dim);display:flex;justify-content:space-between}
   .task .acts{display:flex;gap:6px;margin-top:9px;align-items:center}
 
   /* 我的 */
-  .profile{margin:14px 16px 0;border-radius:20px;padding:16px;border:1px solid var(--line);background:linear-gradient(135deg,#3a1f2f,#241a34)}
+  .profile{margin:14px 16px 0;border-radius:20px;padding:16px;border:1px solid var(--line);background:var(--profile-grad)}
   .profile .who{display:flex;gap:12px;align-items:center}
-  .profile .ava{width:48px;height:48px;border-radius:50%;background:linear-gradient(150deg,#ff5c8a,#7c5cff);
-    display:grid;place-items:center;color:#fff}
-  .profile h4{margin:0;font-size:14px;color:#fff}
-  .profile p{margin:2px 0 0;font-size:11px;color:#d9b8c5}
+  .profile .ava{width:48px;height:48px;border-radius:50%;background:linear-gradient(150deg,var(--accent2),var(--accent));
+    display:grid;place-items:center;color:var(--accent-on)}
+  .profile h4{margin:0;font-size:14px;color:var(--profile-ink)}
+  .profile p{margin:2px 0 0;font-size:11px;color:var(--profile-dim)}
   .kpi{display:flex;justify-content:space-between;margin-top:16px}
-  .kpi div{font-size:10px;color:#d9b8c5;text-align:center}
-  .kpi b{display:block;font-size:16px;color:#fff}
+  .kpi div{font-size:10px;color:var(--profile-dim);text-align:center}
+  .kpi b{display:block;font-size:16px;color:var(--profile-ink)}
   .group{margin:16px 16px 0;border:1px solid var(--line);border-radius:16px;background:var(--panel);overflow:hidden}
   .group .item{display:flex;justify-content:space-between;align-items:center;padding:13px 14px;font-size:12.5px;border-bottom:1px solid var(--line);cursor:pointer;gap:10px}
   .group .item:last-child{border-bottom:0}
@@ -228,10 +255,10 @@
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
   th{color:var(--dim);font-weight:600;font-size:11px;background:var(--panel2)}
   td:first-child{width:42px;color:var(--accent);font-weight:700}
-  td code{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:#9fd6ff;background:rgba(124,92,255,.1);padding:1px 5px;border-radius:5px;white-space:nowrap}
+  td code{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--code-ink);background:var(--code-bg);padding:1px 5px;border-radius:5px;white-space:nowrap}
   tr.hl{background:color-mix(in srgb,var(--accent) 10%,transparent)}
-  pre{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;overflow:auto;
-    font-family:ui-monospace,Consolas,monospace;font-size:11.5px;line-height:1.75;color:#c9d4e6}
+  pre{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px;overflow:auto;
+    font-family:ui-monospace,Consolas,monospace;font-size:11.5px;line-height:1.75;color:var(--text)}
   .note{font-size:11.5px;color:var(--dim);margin:8px 0 0}
   .badge{display:inline-block;font-size:10px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--dim);margin-left:6px}
   .iconbar{display:flex;flex-wrap:wrap;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px}
@@ -244,6 +271,7 @@
 <header>
   <h1>JMComic App · UI 草稿 v1 <small>按钮位置 + 操作逻辑；全图标自绘 SVG，无 emoji</small></h1>
   <span class="tag">六屏 · 25 个编号</span>
+  <span class="tag">浅色白橙 #F26B0F · 深色 #141413 / #FAF9F5</span>
   <span class="tag">数据源：JM 移动端接口（同 JMComic-Crawler-Python 的 JmApiClient）</span>
   <div class="spacer"></div>
   <button class="iconbtn" onclick="toggleTheme()" title="切换明暗"><i data-icon="theme" data-size="17"></i></button>
@@ -590,6 +618,7 @@ JM1490663, 1490701</textarea>
       <h2>图标（自绘 SVG，24×24 / stroke 1.75 / currentColor）</h2>
       <div class="iconbar" id="iconbar"></div>
       <p class="note">全部落在 <code>assets/icons/*.svg</code>，由 <code>lib/core/icons/app_icons.dart</code> 统一取用；规则与清单见 <code>assets\README.md</code>。界面内不出现任何 emoji 或图标字体。</p>
+      <p class="note"><b>配色（已定稿）</b>：默认<b>浅色 · 白橙</b> —— 底 <code>#FFFFFF</code>、主色橙 <code>#F26B0F</code>、正文 <code>#141413</code>、暖白容器 <code>#FBF8F3</code>、描边 <code>#EBE3D8</code>；点右上角圆钮切<b>深色</b> —— 底 <code>#141413</code>、前景字 <code>#FAF9F5</code>、橙提亮为 <code>#FF8A3D</code>、容器 <code>#1B1B19</code> / <code>#232320</code>、描边 <code>#3A3A35</code>。阅读器恒定深色 <code>#0B0B0A</code> + <code>#FAF9F5</code>，不跟随主题。</p>
     </section>
 
     <section>
@@ -695,7 +724,7 @@ JM1490663, 1490701</textarea>
   }
   document.querySelectorAll('.switcher button').forEach(b => b.onclick = () => showScreen(b.dataset.jump));
 
-  function toggleTheme(){ document.body.classList.toggle('light'); }
+  function toggleTheme(){ document.body.classList.toggle('dark'); }
 
   /* ---------------- 首页轮播 ---------------- */
   let slide = 0;
@@ -891,7 +920,10 @@ JM1490663, 1490701</textarea>
   judge();
   renderReader();
 
-  const initial = location.hash.replace('#', '');
+  const raw = location.hash.replace('#', '');
+  const wantDark = raw.endsWith('-dark');
+  const initial = raw.replace(/-dark$/, '');
+  if (wantDark) document.body.classList.add('dark');
   if (SCREENS.includes(initial)) showScreen(initial);
 </script>
 </body>

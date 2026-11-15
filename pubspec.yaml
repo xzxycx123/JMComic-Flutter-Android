@@ -1,0 +1,53 @@
+name: jm_comic
+description: JMComic 首页浏览 + 本地 PDF 下载客户端
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 状态管理（手写 Provider，不用 build_runner）
+  flutter_riverpod: ^2.6.1
+  # 路由 + 三 tab 壳
+  go_router: ^14.6.2
+  # HTTP：底层 dart:io 天然 HTTP/1.1，绕开 JM CDN 的 h2 preface 故障
+  dio: ^5.7.0
+  crypto: ^3.0.6
+  pointycastle: ^3.9.1
+  # 下载记录 / feed 缓存 / 阅读进度
+  hive_ce: ^2.9.0
+  hive_ce_flutter: ^2.2.0
+  shared_preferences: ^2.3.3
+  path_provider: ^2.1.5
+  # 封面（带 UA/Referer 头）
+  cached_network_image: ^3.4.1
+  # 解码 / 切片还原 / PNG 重编码
+  image: ^4.3.0
+  # 纯 Dart 写 PDF
+  pdf: ^3.11.1
+  # 自绘 SVG 图标（全项目禁用 emoji 与图标字体）
+  flutter_svg: ^2.0.17
+  # 前台服务 + 进度通知
+  flutter_foreground_task: ^8.17.0
+  open_filex: ^4.6.0
+  html: ^0.15.5
+  collection: ^1.18.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  mocktail: ^1.0.5
+  http_mock_adapter: ^0.6.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icons/
+    - assets/illustrations/
+    - assets/images/
+    - assets/data/

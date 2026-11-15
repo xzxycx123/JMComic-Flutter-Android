@@ -1,0 +1,29 @@
+{
+  "id": 350234,
+  "name": "測試用單本漫畫",
+  "author": "測試作者",
+  "description": "用於單元測試的詳情資料。",
+  "total_photos": "19",
+  "series_id": "0",
+  "series": [],
+  "tags": ["同人", "漢化"],
+  "total_views": 123456,
+  "likes": 4321,
+  "comment_total": 88,
+  "liked": false,
+  "is_favorite": false,
+  "related_list": [
+    {
+      "id": "350235",
+      "author": "N/A",
+      "name": "相關推薦 A",
+      "image": "",
+      "category": { "id": "2", "title": "單本" },
+      "category_sub": { "id": null, "title": null },
+      "liked": false,
+      "is_favorite": false,
+      "update_at": 1794643443,
+      "adddate": "2026-11-14"
+    }
+  ]
+}
