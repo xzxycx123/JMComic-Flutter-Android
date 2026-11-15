@@ -7,7 +7,7 @@ import '../../core/icons/app_icons.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 
-/// 玻璃胶囊 Dock（三档：首页 / 我的 / 下载）。
+/// 玻璃胶囊 Dock（两档：首页 / 我的；下载与历史收进「我的」二级菜单）。
 class GlassNavBar extends StatelessWidget {
   const GlassNavBar({
     required this.currentIndex,
@@ -21,7 +21,6 @@ class GlassNavBar extends StatelessWidget {
   static const List<({String icon, String label})> items = <({String icon, String label})>[
     (icon: AppIcons.home, label: '首页'),
     (icon: AppIcons.user, label: '我的'),
-    (icon: AppIcons.download, label: '下载'),
   ];
 
   @override

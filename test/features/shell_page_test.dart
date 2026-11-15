@@ -9,7 +9,7 @@ import 'package:jm_comic/features/shell/glass_nav_bar.dart';
 import '../helpers/fixtures.dart';
 import '../helpers/test_env.dart';
 
-Future<void> _pumpFrames(WidgetTester tester, {int frames = 6}) async {
+Future<void> _pumpFrames(WidgetTester tester, {int frames = 8}) async {
   for (var index = 0; index < frames; index++) {
     await tester.pump(const Duration(milliseconds: 60));
   }
@@ -26,7 +26,12 @@ void main() {
     await clearTestBoxes();
   });
 
-  testWidgets('Dock 三档切换 + 各 tab 独立栈', (tester) async {
+  test('Dock 只有两档：首页 / 我的', () {
+    expect(GlassNavBar.items.length, 2);
+    expect(GlassNavBar.items.map((item) => item.label).toList(), <String>['首页', '我的']);
+  });
+
+  testWidgets('Dock 两档切换 + 「我的」二级菜单进入下载与历史', (tester) async {
     final prefs = await testPreferences();
     await tester.pumpWidget(
       ProviderScope(
@@ -45,22 +50,32 @@ void main() {
     await _pumpFrames(tester);
 
     expect(find.byType(GlassNavBar), findsOneWidget);
-
     final barRect = tester.getRect(find.byType(GlassNavBar));
 
-    // 第三档：下载（Dock 外层有 16 的水平内缩，按比例取三档中心）
-    await tester.tapAt(Offset(barRect.left + barRect.width * 0.82, barRect.center.dy));
-    await _pumpFrames(tester);
-    expect(find.text('加入队列'), findsOneWidget);
-
-    // 第二档：我的
-    await tester.tapAt(Offset(barRect.left + barRect.width * 0.5, barRect.center.dy));
+    // 第二档：我的（两项均分，右半区即「我的」）
+    await tester.tapAt(Offset(barRect.left + barRect.width * 0.75, barRect.center.dy));
     await _pumpFrames(tester);
     expect(find.text('未登录 · 本地模式'), findsOneWidget);
+    expect(find.text('下载与历史'), findsOneWidget);
 
-    // 回到第一档：首页
-    await tester.tapAt(Offset(barRect.left + barRect.width * 0.18, barRect.center.dy));
-    await _pumpFrames(tester);
+    // 二级菜单：历史记录（空态）
+    await tester.tap(find.text('历史记录').first);
+    await _pumpFrames(tester, frames: 12);
+    expect(find.text('还没有下载记录'), findsOneWidget);
+
+    // 返回「我的」，再进下载
+    await tester.tap(find.byTooltip('返回'));
+    await _pumpFrames(tester, frames: 12);
+    expect(find.text('未登录 · 本地模式'), findsOneWidget);
+    await tester.tap(find.text('下载').first);
+    await _pumpFrames(tester, frames: 12);
+    expect(find.text('加入队列'), findsOneWidget);
+
+    // 回「我的」再切回首页
+    await tester.tap(find.byTooltip('返回'));
+    await _pumpFrames(tester, frames: 12);
+    await tester.tapAt(Offset(barRect.left + barRect.width * 0.25, barRect.center.dy));
+    await _pumpFrames(tester, frames: 12);
     expect(find.text('JMComic'), findsWidgets);
   });
 }

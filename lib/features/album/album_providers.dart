@@ -17,20 +17,3 @@ final ProviderFamily<ReaderProgress?, ({String albumId, String chapterId})>
     Provider.family<ReaderProgress?, ({String albumId, String chapterId})>(
   (ref, args) => ref.watch(progressStoreProvider).read(args.albumId, args.chapterId),
 );
-
-/// 本地收藏（v1 只存 id，不接登录接口）。
-final NotifierProvider<FavoritesNotifier, Set<String>> favoritesProvider =
-    NotifierProvider<FavoritesNotifier, Set<String>>(FavoritesNotifier.new);
-
-class FavoritesNotifier extends Notifier<Set<String>> {
-  @override
-  Set<String> build() => ref.watch(favoritesStoreProvider).read();
-
-  bool contains(String albumId) => state.contains(albumId);
-
-  Future<bool> toggle(String albumId) async {
-    final added = await ref.read(favoritesStoreProvider).toggle(albumId);
-    state = ref.read(favoritesStoreProvider).read();
-    return added;
-  }
-}

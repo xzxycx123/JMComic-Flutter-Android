@@ -9,8 +9,9 @@ import '../../core/icons/app_images.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../data/local/settings_store.dart';
+import '../../data/models/account_session.dart';
 import '../../data/models/user_session.dart';
-import '../album/album_providers.dart';
+import '../collect/collect_providers.dart';
 import '../download/download_providers.dart';
 import '../home/widgets/section_header.dart';
 
@@ -22,8 +23,14 @@ class MinePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final settings = ref.watch(settingsProvider);
-    final favorites = ref.watch(favoritesProvider);
+    final favoriteCount = ref.watch(favoriteCountProvider);
+    final account = ref.watch(accountSessionProvider).valueOrNull;
     final completed = ref.watch(completedDownloadCountProvider);
+    final activeDownloads = ref.watch(activeDownloadCountProvider);
+    final historyCount = ref
+        .watch(downloadRecordsProvider)
+        .where((record) => record.isFinished)
+        .length;
     final progressCount = ref.watch(progressStoreProvider).historyCount;
     final session = ref.watch(sessionProvider).valueOrNull;
 
@@ -38,11 +45,38 @@ class MinePage extends ConsumerWidget {
             _StatsRow(
               items: <({String label, String value})>[
                 (label: '下载完成', value: '$completed'),
-                (label: '收藏', value: '${favorites.length}'),
+                (label: '收藏', value: '$favoriteCount'),
                 (label: '阅读历史', value: '$progressCount'),
               ],
             ),
             const SizedBox(height: 18),
+            const SectionHeader(title: '账号与收藏'),
+            _AccountCard(
+              account: account,
+              onLogin: () => context.push('/login'),
+              onLogout: () => _confirmLogout(context, ref),
+            ),
+            _SettingTile(
+              icon: AppIcons.bookmark,
+              title: '我的收藏',
+              value: favoriteCount > 0 ? '$favoriteCount 本' : '暂无收藏',
+              onTap: () => context.push('/collect'),
+            ),
+            const SizedBox(height: 10),
+            const SectionHeader(title: '下载与历史'),
+            _SettingTile(
+              icon: AppIcons.download,
+              title: '下载',
+              value: activeDownloads > 0 ? '$activeDownloads 个进行中' : '输入车号新建任务',
+              onTap: () => context.push('/download'),
+            ),
+            _SettingTile(
+              icon: AppIcons.list,
+              title: '历史记录',
+              value: historyCount > 0 ? '$historyCount 条' : '暂无记录',
+              onTap: () => context.push('/history'),
+            ),
+            const SizedBox(height: 10),
             const SectionHeader(title: '阅读'),
             _SettingTile(
               icon: AppIcons.bookOpen,
@@ -114,6 +148,28 @@ class MinePage extends ConsumerWidget {
     );
   }
 
+  Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('退出登录'),
+        content: const Text('退出后收藏仍保留在本机，但不会再同步到账号。'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('退出'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ref.read(accountSessionProvider.notifier).logout();
+  }
+
   Future<void> _copyPath(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
     final location = await ref.read(downloadRepositoryProvider).describeLocation();
@@ -155,6 +211,108 @@ class MinePage extends ConsumerWidget {
     if (selected != null) {
       await ref.read(settingsProvider.notifier).setDefaultReaderMode(selected);
     }
+  }
+}
+
+/// 账号卡：未登录时给登录入口，已登录时显示用户名 / 收藏额度 / 上次同步。
+class _AccountCard extends StatelessWidget {
+  const _AccountCard({
+    required this.account,
+    required this.onLogin,
+    required this.onLogout,
+  });
+
+  final AccountSession? account;
+  final VoidCallback onLogin;
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final session = account ?? AccountSession.local;
+    final loggedIn = session.isLoggedIn;
+
+    final subtitle = switch (session.state) {
+      SessionState.valid => session.username.isEmpty ? '已登录' : session.username,
+      SessionState.needsLogin => '登录已失效 · 点击重新登录',
+      SessionState.local => '未登录 · 本地收藏（登录后可同步）',
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(AppColors.radiusCard),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Row(
+        children: <Widget>[
+          IconTheme(
+            data: IconThemeData(color: scheme.onSurfaceVariant),
+            child: const SvgIcon(AppIcons.user, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.body.copyWith(color: scheme.onSurface),
+                ),
+                if (loggedIn) ...<Widget>[
+                  const SizedBox(height: 2),
+                  Text(
+                    '收藏 ${session.favoritesCount}'
+                    '${session.favoritesMax > 0 ? ' / ${session.favoritesMax}' : ''}'
+                    '${session.lastSyncAt > 0 ? ' · 上次同步 ${_clock(session.lastSyncAt)}' : ''}',
+                    style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                  if (session.nearLimit) ...<Widget>[
+                    const SizedBox(height: 2),
+                    Text(
+                      session.atLimit ? '收藏已满，请先取消部分收藏' : '收藏接近上限（90%）',
+                      style: AppTypography.micro.copyWith(color: scheme.error),
+                    ),
+                  ],
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (loggedIn)
+            TextButton(
+              onPressed: onLogout,
+              style: TextButton.styleFrom(
+                foregroundColor: scheme.onSurfaceVariant,
+                textStyle: AppTypography.caption,
+                minimumSize: const Size(0, 32),
+              ),
+              child: const Text('退出'),
+            )
+          else
+            TextButton(
+              onPressed: onLogin,
+              style: TextButton.styleFrom(
+                foregroundColor: scheme.primary,
+                textStyle: AppTypography.caption,
+                minimumSize: const Size(0, 32),
+              ),
+              child: Text(session.needsLogin ? '重新登录' : '登录'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static String _clock(int timestamp) {
+    final time = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
   }
 }
 

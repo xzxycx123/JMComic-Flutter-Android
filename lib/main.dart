@@ -7,12 +7,21 @@ import 'app.dart';
 import 'core/di/providers.dart';
 import 'core/network/dio_factory.dart';
 import 'data/local/download_store.dart';
+import 'data/local/favorites_store.dart';
 import 'data/local/hive_init.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await HiveInit.initialize();
+
+  // 老版本 `jm_favorites = {ids:[…]}` 迁移成 per-album 记录（幂等）。
+  final favoritesStore = FavoritesStore(
+    favorites: Hive.box<dynamic>(HiveBoxes.favorites),
+    folders: Hive.box<dynamic>(HiveBoxes.favoriteFolders),
+    outbox: Hive.box<dynamic>(HiveBoxes.favoriteOutbox),
+  );
+  await favoritesStore.migrateIfNeeded();
 
   final prefs = await SharedPreferences.getInstance();
   final downloadHistory = HiveDownloadHistory(Hive.box<dynamic>(HiveBoxes.downloads));

@@ -30,8 +30,11 @@ class HomeRepository {
   final Future<HomeFeed?> Function()? _htmlFallback;
 
   /// 冷启动：先给缓存（标 fromCache），后台再刷。
-  HomeFeed? readCache() {
-    final raw = _cacheBox?.get(_keyFeed);
+  HomeFeed? readCache() => readCachedFeed(_cacheBox);
+
+  /// 不依赖 JmApi 的缓存读取：首页可以在网络/引导就绪前先把上次的内容画出来。
+  static HomeFeed? readCachedFeed(Box<dynamic>? box) {
+    final raw = box?.get(_keyFeed);
     if (raw is! Map) return null;
     final map = raw.map((key, value) => MapEntry('$key', value));
     final payload = map['payload'];

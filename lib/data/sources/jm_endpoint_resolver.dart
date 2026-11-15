@@ -183,12 +183,38 @@ class JmEndpointResolver {
   }
 
   /// 兼容旧调用：只要线路列表。
-  Future<List<String>> discover() async => (await refresh()).apiHosts;
-
-  Future<List<String>> applyAndRank() async => _store.apiHosts;
+  Future<List<String>> discover() async => (await refresh()).apiHosts;  Future<List<String>> applyAndRank() async => _store.apiHosts;
 
   // ---------------------------------------------------------------- 主流程
+  /// 冷启动快路径：上次成功且仍在健康 TTL 内的线路直接复用，零网络请求。
+  JmDiscoveryReport? _fastPath() {
+    final last = normalizeHost(_store.lastApiHost);
+    if (last == null) return null;
+    final health = _store.healthOf(last, JmHostKind.api);
+    if (health == null || !health.ok || !health.isFresh(JmConstants.healthTtl)) {
+      return null;
+    }
+    final report = JmDiscoveryReport(
+      at: DateTime.now(),
+      sources: const <String>['cache'],
+      candidates: _store.apiHosts.length,
+      probes: const <JmHostProbeResult>[],
+      apiHosts: _store.apiHosts,
+      imageHosts: _store.imageHosts,
+      message: '复用上次成功线路 $last',
+    );
+    _lastReport = report;
+    Log.i('线路快路径：复用上次成功线路 $last');
+    return report;
+  }
+
   Future<JmDiscoveryReport> _run({required bool force}) async {
+    // 冷启动快路径：上次成功且 30 分钟内仍健康的线路，直接用，不再跑任何发现/探测。
+    if (!force) {
+      final fast = _fastPath();
+      if (fast != null) return fast;
+    }
+
     final collected = await _collect();
     _lastCollected = collected;
 

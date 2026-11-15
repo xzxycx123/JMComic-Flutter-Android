@@ -87,6 +87,29 @@ abstract final class JmConstants {
     'https://jmcomicgo.org/',
   ];
 
+  /// TOS `jm3_Server` 下发的分流标签（2026-11-15 实测，就是 App 里的「1/2/3/4 分流」）。
+  ///
+  /// 阅读器顶栏的「线路」菜单按这个表显示；没收录的域名退化成主机名。
+  static const Map<String, String> lineLabels = <String, String>{
+    'www.cdnbtd.cc': '线路1',
+    'www.cdnutc.cc': '线路2',
+    'www.cdngwc.net': '线路3',
+    'www.cdngwc.club': '线路4',
+    'www.cdnutc.me': '线路5',
+  };
+
+  static String lineLabelOf(String host) {
+    final label = lineLabels[host];
+    if (label != null) return label;
+    return host.isEmpty ? '线路' : host;
+  }
+
+  /// 分流排序：已收录的线路 1..5 按顺序在前，其余（新发现/手填）排后面。
+  static int lineRankOf(String host) {
+    final index = lineLabels.keys.toList(growable: false).indexOf(host);
+    return index < 0 ? 99 : index;
+  }
+
   /// 开源项目的线路清单（GitHub raw，作为域名服务全挂时的旁路）。
   static const List<String> domainMirrorUrls = <String>[
     'https://raw.githubusercontent.com/hect0x7/JMComic-Crawler-Python/master/src/jmcomic/jm_config.py',

@@ -2,7 +2,16 @@
 abstract final class AppConfig {
   /// 应用展示名 / 关于页版本前缀，实际版本号来自 pubspec（package_info 未接入时用此常量）。
   static const String appName = 'JMComic';
-  static const String appVersion = '0.1.0';
+  static const String appVersion = '0.2.0';
+
+  /// 版权与许可证（关于页展示；仓库根 LICENSE 为全文，assets/licenses 里是同一份）。
+  static const String copyright = 'Copyright (C) 2026 xzxycx';
+  static const String licenseName = 'GNU General Public License v3.0';
+  static const String licenseAsset = 'assets/licenses/GPL-3.0.txt';
+  static const String licenseSummary =
+      '本程序是自由软件：你可以依据自由软件基金会发布的 GNU 通用公共许可证第 3 版'
+      '（或你选择的任何更新版本）条款重新发布和/或修改它。本程序按「现状」提供，'
+      '不附带任何担保；详见随包附带的 GPL-3.0 全文。';
 
   /// 下载队列级并发上限（对齐 JmScript/DownloadSlots.MAX_PARALLEL_TASKS）。
   static const int maxParallelTasks = 3;
@@ -25,11 +34,15 @@ abstract final class AppConfig {
   /// PDF 页面长边上限（对齐 JmScript/PdfExporter.MAX_PAGE_EDGE）。
   static const double maxPageEdge = 14400;
 
-  /// 阅读器预加载半径（±2 页）。
-  static const int readerPreloadRadius = 2;
+  /// 阅读器预取窗口：当前页之前 2 页、之后 5 页（进入阅读器后连续补齐，不再一页一停）。
+  static const int readerPreloadBehind = 2;
+  static const int readerPreloadAhead = 5;
+
+  /// 阅读器页面加载并发（网络 + 解码；3 路能跟上滑动，又不会把长图解码打满）。
+  static const int readerFetchConcurrency = 3;
 
   /// 阅读器已解码页 LRU 上限。
-  static const int readerCacheSize = 12;
+  static const int readerCacheSize = 14;
 
   /// 阅读进度落盘节流。
   static const Duration progressWriteThrottle = Duration(seconds: 1);

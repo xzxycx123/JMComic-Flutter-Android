@@ -18,6 +18,18 @@ Future<void> _waitFor(bool Function() predicate, {Duration timeout = const Durat
   throw StateError('等待超时');
 }
 
+Future<bool> _waitForBool(
+  bool Function() predicate, {
+  Duration timeout = const Duration(seconds: 3),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    if (predicate()) return true;
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+  return predicate();
+}
+
 void main() {
   late Directory workRoot;
   late MemoryDownloadHistory history;
@@ -102,8 +114,11 @@ void main() {
     final callsAfterCancel = gatedApi.downloadCalls;
 
     // 临时工作目录必须被清空（PLAN §2.2：取消后临时文件清空）。
-    await Future<void>.delayed(const Duration(milliseconds: 200));
-    expect(workRoot.listSync().whereType<Directory>(), isEmpty);
+    // 取消信号在下一个检查点才生效，这里轮询到清空为止（最多 3s），避免时序抖动。
+    final cleared = await _waitForBool(
+      () => workRoot.listSync().whereType<Directory>().isEmpty,
+    );
+    expect(cleared, isTrue, reason: '取消后临时目录应被清空');
     expect(gatedApi.downloadCalls, callsAfterCancel);
     expect(history.records.first.state, DownloadState.cancelled);
 

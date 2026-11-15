@@ -18,7 +18,8 @@ enum ReaderMode {
     return ReaderMode.paged;
   }
 
-  ReaderMode get toggled => this == ReaderMode.paged ? ReaderMode.vertical : ReaderMode.paged;
+  ReaderMode get toggled =>
+      this == ReaderMode.paged ? ReaderMode.vertical : ReaderMode.paged;
 }
 
 /// 阅读器入参（路由 query 与 provider family 共用）。

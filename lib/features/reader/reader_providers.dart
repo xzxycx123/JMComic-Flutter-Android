@@ -26,8 +26,10 @@ class ReaderData {
   int get total => chapter.images.length;
 }
 
-final AsyncNotifierProviderFamily<ReaderController, ReaderData, ReaderArgs> readerDataProvider =
-    AsyncNotifierProvider.family<ReaderController, ReaderData, ReaderArgs>(ReaderController.new);
+final AsyncNotifierProviderFamily<ReaderController, ReaderData, ReaderArgs>
+    readerDataProvider =
+    AsyncNotifierProvider.family<ReaderController, ReaderData, ReaderArgs>(
+        ReaderController.new,);
 
 class ReaderController extends FamilyAsyncNotifier<ReaderData, ReaderArgs> {
   @override
@@ -44,8 +46,9 @@ class ReaderController extends FamilyAsyncNotifier<ReaderData, ReaderArgs> {
       args: arg,
       chapter: chapter,
       scrambleId: scrambleId,
-      initialPage:
-          initial.clamp(1, chapter.images.isEmpty ? 1 : chapter.images.length).toInt(),
+      initialPage: initial
+          .clamp(1, chapter.images.isEmpty ? 1 : chapter.images.length)
+          .toInt(),
       mode: ReaderMode.fromCode(settings.defaultReaderMode),
     );
   }

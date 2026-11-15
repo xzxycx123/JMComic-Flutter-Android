@@ -161,7 +161,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  '缓存内容 · ${_formatClock(feed.updatedAt!)} 更新',
+                  '上次内容 · ${_formatClock(feed.updatedAt!)} · 正在更新',
                   style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
                 ),
               ],

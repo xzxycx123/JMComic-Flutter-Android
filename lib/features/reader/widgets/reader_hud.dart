@@ -19,6 +19,9 @@ class ReaderHud extends StatelessWidget {
     required this.onJump,
     super.key,
     this.onSliderChanged,
+    this.lineLabel = '',
+    this.onSwitchLine,
+    this.switchingLine = false,
   });
 
   final String title;
@@ -30,6 +33,11 @@ class ReaderHud extends StatelessWidget {
   final VoidCallback onToggleMode;
   final ValueChanged<int> onJump;
   final ValueChanged<double>? onSliderChanged;
+
+  /// 当前分流标签（线路1..5）；为空或没有回调时不渲染分流按钮。
+  final String lineLabel;
+  final VoidCallback? onSwitchLine;
+  final bool switchingLine;
 
   static const Color _barColor = Color(0xE60B0B0A);
   static const Color _ink = Color(0xFFFAF9F5);
@@ -45,6 +53,7 @@ class ReaderHud extends StatelessWidget {
         child: Column(
           children: <Widget>[
             _bar(
+              top: true,
               child: SizedBox(
                 height: 46,
                 child: Row(
@@ -64,6 +73,30 @@ class ReaderHud extends StatelessWidget {
                         style: AppTypography.caption.copyWith(color: _ink),
                       ),
                     ),
+                    if (onSwitchLine != null && lineLabel.isNotEmpty)
+                      TextButton(
+                        onPressed: switchingLine ? null : onSwitchLine,
+                        style: TextButton.styleFrom(
+                          foregroundColor: _ink,
+                          minimumSize: const Size(0, 34),
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: switchingLine
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: _ink,
+                                ),
+                              )
+                            : Text(
+                                lineLabel,
+                                style:
+                                    AppTypography.micro.copyWith(color: _ink),
+                              ),
+                      ),
                     IconButton(
                       tooltip: mode.toggled.label,
                       onPressed: onToggleMode,
@@ -91,7 +124,8 @@ class ReaderHud extends StatelessWidget {
                       ),
                       Expanded(
                         child: Slider(
-                          value: page.clamp(1, total <= 0 ? 1 : total).toDouble(),
+                          value:
+                              page.clamp(1, total <= 0 ? 1 : total).toDouble(),
                           min: 1,
                           max: total <= 0 ? 1 : total.toDouble(),
                           onChanged: total <= 1
@@ -121,13 +155,15 @@ class ReaderHud extends StatelessWidget {
     );
   }
 
-  Widget _bar({required Widget child}) {
+  /// 顶部条必须避开系统状态栏：颜色铺到状态栏底下，内容用 SafeArea 下移，
+  /// 否则阅读器里 HUD 的返回键/标题会和状态栏时间、信号图标重叠。
+  Widget _bar({required Widget child, bool top = false}) {
     return ClipRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
         child: DecoratedBox(
           decoration: const BoxDecoration(color: _barColor),
-          child: child,
+          child: top ? SafeArea(bottom: false, child: child) : child,
         ),
       ),
     );

@@ -73,12 +73,17 @@ class EndpointStore {
   static const String _keyManualHost = 'jm_manual_host';
   static const String _keyUpdatedAt = 'jm_endpoints_updated_at';
   static const String _keyHealth = 'jm_host_health';
+  static const String _keyLastApiHost = 'jm_last_api_host';
 
   final SharedPreferences _prefs;
+
+  /// 上次真正成功过的 API 线路（冷启动优先用它，避免每次重新发现+探测）。
+  String get lastApiHost => _prefs.getString(_keyLastApiHost) ?? '';
 
   List<String> get apiHosts {
     final candidates = _merge(<String?>[
       manualHost,
+      lastApiHost,
       ..._readHosts(_keyApiHosts),
       ...JmConstants.defaultApiHosts,
     ]);
@@ -248,7 +253,12 @@ class EndpointStore {
     final normalized =
         hosts.map(normalizeHost).whereType<String>().toList(growable: false);
     if (normalized.isEmpty) return;
-    final merged = <String>[...normalized, ..._readHosts(_keyApiHosts)];
+    final last = normalizeHost(lastApiHost);
+    final merged = <String>[
+      if (last != null) last,
+      ...normalized,
+      ..._readHosts(_keyApiHosts),
+    ];
     final unique = merged.toSet().toList(growable: false);
     // 上限 30 条：线路会漂移，表不能无限长。
     await _prefs.setStringList(
@@ -261,6 +271,7 @@ class EndpointStore {
   Future<void> markApiHostWorking(String host) async {
     final normalized = normalizeHost(host);
     if (normalized == null) return;
+    await _prefs.setString(_keyLastApiHost, normalized);
     final saved = _readHosts(_keyApiHosts);
     if (saved.isNotEmpty && saved.first == normalized) return;
     final next = <String>[

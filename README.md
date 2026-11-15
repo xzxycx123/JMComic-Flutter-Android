@@ -1,94 +1,175 @@
-# JMComic Flutter 客户端
+# JMComic for Android（非官方 Flutter 客户端）
 
-首页浏览（JM 移动端接口）+ 本地 PDF 下载（移植自 `D:\data\coding\JmScript`）的 Flutter 应用。
-底部 Dock 三档：**首页 / 我的 / 下载**。
+一个 Android 优先、**本地优先**的 JM 客户端：首页浏览、搜索、阅读器、PDF 下载归档，以及**登录后可双向同步的收藏夹**。
 
-完整施工方案、协议规格、UI 规格、下载引擎移植对照、里程碑与测试向量 → **[PLAN.md](PLAN.md)**。
-本轮落地情况、与 PLAN 的差异 → **[docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)**。
+> 本项目是非官方第三方客户端，与站点运营方无关；所有内容版权归原作者与站点所有，本客户端仅做浏览与个人离线备份，不提供内容源、不绕过任何付费/权限。
+> 仅支持 Android 8.0+（minSdk 29）。iOS 目录保留但未验收。
 
-## 构建（本机已装 Flutter 3.50.0 / Dart 3.14.0）
+[![Flutter](https://img.shields.io/badge/Flutter-3.50-02569B?logo=flutter)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.14-0175C2?logo=dart)](https://dart.dev)
+[![Platform](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android)](https://developer.android.com)
+[![License](https://img.shields.io/badge/License-GPL--3.0-blue)](LICENSE)
 
-SDK 位置：`D:\data\tools\flutter`（stable，已绑定 `C:\Users\Jolie\AppData\Local\Android\Sdk`）。
-`android/`、`ios/` 已由 `flutter create --org com.jmcomic --project-name jm_comic` 生成，`apply_android_config.ps1` 也已跑过。
+---
 
-```powershell
-$env:Path = 'D:\data\tools\flutter\bin;' + $env:Path
-# 必须用 64 位 JDK：本机默认 java 是 32 位 Liberica（Gradle 起 4G 堆会失败）
-$env:JAVA_HOME = 'C:\Program Files\Java\jdk-17.0.4'
-cd D:\data\product\JMComic
+## 功能
 
-python tools\build_app_assets.py   # img/ -> assets/images + mipmap 图标（幂等）
-flutter pub get                    # 已解析 117 个依赖
-flutter analyze                    # No issues found
-flutter test                       # 75 个用例全绿
-
-flutter build apk --release
-# 产物：build\app\outputs\flutter-apk\app-release.apk（universal，62.6 MB）
-# 已归档：dist\JMComic-0.1.0-release.apk（SHA256 E2B2D8CA…F9943F6B）
-# 瘦身可加 --split-per-abi（按 ABI 拆包，单包约 20 MB）
-
-# 装到已连接设备：
-adb install -r dist\JMComic-0.1.0-release.apk
-```
-
-构建环境说明（本机踩过的坑，换机器同样适用）：
-
-- **JDK**：必须 64 位；32 位 JVM 会报 `Invalid maximum heap size: -Xmx8G/4G`。
-- **compileSdk = 36**：Flutter 3.50 的插件默认按 36 编译，只用 35 会触发 `plugin compiles against 36` 校验失败；`tools\apply_android_config.ps1` 已按 36 写死（minSdk 29 / targetSdk 35 不变）。
-- **Gradle 代理**：`C:\Users\Jolie\.gradle\gradle.properties` 里配 `systemProp.https.proxyHost=127.0.0.1` + `proxyPort=7890`（本机 FlClash）；否则 Maven Central 会 `Remote host terminated the handshake`。
-- **Kotlin 增量编译**：pub cache 在 C:、工程在 D: 时 Kotlin 2.4 会报 `this and base files have different roots`，`android/gradle.properties` 已设 `kotlin.incremental=false` + `kotlin.incremental.useClasspathSnapshot=false`。
-
-首次在新机器重建时：
-
-```powershell
-git clone -b stable --depth 1 https://github.com/flutter/flutter.git D:\data\tools\flutter
-flutter config --android-sdk C:\Users\Jolie\AppData\Local\Android\Sdk
-flutter doctor --android-licenses
-sdkmanager "platforms;android-36"
-flutter create --org com.jmcomic --project-name jm_comic --platforms android,ios .
-pwsh -File .\tools\apply_android_config.ps1
-python tools\build_app_assets.py
-```
-
-> 如果 `flutter` 首次运行卡在 “Downloading Dart SDK”（BITS 不走代理）：手动
-> `curl -L --proxy http://127.0.0.1:7890 -C - -o bin\cache\dart-sdk-windows-x64.zip https://storage.googleapis.com/flutter_infra_release/flutter/<engine.stamp>/dart-sdk-windows-x64.zip`
-> 解包到 `bin\cache\dart-sdk`，并把 `engine.stamp` 的内容写进 `bin\cache\engine-dart-sdk.stamp`。
-
-## 工具脚本
-
-```powershell
-pwsh -File .\tools\scaffold.ps1              # 幂等目录脚手架
-pwsh -File .\tools\probe_hosts.ps1           # 线路发现 + 实测 → assets/data/jm_hosts.json + docs/NETWORK_DOMAINS_<date>.md
-pwsh -File .\tools\probe_api.ps1             # 协议实网自检（线路 / promote / latest / ... / 图床）
-pwsh -File .\tools\check_ui_rules.ps1        # UI 守卫：禁 emoji、禁 Icons.*、图标必须 SVG
-pwsh -File .\tools\apply_android_config.ps1  # flutter create 之后应用 android 配置
-python tools\build_app_assets.py            # 从 img/ 派生 assets/images + 桌面图标
-```
-
-## 目录速查
-
-| 路径 | 说明 |
+| 模块 | 说明 |
 |---|---|
-| `docs/NETWORK_MODULE.md` | 网络模块设计：多源发现、连通性探测、健康度/冷却、国内域名清单 |
-| `docs/NETWORK_DOMAINS_<date>.md` | 最近一次全量实测留档（`tools\probe_hosts.ps1` 生成） |
-| `assets/data/jm_hosts.json` | 打进 APK 的线路种子（api / image / web 三组，含延迟与时间戳） |
-| `PLAN.md` | 交接文档（协议 / UI / 移植 / 里程碑 / 测试向量） |
-| `docs/ui-draft.html` | **UI 交互草稿**：六屏可点原型 + 25 个按钮编号 + 行为/接口对照表 |
-| `docs/ui-draft*.png` | 草稿截图（首页 / 搜索 / 详情 / 阅读器 / 下载 / 我的） |
-| `docs/PROBE_RESULT_2026-11-14.txt` | 一次全绿的接口探测留档 |
-| `assets/icons/*.svg` | 全部 UI 图标（自绘 24×24 / stroke 1.75），规则见 `assets/README.md` |
-| `lib/core` | 主题、路由、Dio、图片算法、工具、依赖注入 |
-| `lib/data` | 模型、协议源（crypto/api/scraper/parser）、本地存储、仓储 |
-| `lib/features` | shell（三 tab）、home、album、reader、mine、download |
-| `lib/features/download/engine` | 下载引擎（对照 `JmScript` 的 Kotlin 实现） |
-| `test` | 单元 + widget 用例，fixtures 用 `tools\probe_api.ps1` 的真实结构改写 |
+| 首页 | 轮播 + 分类 chips + 排序（最新/日榜/周榜/月榜/人气）+ 无限流；**冷启动先用上次缓存秒开，再后台刷新替换** |
+| 搜索 | 纯车号（`350234` / `JM350234` / 链接）直达详情；关键词走 `/search` 分页 |
+| 详情 | 模糊封面头、章节列表、统计与标签、相关推荐、双 CTA（阅读 / 下载） |
+| 阅读器 | 上下滚动 / 左右翻页双模式，三分区点击、HUD 进度、双击缩放、进度记忆；HUD 已避开系统状态栏 |
+| 下载 | 批量车号 → 队列（3 并发）→ 切片还原 → PNG → PDF，落到 `Documents/JMComics/`，同名自动 `(2)` |
+| 前台服务 | 下载中锁屏/切后台不中断，通知栏显示进度 |
+| 收藏 | **本地账本 + 服务端镜像**：断网可收藏、撤销、分文件夹、按更新时间排序；登录后对账并自愈 toggle |
+| 账号 | 会话 cookie 为主，**不保存密码**；冷启动一次校验，失效回本地模式 |
+| 历史 | 下载记录按「全部 / 已完成 / 失败 / 已取消」筛选，可打开、重试、删除 |
+| 其它 | 深浅主题、线路健康度与测速、本地搜索历史、GPL-3.0 |
 
-## 关键事实（实测，2026-11-14，2026-11-15 复核）
+---
 
-- token = `md5hex(ts + "185Hcomic3PAPP7R")`；响应 `data` 用 **AES-256-ECB/PKCS7**、key = `ASCII(md5hex(ts + secret))` **全部 32 字节**解密（旧文档写的 16 字节是错的，见 §协议更正）。
-- 线路：内置种子 `assets/data/jm_hosts.json` → TOS 域名服务（`newsvr-2025.txt`，AES-256 + 空 ts）→ 发布页 `jmcomictt.site / jmcomicgo.org`（国内域名）→ GitHub 镜像配置；实测 ok 的按延迟排序，失败进 10 分钟冷却。
-- 国内地址（发布页「內地 / 分流」）：`comic18j-susu.com`、`comic18j-nico.work`、`comic18j-neo.com`。**不提供 APP 接口**（`/setting` 404、网页被 Cloudflare 挑战），但 `/media/...` 能直出图片 → 作为国内图床兜底。
-- `/promote`（8 模块）、`/latest`（80/页）、`/categories`、`/categories/filter`（80/页）**直接可用**，首页无需依赖 HTML 解析。
-- 列表接口 `image` 字段恒空 → 封面自拼：`https://{img_host}/media/albums/{id}_3x4.jpg`（实测 200）。
-- 正文图：`https://{img_host}/media/photos/{photoId}/{filename}`；切片阈值来自 `/chapter_view_template` 的 `scramble_id`。
-- 本机代理：`--dart-define=JM_PROXY=http://127.0.0.1:7890`（FlClash），真机走 TUN 即可。
+## 截图
+
+| 首页 | 详情 | 阅读器 |
+|---|---|---|
+| ![](docs/ui-draft-home.png) | ![](docs/ui-draft-detail.png) | ![](docs/ui-draft-reader.png) |
+
+| 搜索 | 下载 | 我的 |
+|---|---|---|
+| ![](docs/ui-draft-search.png) | ![](docs/ui-draft-download.png) | ![](docs/ui-draft-mine.png) |
+
+> 截图来自 `docs/ui-draft.html` 的交互草稿，实际界面以真机为准。
+
+---
+
+## 下载安装
+
+1. 打开仓库的 **Releases** 页，下载最新 `JMComic-x.y.z-release.apk`；
+2. 允许「安装未知来源应用」后安装（APK 使用 debug keystore 签名，仅自用，不上架应用商店）；
+3. 首次启动如提示通知权限，建议允许（下载进度通知需要它）。
+
+```bash
+adb install -r JMComic-0.2.0-release.apk
+```
+
+---
+
+## 从源码构建
+
+### 环境要求
+
+| 组件 | 版本 |
+|---|---|
+| Flutter | 3.50.0（stable） |
+| Dart | 随 Flutter（3.14.0） |
+| JDK | **17（必须 64 位）** |
+| Android SDK | `platforms;android-36`、`build-tools;36.x`、`platform-tools`、**NDK 28.2.13676358** |
+| Gradle | 由 Flutter 模板提供（9.x） |
+| 磁盘 | 首次构建约 3 GB（含 Flutter SDK 与 Gradle 缓存） |
+
+> 为什么需要 NDK：依赖里的 `jni`（transitive）带 CMake 原生构建；缺 NDK 会报 `Could not find toolchain file ... android.toolchain.cmake`。
+
+### 一步步构建
+
+```bash
+# 1) 拿到代码
+git clone https://github.com/xzxycx123/JMComic-Flutter-Android.git
+cd JMComic-Flutter-Android
+
+# 2) 检查工具链（缺什么按提示装）
+flutter doctor -v
+flutter config --android-sdk "$ANDROID_SDK_ROOT"   # Windows 示例：C:\Users\<你>\AppData\Local\Android\Sdk
+flutter doctor --android-licenses
+
+# 3) 依赖 + 素材派生（品牌位图 / 桌面图标 / 启动图）
+flutter pub get
+python tools/build_app_assets.py
+
+# 4) 静态检查与测试
+flutter analyze
+flutter test
+
+# 5) 打包
+flutter build apk --release
+# 产物：build/app/outputs/flutter-apk/app-release.apk
+
+# 可选：按 ABI 拆包（单包约 23 MB）
+flutter build apk --release --split-per-abi
+```
+
+### Windows 构建注意事项（实测踩坑）
+
+```powershell
+# 必须指定 64 位 JDK 17，否则 Gradle 起 4G 堆直接失败
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-17.0.4'
+$env:Path = 'C:\path\to\flutter\bin;' + $env:JAVA_HOME + '\bin;' + $env:Path
+
+# Gradle 走代理（国内网络）：写进 %USERPROFILE%\.gradle\gradle.properties
+# systemProp.https.proxyHost=127.0.0.1
+# systemProp.https.proxyPort=7890
+
+# Kotlin 在「pub cache 在 C:、工程在 D:」时报 different roots：android/gradle.properties 已设
+# kotlin.incremental=false
+```
+
+常见问题：
+
+| 现象 | 处理 |
+|---|---|
+| `Android sdkmanager did not install NDK 28.2.13676358` | 用 sdkmanager 或直接下载 `android-ndk-r28c-windows.zip`，解压到 `<SDK>/ndk/28.2.13676358` |
+| `cmdline-tools component is missing` | 安装 Android Command-line Tools，解压到 `<SDK>/cmdline-tools/latest` |
+| `plugin compiles against 36` | 工程 `compileSdk = 36`，需装 `platforms;android-36` |
+| 首次 `flutter` 卡在 Downloading Dart SDK | 手动下载对应 engine 的 `dart-sdk-windows-x64.zip` 放进 `flutter/bin/cache` |
+| 接口全部超时 / TLS 失败 | 换代理节点；或在「我的 → 网络 → 线路测速」里换线路 |
+
+---
+
+## 项目结构
+
+```
+lib/
+├─ core/       主题、路由、网络（dio + cookie + 线路健康）、图片算法、图标/位图、工具
+├─ data/       模型、协议源（crypto/api/catalog/probe/parser）、Hive 存储、仓储（home/album/favorites/auth/…）
+└─ features/   shell（两 tab）、home、album、reader、search、mine、download（含 engine）、collect、auth
+test/          单元 + widget 测试（139 通过 / 2 实网 skip）+ fixtures
+tools/         probe_api.ps1 / probe_hosts.ps1 / scaffold.ps1 / apply_android_config.ps1 / build_app_assets.py
+Plan/          交接文档 PLAN.md、网络层修复记录 Fix Plan.md
+docs/          设计文档（NETWORK_MODULE / FAVORITES）、UI 草稿、审查记录
+```
+
+### 协议与实现说明
+
+- API：移动端 JSON 接口，`token = md5(ts + salt)`，响应 `AES-256-ECB/PKCS7`（key = md5hex 的 32 个 ASCII 字节）；线路与图床地址会漂移，客户端内置种子 + 多源发现 + 健康度排序。
+- 下载：与 [JmScript](https://github.com/hect0x7) 的 Kotlin 实现 1:1 对齐（切片段数算法、PNG 重编码、PDF 页尺寸上限 14400、`IS_PENDING` 写 MediaStore）。
+- 收藏：`POST /favorite` 是 **toggle**，因此同步时必须核对返回的 `type`，不符就反向补发一次（防静默丢收藏）。
+- 站点域名与字段随时可能变化，协议争议以 `tools/probe_api.ps1` 的实时输出为准。
+
+---
+
+## 开发
+
+```bash
+flutter run --release                       # 真机
+flutter test                                # 单元 + widget
+flutter test --dart-define=JM_LIVE=true \
+  --dart-define=JM_PROXY=http://127.0.0.1:7890 test/manual/network_live_test.dart   # 实网联调
+pwsh -File tools/probe_api.ps1 -Proxy http://127.0.0.1:7890                          # 协议探测
+pwsh -File tools/check_ui_rules.ps1                                                  # UI 守卫（禁 emoji / 禁 Icons.*）
+```
+
+贡献：欢迎 PR；请保持 `flutter analyze` 0 issue、`flutter test` 全绿、UI 守卫通过。涉及协议改动请同步更新 `docs/`。
+
+---
+
+## 许可证
+
+本项目以 **GNU General Public License v3.0** 发布，版权归 **Copyright (C) 2026 xzxycx** 所有。
+全文见 [LICENSE](LICENSE)；你也可以在 App 内「我的 → 关于 → 开源许可」查看。
+
+主要参考与致谢：
+
+- [JmScript](https://github.com/hect0x7)（Kotlin 下载/PDF 实现，行为基准）
+- [JMComic-Crawler-Python](https://github.com/hect0x7/JMComic-Crawler-Python)（协议字段核对）
+- [jm-mobile](https://github.com/Dedicatus546/jm-mobile)（登录/收藏流程参考，GPL-3.0）
+- Flutter / Riverpod / Dio / pdf / image 等开源项目

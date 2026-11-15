@@ -110,5 +110,59 @@ void main() {
       await tester.pumpAndSettle();
       expect(jumped, greaterThan(12));
     });
+
+    testWidgets('顶栏显示当前分流并可点击切换', (tester) async {
+      var switched = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 400,
+              child: ReaderHud(
+                title: '测试',
+                page: 1,
+                total: 10,
+                mode: ReaderMode.paged,
+                visible: true,
+                lineLabel: '线路2',
+                onSwitchLine: () => switched++,
+                onExit: () {},
+                onToggleMode: () {},
+                onJump: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('线路2'), findsOneWidget);
+      await tester.tap(find.text('线路2'));
+      expect(switched, 1);
+    });
+
+    testWidgets('没有回调时不渲染分流按钮', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 400,
+              child: ReaderHud(
+                title: '测试',
+                page: 1,
+                total: 10,
+                mode: ReaderMode.paged,
+                visible: true,
+                onExit: () {},
+                onToggleMode: () {},
+                onJump: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('线路2'), findsNothing);
+      expect(find.byType(TextButton), findsNothing);
+    });
   });
 }

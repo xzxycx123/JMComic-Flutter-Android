@@ -1,0 +1,66 @@
+# ---------------------------------------------------------------- Flutter / Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+
+# ---------------------------------------------------------------- IDE / 编辑器
+.idea/
+.vscode/
+*.sublime-workspace
+
+# ---------------------------------------------------------------- Android
+android/.gradle/
+android/.cxx/
+android/.kotlin/
+android/local.properties
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/key.properties
+*.jks
+*.keystore
+
+# ---------------------------------------------------------------- iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/ephemeral/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Runner/GeneratedPluginRegistrant.*
+**/xcuserdata/
+
+# ---------------------------------------------------------------- 产物 / 归档
+dist/
+*.apk
+*.aab
+*.ipa
+coverage/
+*.log
+.recover/
+
+# ---------------------------------------------------------------- 设计源文件与草稿（非运行时必需）
+img/*.psd
+img/*.psb
+img/*.ai
+img/*.sketch
+img/未标题-*.png
+img/*副本*.png
+
+# ---------------------------------------------------------------- Python / 脚本缓存
+__pycache__/
+*.pyc
+.pytest_cache/
+tools/**/__pycache__/
+
+# ---------------------------------------------------------------- 本机杂项
+*.tmp
+Thumbs.db
+desktop.ini
+.DS_Store

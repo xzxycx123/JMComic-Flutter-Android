@@ -194,3 +194,41 @@ flutter build apk --release
    APK 内 `assets/flutter_assets/assets/images/` 17 个位图 + `assets/data/jm_hosts.json` 均在。
 5. `.gitignore` 补齐非必须文件：`img/*.psd`、`img/未标题-*.png`（设计草稿）、`dist/`、`*.apk/*.aab`、
    `.dart_tool/`、`build/`、`.idea/`、`*.iml`、`android/.gradle|cxx|kotlin`、`__pycache__`、`*.log` 等。
+
+## 七、阅读器加载与分流切换（2026-11-15）
+
+1. **加载 bug**：旧 `_loadPage` 在并发满 2 时直接 `return`，被拒的页没有队列也没有重试，于是进入阅读器只会加载 2 页，其余一直转圈。
+2. **修复**：新增 `lib/features/reader/reader_page_loader.dart` —— 窗口 `焦点-2 .. 焦点+5`、并发 3、前向优先、槽位空出自动补位、失败可重试、LRU 14 页、`clear/dispose` 用 generation 作废旧请求；`reader_page.dart` 全面接入（删掉旧的 `_pageBytes/_loading/_failed/_preloadAround`）。
+3. **分流切换**：`JmApi` 新增 `availableHosts` / `switchApiHost(host)`；`JmApiClient.switchApiHost` 只请求目标线路 `/setting`，成功后更新图床（`img_host`）、写健康表并置顶持久化，失败保留原线路。`JmConstants.lineLabels` 收录线路1-5（`www.cdnbtd.cc` / `www.cdnutc.cc` / `www.cdngwc.net` / `www.cdngwc.club` / `www.cdnutc.me`）。
+4. **UI**：`ReaderHud` 顶栏「线路N」按钮 -> 底部弹层（当前置顶 / 标签 / 主机 / 最近延迟）；切换后清空阅读缓存并按当前页重载，图床跟着换。
+5. **验证**：`flutter analyze` 无问题；`flutter test` 123 通过 / 2 skip（新增 loader 7 个、HUD 分流 2 个、分流切换 3 个用例）。
+## 八、v0.1.2 变更（2026-11-15）
+
+1. **启动行为**：打开 App 先用「上次成功线路 + 上次首页缓存」秒开，再后台拉新并整体替换。
+   - `EndpointStore` 新增 `jm_last_api_host`（`lastApiHost`），成功一次即持久化；`apiHosts` 排序把手填线路排第一、`lastApiHost` 紧随其后。
+   - `JmEndpointResolver._fastPath()`：上次线路的健康记录仍在 30 分钟 TTL 内时，**零网络**复用（跳过四源发现 + 探测）；`probeAll()`/设置页「重新探测」仍走全量。
+   - `HomeFeedNotifier.build()` 改为「先读 Hive 缓存（不看 TTL、不等 `jmBootstrapProvider`）→ 立即返回 → 后台刷新后 `state = data(fresh)` 替换」；首页顶部条显示「上次内容 · HH:mm · 正在更新」。
+   - 失败兜底：后台刷新失败保持缓存内容；只有无缓存且首拉失败才进整页错误态。
+2. **Dock 由三档改两档**：`首页 / 我的`；`/download`、`/history` 改为顶层 push 路由，从「我的 → 下载与历史」进入（返回即回我的）。
+3. **新增历史记录页** `features/download/history_page.dart`：全部 / 已完成 / 失败 / 已取消 四档筛选、打开 PDF、重试、删除、清空已完成；「我的」里显示进行中数量与历史条数。
+4. **版本与许可**：`pubspec.yaml` → `0.1.2+2`（versionCode 2），`AppConfig.appVersion = '0.1.2'`；新增仓库根 `LICENSE`（MIT，Copyright (c) 2026 xzxycx）与 `lib/core/constants/license_text.dart`；关于页新增「开源许可（MIT License）」弹窗与版权行，「第三方开源许可」仍走 `showLicensePage`。
+5. **验证**：`flutter analyze` 无问题；`flutter test` **128 通过 / 2 跳过**（新增 history、dock 两档、缓存读取用例）；UI 守卫通过。
+6. **产物**：`dist\JMComic-0.1.2-release.apk`，62.08 MB，SHA256 `237C529B…FB87E601`，
+   `versionName 0.1.2 / versionCode 2 / minSdk 29 / targetSdk 35 / compileSdk 36`。
+
+## 九、v0.2.0 变更（2026-11-15）
+
+1. **登录 + 收藏（M4.5）**：新增 `AccountSession` / `SessionStore`（`jm_session`）/ `AuthRepository`、
+   `FavoriteItem` / `FavoritesStore`（per-album 账本 + 文件夹 + outbox）/ `FavoritesRepository`（对账 + toggle 反向自愈）、
+   `/login` 与 `/collect` 两个页面；详情页收藏改为乐观更新 + 撤销，并清理「有更新」角标。
+   - 协议：`GET /favorite?page&o&folder_id`、`POST /favorite {aid}`（toggle，核对 `type`）、`POST /login`（multipart，带 `s` 时补 `AVS` cookie）。
+   - 红线：不存明文密码；写本地读本地；服务端只镜像布尔；登出清 session/cookie/outbox 并把收藏降级为「仅本地」。
+   - 迁移：老 `jm_favorites = {ids:[…]}` 启动时迁成 per-album 记录（幂等）。
+2. **许可证改为 GPL-3.0**：仓库根 `LICENSE` 与 `assets/licenses/GPL-3.0.txt` 为 GNU GPL v3 全文，
+   关于页从 asset 读取并展示；版权行 `Copyright (C) 2026 xzxycx`。
+3. **阅读器 HUD 避开系统状态栏**：`ReaderHud` 顶部条改为 `SafeArea(bottom: false)` 包内容、底色铺到状态栏下方，
+   不再与时间/信号图标重叠。
+4. **版本 0.2.0**：`pubspec.yaml` → `0.2.0+3`（versionCode 3），`AppConfig.appVersion = '0.2.0'`。
+5. **验证**：`flutter analyze` 无问题；`flutter test` **139 通过 / 2 跳过**（新增 `favorites_test` 11 条：迁移、outbox 去重、本地/在线 toggle、对账、反向自愈、登录/登出/会话恢复）；UI 守卫通过。
+6. **产物**：`dist\JMComic-0.2.0-release.apk`，62.49 MB，SHA256 `3BADD35B…01BC10E`，
+   `versionName 0.2.0 / versionCode 3 / minSdk 29 / targetSdk 35 / compileSdk 36`。

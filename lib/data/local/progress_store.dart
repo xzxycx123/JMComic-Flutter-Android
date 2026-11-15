@@ -88,38 +88,5 @@ class SearchHistoryStore {
 }
 
 /// 本地收藏（v1 只存 id，不接登录接口）。
-class FavoritesStore {
-  FavoritesStore(this._box);
-
-  static const String _key = 'ids';
-  final Box<dynamic> _box;
-
-  Set<String> read() {
-    final raw = _box.get(_key);
-    if (raw is List) {
-      return raw.map((item) => '$item').toSet();
-    }
-    return <String>{};
-  }
-
-  bool contains(String albumId) => read().contains(albumId);
-
-  int get count => read().length;
-
-  Future<bool> toggle(String albumId) async {
-    final ids = read();
-    final added = !ids.contains(albumId);
-    if (added) {
-      ids.add(albumId);
-    } else {
-      ids.remove(albumId);
-    }
-    await _box.put(_key, ids.toList(growable: false));
-    return added;
-  }
-
-  Future<void> clear() => _box.delete(_key);
-}
-
 /// 统一取 box 的小工具（冷启动时必须已 [HiveInit.initialize]）。
 Box<dynamic> appBox(String name) => Hive.box<dynamic>(name);

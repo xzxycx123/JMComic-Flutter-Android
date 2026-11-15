@@ -10,6 +10,9 @@ abstract final class HiveBoxes {
   static const String readerProgress = 'jm_reader_progress';
   static const String searchHistory = 'jm_search_history';
   static const String favorites = 'jm_favorites';
+  static const String favoriteFolders = 'jm_favorite_folders';
+  static const String favoriteOutbox = 'jm_favorite_outbox';
+  static const String session = 'jm_session';
   static const String endpoints = 'jm_endpoints';
 }
 
@@ -28,6 +31,9 @@ abstract final class HiveInit {
       HiveBoxes.readerProgress,
       HiveBoxes.searchHistory,
       HiveBoxes.favorites,
+      HiveBoxes.favoriteFolders,
+      HiveBoxes.favoriteOutbox,
+      HiveBoxes.session,
     ]) {
       if (!Hive.isBoxOpen(name)) {
         await Hive.openBox<dynamic>(name);

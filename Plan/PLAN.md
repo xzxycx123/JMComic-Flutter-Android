@@ -290,6 +290,12 @@ const kDomainServerUrls = <String>[
 | 7 | `/album` | `id` | 详见 §5.5 | 详情 |
 | 8 | `/chapter` | `id`（章节/单本 id） | `{id,name,images:["00001.webp",…],tags,series_id,…}` | 页面清单 |
 | 9 | `/chapter_view_template` | `id,mode=vertical,page=0,app_img_shunt=1,express=off,v=ts`（**用 scramble 密钥**） | HTML，正则 `var\s+scramble_id\s*=\s*(\d+)\s*;` | 切片阈值 |
+| 10 | `/favorite`（GET） | `page`（1 起）、`o=mr\|mp`、`folder_id`（默认 0） | `{count,total,list:[{id,author,name,image,category,category_sub,…}]}` | 收藏列表（需登录） |
+| 11 | `/favorite`（POST，multipart） | `aid` | `{msg,status:"ok",type:"add"\|"remove"}` | **切换**收藏（需登录） |
+| 12 | `/login`（POST，multipart） | `username`、`password` | `{uid,username,album_favorites,album_favorites_max,…}` + cookie（含 `AVS`） | 登录，取收藏上限 |
+| 13 | `/watch_list` | `page` | 与 #10 同构 | 观看历史（需登录） |
+
+> #10–#13 的字段与参数取自 `Dedicatus546/jm-mobile` 的 Retrofit 定义与 `hect0x7/JMComic-Crawler-Python` 的 `favorite_folder`；设计细节见 `docs/FAVORITES.md`。
 
 `/categories` 实测 10 个顶层分类（`total_albums` 为服务端计数）：
 
@@ -800,6 +806,34 @@ abstract final class AppColors {
 - 底部「清空已完成」文字按钮（二次确认 `showDialog`）。
 - 空态：插画 + 「输入车号开始下载」+ 「如何获取车号？」折叠说明。
 
+### 7.9 收藏夹（本地账本 + 服务端镜像）
+
+> 完整设计（模型、box、迁移、对账算法、F1–F5 拆分、测试矩阵）见 **`docs/FAVORITES.md`**；这里只留实现时不得偏离的约束。
+
+- **定位**：收藏页永远先渲染 Hive，网络只做对账；服务端只镜像「在不在收藏里」这一个布尔，文件夹/追更/标题快照都是本地能力。
+- **入口**：我的 → 统计卡「收藏 N」+ 「我的收藏」行；Dock 仍三档，收藏是二级页（`/collect`）。
+- **页面**：顶部「本地收藏 · 登录后可同步」提示条（仅未登录显示）→ 文件夹 chips（全部 / 默认 / 自建 / + 新建）→ 排序 chips（收藏时间 `mr` / 更新时间 `mp`）+ 视图切换 → 三列网格 → 多选批量条（移动 / 下载 / 移除）→ 触底加载每页 20、切排序回顶。
+- **卡片角标**：待同步（点）/ 已同步（云）/ 纯本地（无）/ 有更新（橙点，`updateAt > lastSeenAt`）。
+- **写路径**：乐观更新 + 180ms 缩放 + SnackBar「已收藏 · 撤销 / 查看」；撤销同时删除对应 outbox 项，别把撤销同步出去。
+- **接口**：`GET /favorite?page&o&folder_id=0`、`POST /favorite {aid}`（**toggle**，返回 `type` 与预期不符必须反向补发一次并标 conflict）、`POST /login`（存 cookie + `AVS`，**不存明文密码**）、上限取 `album_favorites_max`。
+- **限流**：push 串行、间隔 ≥400ms、退避 2s/8s/30s（最多 5 次）；对账翻页间隔 ≥300ms；连续 3 条业务失败暂停本轮。
+- **迁移**：老的 `jm_favorites = {ids:[…]}` 必须在启动时迁成 per-album 记录，空标题惰性补详情，不阻塞首屏。
+- **不取 jm-mobile 的做法**：明文存密码做自动登录；也不做服务端收藏夹创建/改名（接口未验证）。
+- **验收**：断网可收藏/取消/切文件夹/排序/删除；登录后本地与服务端双向一致；toggle 被反向时自愈；上限 90% 起告警。
+
+### 7.10 会话与登录（收藏同步的前置）
+
+> 完整解剖（jm-mobile 的拦截器链、自动登录、登出、UI 细节）与我们的实现骨架见 **`docs/FAVORITES.md` §2 / §4**。
+
+- **定位**：cookie 为主、`/login` 换取账号信息为辅；**不存明文密码**（jm-mobile 存明文并在每次冷启动重登，我们不取）。
+- **存储**：新 box `jm_session` 只放会话快照 + cookie 列表（含 `AVS`）；密码若要记住，必须用户显式勾选并落 `flutter_secure_storage`。
+- **拦截器链顺序**：`SessionGate`（`/setting`、`/login` 放行）→ `Endpoint`（域名轮换）→ `Token`（**每请求现算** `md5(ts+secret)`，版本取 `/setting.jm3_version`）→ `Cookie` → `Decrypt`（`{code,data}`，**AES-256-ECB**）→ `LoginRequired`（401/HTML/`code!=200` → `needsLogin`）。
+- **登录时序**：`bootstrap()` → `POST /login`（multipart）→ 响应带 `s` 就补写 `AVS` cookie → `UserSession(state: valid)` → `GET /favorite?page=1` 校验 → 触发收藏对账。
+- **自动登录**：默认「cookie 恢复 + 一次校验」，失败一次即回 `local`，不打扰用户；不做每冷启动重登。
+- **失效**：`needsLogin` 时收藏继续本地可用，我的页顶栏给「登录已失效 · 重新登录」，只重试一次（仅当开启记住密码）。
+- **登出**：session + cookie + outbox 三处清空；本地收藏保留但 `synced → localOnly`，避免推到下一个账号。
+- **UI**（对齐 jm-mobile 的可抄部分）：用户名/密码 ASCII-only 过滤、用户名失焦 trim、IME Next/Done、按钮 loading「登录中」、成功后 `popUpTo` 不留在栈里。
+
 ---
 
 ## 8. 下载引擎移植规格（基准 `D:\data\coding\JmScript`）
@@ -956,6 +990,13 @@ flutter analyze
 - `download_task` / `download_slots` / `download_worker` / `pdf_exporter` / `pdf_sink` / `notification_service` / `download_coordinator`。
 - `test/download/image_scrambler_test.dart`、`image_processor_test.dart`（用 `test/fixtures/slice_sample.png` 合成切片图）、`pdf_exporter_test.dart`（生成 2 页 PDF 断言页数）。
 - 验收：输入 3 个车号 → 3 并发 → `Documents/JMComics/` 出 3 个 PDF；再来一次出现 `(2)`；取消后 workDir 为空。
+
+### M4.5 登录与收藏（1.5 天）
+
+- **F0 会话**：`UserSession` / `SessionStore`（`jm_session`）/ `AuthRepository` / 拦截器链改造 / 登录页 —— 验收：能登录、杀进程后仍登录、登出三处皆清、`AVS` 写入正确。
+- **F1–F3 收藏**：`FavoriteItem` + 迁移 + 收藏页 + 详情联动（详见 §7.9 与 `docs/FAVORITES.md` §9）。
+- **F4–F5 同步与批量**：对账 + outbox + 退避 + 上限 + 多选批量 + 追更角标。
+- 验收：见 `docs/FAVORITES.md` §10 的 15 条测试矩阵，登录/失效/登出/断网四条必须有真机 case。
 
 ### M5 我的（0.5 天）
 

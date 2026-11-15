@@ -1,11 +1,20 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:jm_comic/core/constants/jm_constants.dart';
+import 'package:jm_comic/data/local/hive_init.dart';
 import 'package:jm_comic/data/models/jm_album_summary.dart';
 import 'package:jm_comic/data/repositories/home_repository.dart';
 
 import '../helpers/fixtures.dart';
+import '../helpers/test_env.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() async {
+    await initTestStores();
+  });
+
   group('HomeRepository', () {
     test('聚合四类区块', () async {
       final repository = HomeRepository(api: FakeJmApi());
@@ -22,6 +31,22 @@ void main() {
       expect(feed.partialErrors, isEmpty);
     });
 
+    test('readCachedFeed 不依赖 JmApi，可直接恢复上次首页', () async {
+      final feed = await HomeRepository(api: FakeJmApi()).fetchFeed();
+      final box = Hive.box<dynamic>(HiveBoxes.feedCache);
+      await box.put('feed', <String, dynamic>{
+        'payload': feed.encode(),
+        'cachedAt': DateTime.now().millisecondsSinceEpoch,
+      });
+
+      final cached = HomeRepository.readCachedFeed(box);
+      expect(cached, isNotNull);
+      expect(cached!.fromCache, isTrue);
+      expect(cached.grid.length, feed.grid.length);
+      expect(cached.categories.length, feed.categories.length);
+      expect(cached.updatedAt, isNotNull);
+      await box.clear();
+    });
     test('mergeUnique 按 id 去重保序', () {
       const a = JmAlbumSummary(id: '1', title: 'a');
       const b = JmAlbumSummary(id: '2', title: 'b');

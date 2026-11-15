@@ -121,4 +121,45 @@ void main() {
     );
     expect(store.apiHealth.where((item) => item.ok), isEmpty);
   });
+
+  group('分流切换', () {
+    test('switchApiHost：拉目标线路 /setting 并更新图床', () async {
+      dio.httpClientAdapter = _HostStubAdapter((options) {
+        if (options.uri.host == 'www.cdngwc.net' &&
+            options.uri.path == '/setting') {
+          return _json(
+            _envelope(<String, dynamic>{
+              'jm3_version': '2.1.13',
+              'img_host': 'https://cdn-switch.example.com',
+            }),
+          );
+        }
+        return _json(_envelope(Fixtures.promote()));
+      });
+
+      final ok = await client.switchApiHost('www.cdngwc.net');
+
+      expect(ok, isTrue);
+      expect(client.apiHost, 'www.cdngwc.net');
+      expect(client.imageHost, 'cdn-switch.example.com');
+      expect(store.healthOf('www.cdngwc.net')?.ok, isTrue);
+      expect(client.availableHosts, contains('www.cdngwc.net'));
+    });
+
+    test('目标线路不可用时返回 false，且保留原线路', () async {
+      final before = client.apiHost;
+      dio.httpClientAdapter =
+          _HostStubAdapter((options) => _json('<html>blocked</html>'));
+
+      final ok = await client.switchApiHost('www.cdngwc.club');
+
+      expect(ok, isFalse);
+      expect(client.apiHost, before);
+      expect(store.healthOf('www.cdngwc.club')?.ok, isFalse);
+    });
+
+    test('非法域名直接拒绝', () async {
+      expect(await client.switchApiHost('not a host'), isFalse);
+    });
+  });
 }

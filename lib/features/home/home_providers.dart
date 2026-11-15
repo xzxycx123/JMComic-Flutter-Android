@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_ce/hive.dart';
 
 import '../../core/constants/jm_constants.dart';
 import '../../core/di/providers.dart';
+import '../../data/local/hive_init.dart';
 import '../../data/models/home_feed.dart';
 import '../../data/repositories/home_repository.dart';
 
@@ -24,30 +26,40 @@ final AsyncNotifierProvider<HomeFeedNotifier, HomeFeed> homeFeedProvider =
     AsyncNotifierProvider<HomeFeedNotifier, HomeFeed>(HomeFeedNotifier.new);
 
 class HomeFeedNotifier extends AsyncNotifier<HomeFeed> {
+  bool _disposed = false;
+
   @override
   Future<HomeFeed> build() async {
+    ref.onDispose(() => _disposed = true);
     final category = ref.watch(selectedCategoryProvider);
     final order = ref.watch(albumOrderProvider);
-    final repository = await ref.watch(homeRepositoryProvider.future);
+    final isDefaultQuery =
+        category == '0' && order == AlbumOrder.latestUpdate;
 
-    final cached = repository.readCache();
-    final useCache =
-        cached != null && !repository.cacheExpired() && category == '0' && order == AlbumOrder.latestUpdate;
-    if (useCache) {
-      // 先渲染缓存，再后台刷新（PLAN §6.2）。
-      unawaited(_refreshInBackground(repository, category, order));
-      return cached;
+    // 冷启动：先把「上次的主页」直接画出来（不看 TTL，也不等网络/引导），
+    // 再后台拉新并在成功后整体替换（PLAN §6.2 的加强版）。
+    if (isDefaultQuery) {
+      final cached = HomeRepository.readCachedFeed(
+        Hive.box<dynamic>(HiveBoxes.feedCache),
+      );
+      if (cached != null) {
+        unawaited(_refreshInBackground(category, order));
+        return cached;
+      }
     }
+
+    final repository = await ref.watch(homeRepositoryProvider.future);
     return repository.fetchFeed(category: category, order: order);
   }
 
   Future<void> _refreshInBackground(
-    HomeRepository repository,
     String category,
     AlbumOrder order,
   ) async {
     try {
+      final repository = await ref.read(homeRepositoryProvider.future);
       final fresh = await repository.fetchFeed(category: category, order: order);
+      if (_disposed) return;
       state = AsyncValue<HomeFeed>.data(fresh);
     } catch (_) {
       // 后台刷新失败保持缓存内容，不打断用户。

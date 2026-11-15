@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
@@ -43,7 +44,7 @@ class AboutPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'v${AppConfig.appVersion} · Android 优先',
+                    'v${AppConfig.appVersion} · Android · GPL-3.0',
                     style: AppTypography.caption.copyWith(color: scheme.onSurfaceVariant),
                   ),
                 ],
@@ -59,8 +60,13 @@ class AboutPage extends StatelessWidget {
           ),
           const SizedBox(height: 22),
           _LinkTile(
+            icon: AppIcons.check,
+            title: '开源许可（GPL-3.0）',
+            onTap: () => _showMitLicense(context),
+          ),
+          _LinkTile(
             icon: AppIcons.bookOpen,
-            title: '开源许可',
+            title: '第三方开源许可',
             onTap: () => showLicensePage(
               context: context,
               applicationName: AppConfig.appName,
@@ -78,6 +84,46 @@ class AboutPage extends StatelessWidget {
           Text(
             '协议事实以 tools\\probe_api.ps1 的实时输出为准（docs/PROBE_RESULT_2026-11-14.txt 为留档）。',
             style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${AppConfig.copyright} · GNU GPL v3.0',
+            style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMitLicense(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('GNU GPL v3.0'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 420,
+          child: FutureBuilder<String>(
+            future: rootBundle.loadString(AppConfig.licenseAsset),
+            builder: (context, snapshot) {
+              if (snapshot.hasError || !snapshot.hasData) {
+                return const SingleChildScrollView(
+                  child: Text('${AppConfig.licenseSummary}\n\n（完整文本见仓库根 LICENSE）'),
+                );
+              }
+              return SingleChildScrollView(
+                child: Text(
+                  '${AppConfig.licenseSummary}\n\n${snapshot.data}',
+                  style: const TextStyle(fontSize: 12, height: 1.45),
+                ),
+              );
+            },
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('知道了'),
           ),
         ],
       ),

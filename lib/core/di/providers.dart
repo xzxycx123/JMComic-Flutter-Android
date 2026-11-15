@@ -114,10 +114,6 @@ final Provider<SearchHistoryStore> searchHistoryStoreProvider =
   (ref) => SearchHistoryStore(Hive.box<dynamic>(HiveBoxes.searchHistory)),
 );
 
-final Provider<FavoritesStore> favoritesStoreProvider =
-    Provider<FavoritesStore>(
-  (ref) => FavoritesStore(Hive.box<dynamic>(HiveBoxes.favorites)),
-);
 
 // ---------------------------------------------------------------- 仓储
 final FutureProvider<HomeRepository> homeRepositoryProvider =

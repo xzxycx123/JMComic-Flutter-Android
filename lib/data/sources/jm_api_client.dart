@@ -12,6 +12,7 @@ import '../models/jm_album_detail.dart';
 import '../models/jm_album_summary.dart';
 import '../models/jm_category.dart';
 import '../models/jm_chapter.dart';
+import '../models/jm_favorite_list.dart';
 import '../models/jm_host_entry.dart';
 import '../models/jm_promote_module.dart';
 import '../models/jm_search_page.dart';
@@ -28,6 +29,12 @@ abstract class JmApi {
   String get imageHost;
   UserSession get session;
   Map<String, String> get imageHeaders;
+
+  /// 可选分流列表（按健康度排序；第一条是当前默认线路）。
+  List<String> get availableHosts;
+
+  /// 显式切换分流：拉该线路的 `/setting` 并更新图床/版本；失败返回 false 且保留原线路。
+  Future<bool> switchApiHost(String host);
 
   Future<void> prepare();
 
@@ -60,6 +67,32 @@ abstract class JmApi {
   String coverUrl(String albumId);
 
   String photoUrl(String photoId, String filename);
+
+  // ---------------------------------------------------------------- 账号 / 收藏（0.2.0）
+  /// `POST /login`（multipart），返回解密后的账号信息；带 `s` 时自动补 AVS cookie。
+  Future<Map<String, dynamic>> login({
+    required String username,
+    required String password,
+  });
+
+  /// `GET /favorite?page&o&folder_id`。
+  Future<JmFavoriteList> fetchFavorites({
+    int page = 1,
+    String order = 'mr',
+    int folderId = 0,
+  });
+
+  /// `POST /favorite {aid}`：**toggle**，返回 `add` / `remove`。
+  Future<String> toggleFavorite(String albumId);
+
+  /// 用收藏列表探一次会话是否还有效（true=有效，false=未登录/失效；网络错误会抛出）。
+  Future<bool> pingFavorite();
+
+  Future<void> setCookie(String name, String value);
+
+  Map<String, String> get cookieSnapshot;
+
+  void restoreCookies(Map<String, String> cookies);
 }
 
 /// 协议客户端（移植 `JmScript/data/JmApiClient.kt` + 首页端点扩展）。
@@ -137,23 +170,69 @@ class JmApiClient implements JmApi {
     }
 
     final decoded = await _requestApi('/setting');
-    final map = asMap(decoded);
-    if (map != null) {
-      final imgHost =
-          JmEndpointResolver.normalizeHost(asString(map['img_host']) ?? '');
-      if (imgHost != null && imgHost.isNotEmpty) {
-        await _store.setImageHosts(<String>[imgHost]);
-        _activeImageHost = imgHost;
-      }
-      final version = asString(map['jm3_version']);
-      if (version != null && version.trim().isNotEmpty) {
-        await _store.setAppVersion(version);
-      }
-    }
+    await _applySetting(decoded);
     _prepared = true;
     Log.i(
       'prepare 完成：api=$apiHost img=$imageHost appVersion=${_store.appVersion} cookies=${_jar.length}',
     );
+  }
+
+  /// `/setting` 的公共处理：img_host 置顶、版本号升级。
+  Future<void> _applySetting(dynamic decoded) async {
+    final map = asMap(decoded);
+    if (map == null) return;
+    final imgHost =
+        JmEndpointResolver.normalizeHost(asString(map['img_host']) ?? '');
+    if (imgHost != null && imgHost.isNotEmpty) {
+      await _store.setImageHosts(<String>[imgHost]);
+      _activeImageHost = imgHost;
+    }
+    final version = asString(map['jm3_version']);
+    if (version != null && version.trim().isNotEmpty) {
+      await _store.setAppVersion(version);
+    }
+  }
+
+  // ---------------------------------------------------------------- 分流
+  @override
+  List<String> get availableHosts => _store.apiHosts;
+
+  @override
+  Future<bool> switchApiHost(String host) async {
+    final normalized = JmEndpointResolver.normalizeHost(host);
+    if (normalized == null) return false;
+    final sw = Stopwatch()..start();
+    try {
+      // 只试目标线路：不轮换、不重试，失败就让 UI 明确提示。
+      final decoded = await _requestApiOnHost(
+        normalized,
+        JmConstants.probeSettingPath,
+        tokenSecret: JmConstants.tokenSecret,
+      );
+      await _applySetting(decoded);
+      _activeHost = normalized;
+      _prepared = true;
+      await _store.markApiHostWorking(normalized);
+      await _store.recordHealth(
+        normalized,
+        JmHostKind.api,
+        ok: true,
+        latencyMs: sw.elapsedMilliseconds,
+        status: 'ok',
+      );
+      Log.i('分流已切到 $normalized（img=$_activeImageHost）');
+      return true;
+    } catch (error) {
+      await _store.recordHealth(
+        normalized,
+        JmHostKind.api,
+        ok: false,
+        latencyMs: sw.elapsedMilliseconds,
+        status: _statusOf(error),
+      );
+      Log.w('分流切换 $normalized 失败：$error');
+      return false;
+    }
   }
 
   Future<void> ensurePrepared() async {
@@ -350,6 +429,85 @@ class JmApiClient implements JmApi {
     return 'https://$host/media/photos/$photoId/$filename';
   }
 
+  // ---------------------------------------------------------------- 账号 / 收藏
+  @override
+  Future<Map<String, dynamic>> login({
+    required String username,
+    required String password,
+  }) async {
+    final decoded = await _requestApi(
+      '/login',
+      method: 'POST',
+      form: <String, String>{'username': username, 'password': password},
+    );
+    final map = asMap(decoded);
+    if (map == null) {
+      throw const JmContentException('登录响应结构异常');
+    }
+    final avs = asString(map['s']);
+    if (avs != null && avs.isNotEmpty) {
+      await setCookie('AVS', avs);
+    }
+    return map;
+  }
+
+  @override
+  Future<JmFavoriteList> fetchFavorites({
+    int page = 1,
+    String order = 'mr',
+    int folderId = 0,
+  }) async {
+    final decoded = await _requestApi(
+      '/favorite',
+      query: <String, String>{
+        'page': '$page',
+        'o': order,
+        'folder_id': '$folderId',
+      },
+    );
+    final map = asMap(decoded);
+    if (map == null) {
+      throw const JmContentException('收藏列表结构异常');
+    }
+    return JmFavoriteList.fromJson(map, page: page);
+  }
+
+  @override
+  Future<String> toggleFavorite(String albumId) async {
+    final decoded = await _requestApi(
+      '/favorite',
+      method: 'POST',
+      form: <String, String>{'aid': albumId},
+    );
+    final map = asMap(decoded);
+    final type = asString(map?['type']) ?? '';
+    if (type != 'add' && type != 'remove') {
+      throw JmContentException('收藏接口返回无法识别：$type');
+    }
+    return type;
+  }
+
+  @override
+  Future<bool> pingFavorite() async {
+    try {
+      await fetchFavorites(page: 1);
+      return true;
+    } on JmApiException {
+      rethrow;
+    } catch (_) {
+      // code!=200 / 结构异常：视为未登录或会话失效。
+      return false;
+    }
+  }
+
+  @override
+  Future<void> setCookie(String name, String value) async => _jar.setCookie(name, value);
+
+  @override
+  Map<String, String> get cookieSnapshot => _jar.snapshot();
+
+  @override
+  void restoreCookies(Map<String, String> cookies) => _jar.restore(cookies);
   @override
   Future<Uint8List> downloadImage(String photoId, String filename) async {
     final hosts = _preferActive(
@@ -422,6 +580,8 @@ class JmApiClient implements JmApi {
     String path, {
     Map<String, String>? query,
     String tokenSecret = JmConstants.tokenSecret,
+    String method = 'GET',
+    Map<String, String>? form,
   }) async {
     final hosts = _preferActive(
       _orderedHosts(_store.apiHosts, JmHostKind.api),
@@ -447,6 +607,8 @@ class JmApiClient implements JmApi {
           path,
           query: query,
           tokenSecret: tokenSecret,
+          method: method,
+          form: form,
         );
         await _store.markApiHostWorking(host);
         await _store.recordHealth(
@@ -552,14 +714,18 @@ class JmApiClient implements JmApi {
     String path, {
     Map<String, String>? query,
     required String tokenSecret,
+    String method = 'GET',
+    Map<String, String>? form,
   }) async {
     final ts = _timestamp();
     final Response<String> response;
     try {
-      response = await _dio.get<String>(
+      response = await _dio.request<String>(
         'https://$host$path',
+        data: form == null ? null : FormData.fromMap(form),
         queryParameters: query,
         options: Options(
+          method: method,
           responseType: ResponseType.plain,
           receiveTimeout: JmConstants.requestAttemptTimeout,
           sendTimeout: JmConstants.requestAttemptTimeout,

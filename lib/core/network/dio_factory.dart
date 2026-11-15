@@ -37,6 +37,23 @@ class JmCookieJar {
         .join('; ');
   }
 
+  /// 会话持久化：把当前 cookie 名值对整体导出（写入 `jm_session`）。
+  Map<String, String> snapshot() => Map<String, String>.unmodifiable(_cookies);
+
+  /// 冷启动恢复 cookie（配合 `SessionStore.readCookies`）。
+  void restore(Map<String, String> cookies) {
+    _cookies
+      ..clear()
+      ..addAll(cookies);
+  }
+
+  void setCookie(String name, String value) {
+    if (name.isEmpty) return;
+    _cookies[name] = value;
+  }
+
+  bool has(String name) => _cookies.containsKey(name);
+
   void clear() => _cookies.clear();
 }
 

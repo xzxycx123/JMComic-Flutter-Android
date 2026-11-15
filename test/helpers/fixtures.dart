@@ -10,6 +10,7 @@ import 'package:jm_comic/data/models/jm_album_detail.dart';
 import 'package:jm_comic/data/models/jm_album_summary.dart';
 import 'package:jm_comic/data/models/jm_category.dart';
 import 'package:jm_comic/data/models/jm_chapter.dart';
+import 'package:jm_comic/data/models/jm_favorite_list.dart';
 import 'package:jm_comic/data/models/jm_promote_module.dart';
 import 'package:jm_comic/data/models/jm_search_page.dart';
 import 'package:jm_comic/data/models/user_session.dart';
@@ -20,11 +21,13 @@ import 'package:jm_comic/data/sources/jm_response_parser.dart';
 abstract final class Fixtures {
   static Directory get _dir => Directory('test/fixtures');
 
-  static String text(String name) => File('${_dir.path}/$name').readAsStringSync();
+  static String text(String name) =>
+      File('${_dir.path}/$name').readAsStringSync();
 
   static dynamic json(String name) => jsonDecode(text(name));
 
-  static Map<String, dynamic> map(String name) => json(name) as Map<String, dynamic>;
+  static Map<String, dynamic> map(String name) =>
+      json(name) as Map<String, dynamic>;
 
   static List<dynamic> list(String name) => json(name) as List<dynamic>;
 
@@ -50,7 +53,8 @@ Uint8List syntheticPng({
   final image = img.Image(width: width, height: height);
   for (var y = 0; y < height; y++) {
     for (var x = 0; x < width; x++) {
-      image.setPixelRgb(x, y, (x * 7 + seed) % 256, (y * 5 + seed) % 256, (x + y + seed) % 256);
+      image.setPixelRgb(x, y, (x * 7 + seed) % 256, (y * 5 + seed) % 256,
+          (x + y + seed) % 256,);
     }
   }
   return Uint8List.fromList(img.encodePng(image));
@@ -97,7 +101,10 @@ class FakeJmApi implements JmApi {
     this.failEveryPage = false,
     this.emptyAfterFirstPage = false,
     this.gate,
-  });
+    this.loggedIn = false,
+    this.forcedToggleType,
+    Set<String>? serverFavorites,
+  }) : serverFavorites = serverFavorites ?? <String>{};
 
   final int chapterCount;
   final int pagesPerChapter;
@@ -118,6 +125,17 @@ class FakeJmApi implements JmApi {
   /// 页面下载闸门：不 complete 就一直挂起，用于验证取消。
   final Completer<void>? gate;
 
+  /// 是否已登录（收藏接口依赖）。
+  bool loggedIn;
+
+  /// 强制返回与操作相反的 toggle 结果（用于验证反向自愈）。
+  String? forcedToggleType;
+
+  /// 服务端收藏集合（toggle 会真实增删）。
+  final Set<String> serverFavorites;
+
+  final Map<String, String> _cookies = <String, String>{};
+
   int downloadCalls = 0;
   int scrambleCalls = 0;
   int filterCalls = 0;
@@ -132,10 +150,22 @@ class FakeJmApi implements JmApi {
   String get apiHost => 'www.cdnbtd.cc';
 
   @override
+  List<String> get availableHosts => const <String>[
+        'www.cdnbtd.cc',
+        'www.cdnutc.cc',
+        'www.cdngwc.net',
+        'www.cdngwc.club',
+      ];
+
+  @override
+  Future<bool> switchApiHost(String host) async => true;
+
+  @override
   String get imageHost => 'cdn-msp.jmdanjonproxy.xyz';
 
   @override
-  Map<String, String> get imageHeaders => <String, String>{'User-Agent': 'fake'};
+  Map<String, String> get imageHeaders =>
+      <String, String>{'User-Agent': 'fake'};
 
   @override
   UserSession get session => UserSession(
@@ -146,13 +176,87 @@ class FakeJmApi implements JmApi {
       );
 
   @override
+  Future<Map<String, dynamic>> login({
+    required String username,
+    required String password,
+  }) async {
+    if (username.isEmpty || password.isEmpty) {
+      throw const JmContentException('用户名和密码不能为空');
+    }
+    loggedIn = true;
+    _cookies['AVS'] = 'fake-avs';
+    return <String, dynamic>{
+      'uid': 42,
+      'username': username,
+      'album_favorites': serverFavorites.length,
+      'album_favorites_max': 500,
+      'level': 3,
+      'level_name': 'LV3',
+      's': 'fake-avs',
+    };
+  }
+
+  @override
+  Future<JmFavoriteList> fetchFavorites({
+    int page = 1,
+    String order = 'mr',
+    int folderId = 0,
+  }) async {
+    if (!loggedIn) {
+      throw const JmContentException('JM 接口错误：请先登录');
+    }
+    final items = serverFavorites
+        .map((id) => JmAlbumSummary(id: id, title: 'JM$id'))
+        .toList(growable: false);
+    return JmFavoriteList(
+      count: items.length,
+      total: items.length,
+      items: page == 1 ? items : const <JmAlbumSummary>[],
+      page: page,
+    );
+  }
+
+  @override
+  Future<String> toggleFavorite(String albumId) async {
+    if (!loggedIn) {
+      throw const JmContentException('JM 接口错误：请先登录');
+    }
+    final forced = forcedToggleType;
+    if (forced != null) {
+      forcedToggleType = null;
+      return forced;
+    }
+    if (serverFavorites.remove(albumId)) return 'remove';
+    serverFavorites.add(albumId);
+    return 'add';
+  }
+
+  @override
+  Future<bool> pingFavorite() async => loggedIn;
+
+  @override
+  Future<void> setCookie(String name, String value) async {
+    _cookies[name] = value;
+  }
+
+  @override
+  Map<String, String> get cookieSnapshot => Map<String, String>.unmodifiable(_cookies);
+
+  @override
+  void restoreCookies(Map<String, String> cookies) {
+    _cookies
+      ..clear()
+      ..addAll(cookies);
+  }
+  @override
   Future<void> prepare() async {}
 
   @override
   Future<JmAlbumDetail> getAlbum(String albumId) async {
     final chapters = List<JmChapterRef>.generate(
       chapterCount,
-      (index) => JmChapterRef(id: '${albumId}0$index', sort: index + 1, title: '第 ${index + 1} 话'),
+      (index) => JmChapterRef(
+          id: '${albumId}0$index', sort: index + 1, title: '第 ${index + 1} 话',),
     );
     return JmAlbumDetail(
       id: albumId,
@@ -245,7 +349,8 @@ class FakeJmApi implements JmApi {
     AlbumOrder order = AlbumOrder.latestUpdate,
   }) async {
     _throwIfFailing();
-    return JmResponseParser.searchPage(Fixtures.filter(), page: page, query: query);
+    return JmResponseParser.searchPage(Fixtures.filter(),
+        page: page, query: query,);
   }
 }
 

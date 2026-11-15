@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/di/providers.dart';
+import '../../core/icons/app_icons.dart';
 import '../../core/icons/app_images.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/jm_id_parser.dart';
@@ -66,32 +68,33 @@ class _DownloadPageState extends ConsumerState<DownloadPage> {
     final repository = ref.watch(downloadRepositoryProvider);
 
     return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          tooltip: '返回',
+          icon: IconTheme(
+            data: IconThemeData(color: scheme.onSurface),
+            child: const SvgIcon(AppIcons.back, size: 22),
+          ),
+          onPressed: () => context.canPop() ? context.pop() : context.go('/mine'),
+        ),
+        title: const Text('下载'),
+        actions: <Widget>[
+          if (allRecords.any((record) => record.isFinished))
+            TextButton(
+              onPressed: () => _clearFinished(),
+              style: TextButton.styleFrom(
+                foregroundColor: scheme.onSurfaceVariant,
+                textStyle: AppTypography.caption,
+              ),
+              child: const Text('清空已完成'),
+            ),
+          const SizedBox(width: 4),
+        ],
+      ),
       body: SafeArea(
         bottom: false,
         child: Column(
           children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-              child: Row(
-                children: <Widget>[
-                  Text(
-                    '下载',
-                    style: AppTypography.displayTitle.copyWith(color: scheme.onSurface),
-                  ),
-                  const Spacer(),
-                  if (allRecords.any((record) => record.isFinished))
-                    TextButton(
-                      onPressed: () => _clearFinished(),
-                      style: TextButton.styleFrom(
-                        foregroundColor: scheme.onSurfaceVariant,
-                        textStyle: AppTypography.caption,
-                        minimumSize: const Size(0, 32),
-                      ),
-                      child: const Text('清空已完成喵'),
-                    ),
-                ],
-              ),
-            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: DownloadInput(

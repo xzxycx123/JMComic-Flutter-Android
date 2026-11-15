@@ -11,11 +11,13 @@ import '../../core/icons/app_images.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../data/models/jm_album_detail.dart';
+import '../../data/models/jm_album_summary.dart';
 import '../../data/models/jm_chapter.dart';
 import '../home/widgets/album_card.dart';
 import '../home/widgets/cover_image.dart';
 import '../home/widgets/feed_skeleton.dart';
 import '../home/widgets/section_header.dart';
+import '../collect/collect_providers.dart';
 import 'album_providers.dart';
 import 'widgets/chapter_tile.dart';
 
@@ -26,6 +28,12 @@ class AlbumPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 进入详情即清掉「有更新」角标。
+    ref.listen(albumDetailProvider(albumId), (previous, next) {
+      next.whenData((album) {
+        ref.read(favoritesRepositoryProvider).markSeen(album.id);
+      });
+    });
     final detail = ref.watch(albumDetailProvider(albumId));
 
     return detail.when(
@@ -102,11 +110,32 @@ class _AlbumContent extends ConsumerWidget {
     }
   }
 
-  Future<void> _toggleFavorite(BuildContext context, WidgetRef ref) async {
-    final added = await ref.read(favoritesProvider.notifier).toggle(album.id);
+  Future<void> _toggleFavorite(
+    BuildContext context,
+    WidgetRef ref,
+    JmAlbumDetail album,
+  ) async {
+    final repository = ref.read(favoritesRepositoryProvider);
+    final summary = JmAlbumSummary(
+      id: album.id,
+      title: album.title,
+      author: album.author,
+      updateAt: 0,
+    );
+    final added = await repository.toggle(summary);
+    ref.read(favoritesItemsProvider.notifier).reload();
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(added ? '已收藏' : '已取消收藏')),
+      SnackBar(
+        content: Text(added ? '已收藏' : '已取消收藏'),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () async {
+            await repository.undo(added, summary);
+            ref.read(favoritesItemsProvider.notifier).reload();
+          },
+        ),
+      ),
     );
   }
 
@@ -125,7 +154,7 @@ class _AlbumContent extends ConsumerWidget {
     final progress = ref.watch(
       chapterProgressProvider((albumId: album.id, chapterId: primaryChapter.id)),
     );
-    final isFavorite = ref.watch(favoritesProvider).contains(album.id);
+    final isFavorite = ref.watch(favoriteIdsProvider).contains(album.id);
     final resumePage = progress == null || progress.page <= 1 ? 1 : progress.page;
     final ctaLabel = progress == null || progress.page <= 1
         ? '开始阅读'
@@ -155,7 +184,7 @@ class _AlbumContent extends ConsumerWidget {
                       ),
                       child: const SvgIcon(AppIcons.bookmark, size: 20),
                     ),
-                    onPressed: () => _toggleFavorite(context, ref),
+                    onPressed: () => _toggleFavorite(context, ref, album),
                   ),
                   IconButton(
                     tooltip: '分享',
