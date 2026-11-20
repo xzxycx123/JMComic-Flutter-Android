@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/di/providers.dart';
 import '../../../core/icons/app_icons.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/ui/app_toast.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/models/jm_comment.dart';
 import '../../../data/sources/jm_api_client.dart';
@@ -194,14 +195,13 @@ void sendCommentOptimistically(
   required CommentDraft draft,
   String? parentId,
 }) {
-  final messenger = ScaffoldMessenger.of(context);
-  messenger.showSnackBar(const SnackBar(content: Text('评论已发送')));
+  AppToast.show(context, '评论已发送');
   unawaited(
     ref
         .read(albumCommentsProvider(albumId).notifier)
         .post(draft.content, spoiler: draft.spoiler, parentId: parentId)
         .catchError((Object error) {
-      messenger.showSnackBar(SnackBar(content: Text('发送失败：$error')));
+      if (context.mounted) AppToast.show(context, '发送失败：$error');
       return '';
     }),
   );

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import '../../core/di/providers.dart';
 import '../../core/icons/app_icons.dart';
 import '../../core/icons/app_images.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/ui/app_toast.dart';
 import '../../core/theme/app_typography.dart';
 import '../../data/models/jm_album_detail.dart';
 import '../../data/models/jm_album_summary.dart';
@@ -99,15 +101,14 @@ class _AlbumContent extends ConsumerWidget {
   }
 
   Future<void> _download(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
     try {
       final record = await ref.read(downloadRepositoryProvider).enqueue(album.id);
-      messenger.showSnackBar(
-        SnackBar(content: Text('已加入队列：${record.displayTitle}')),
-      );
-      if (context.mounted) context.go('/download');
+      if (context.mounted) {
+        AppToast.show(context, '已加入队列：${record.displayTitle}');
+        context.go('/download');
+      }
     } catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text('加入队列失败：$error')));
+      if (context.mounted) AppToast.show(context, '加入队列失败：$error');
     }
   }
 
@@ -126,30 +127,25 @@ class _AlbumContent extends ConsumerWidget {
     final added = await repository.toggle(summary);
     ref.read(favoritesItemsProvider.notifier).reload();
     if (!context.mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    // 先清掉排队中的旧提示：连点收藏会排一串 SnackBar，看起来就像「已收藏」永远不消失。
-    messenger.clearSnackBars();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(added ? '已收藏' : '已取消收藏'),
-        duration: const Duration(seconds: 2),
-        action: SnackBarAction(
-          label: '撤销',
-          onPressed: () async {
-            await repository.undo(added, summary);
-            ref.read(favoritesItemsProvider.notifier).reload();
-          },
-        ),
-      ),
+    // 用自绘 toast：SnackBar 的自动消失依赖框架内部的 Timer，某些情况（无障碍模式、
+    // 路由切换、弹出层）计时器根本没启动，用户看到的就是一条永远挂着的黑条。
+    AppToast.show(
+      context,
+      added ? '已收藏' : '已取消收藏',
+      actionLabel: '撤销',
+      onAction: () {
+        unawaited(() async {
+          await repository.undo(added, summary);
+          ref.read(favoritesItemsProvider.notifier).reload();
+        }());
+      },
     );
   }
 
   Future<void> _share(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: 'https://18comic.vip/album/${album.id}/'));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('链接已复制')),
-    );
+    AppToast.show(context, '链接已复制');
   }
 
   @override
@@ -366,9 +362,8 @@ class _InteractionBar extends ConsumerWidget {
     WidgetRef ref,
     AlbumLikeState state,
   ) async {
-    final messenger = ScaffoldMessenger.of(context);
     if (state.liked) {
-      messenger.showSnackBar(const SnackBar(content: Text('你已经点过赞了')));
+      AppToast.show(context, '这本已经点过赞了');
       return;
     }
     if (!(ref.read(accountSessionProvider).valueOrNull?.isLoggedIn ?? false)) {
@@ -377,11 +372,11 @@ class _InteractionBar extends ConsumerWidget {
     }
     // 前台立刻成功（notifier 在第一个 await 之前就把状态改成已赞），网络在后台跑。
     final pending = ref.read(albumLikeProvider(album.id).notifier).like();
-    messenger.showSnackBar(const SnackBar(content: Text('已点赞')));
+    AppToast.show(context, '已点赞');
     final ok = await pending;
     if (!context.mounted || ok) return;
     final error = ref.read(albumLikeProvider(album.id)).error ?? '未知错误';
-    messenger.showSnackBar(SnackBar(content: Text('点赞失败：$error')));
+    AppToast.show(context, '点赞失败：$error');
   }
 
   Future<void> _comment(BuildContext context, WidgetRef ref) async {
