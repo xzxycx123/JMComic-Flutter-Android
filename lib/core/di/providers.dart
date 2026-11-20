@@ -20,6 +20,7 @@ import '../../data/sources/jm_api_client.dart';
 import '../../data/sources/jm_endpoint_resolver.dart';
 import '../../data/sources/jm_host_probe.dart';
 import '../../data/sources/jm_html_scraper.dart';
+import '../../data/sources/pdf_reader_channel.dart';
 import '../../data/models/user_session.dart';
 import '../../features/download/engine/notification_service.dart';
 import '../../features/download/engine/pdf_sink.dart';
@@ -188,6 +189,10 @@ final Provider<SessionRepository> sessionRepositoryProvider =
 
 final Provider<PdfSink> pdfSinkProvider =
     Provider<PdfSink>((ref) => FallbackPdfSink());
+
+/// 内置 PDF 阅读器（Android PdfRenderer 通道）。
+final Provider<PdfReader> pdfReaderProvider =
+    Provider<PdfReader>((ref) => PdfReaderChannel());
 
 final Provider<DownloadNotificationService> downloadNotificationProvider =
     Provider<DownloadNotificationService>(

@@ -340,10 +340,9 @@ class CommentTile extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (comment.spoiler) ...<Widget>[
-                      const SizedBox(width: 6),
-                      _Tag(text: '剧透', color: scheme.error),
-                    ],
+                    // 注意：`/forum` 的 `spoiler` 字段实测恒为 "1"（不是剧透标记，
+                    // 更像「已处理过剧透内容」的服务端状态位），所以这里不再按它打标签，
+                    // 否则每条评论都会挂一个「剧透」。
                     if (comment.pending) ...<Widget>[
                       const SizedBox(width: 6),
                       _Tag(text: '发送中', color: scheme.onSurfaceVariant),

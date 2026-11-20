@@ -58,7 +58,8 @@ void main() {
 
     expect(find.text('评论 3'), findsOneWidget);
     expect(find.text('第一条测试评论'), findsOneWidget);
-    expect(find.text('剧透'), findsOneWidget);
+    // 0.3.3：/forum.spoiler 实测恒为 "1"，不再当剧透标记渲染。
+    expect(find.text('剧透'), findsNothing);
   });
 
   testWidgets('未登录点「说点什么…」弹登录门槛，不发请求', (tester) async {

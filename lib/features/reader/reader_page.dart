@@ -153,8 +153,14 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   AlbumRepository? _repository;
   late ReaderMode _mode;
   late int _page;
+
+  /// 拖动进度条时的「预览页」：只改 HUD 显示，不写 [_page]。
+  ///
+  /// 之前直接把 `_page` 改掉，松手时 `_goToPage(value)` 发现目标页 == 当前页就直接
+  /// return，于是进度条拖完什么都没发生。
+  int? _dragPage;
   bool _hudVisible = true;
-  bool _zoomed = false;
+  bool _locked = false;
   bool _switchingLine = false;
   Timer? _hudTimer;
   DateTime _lastProgressWrite = DateTime.fromMillisecondsSinceEpoch(0);
@@ -250,7 +256,10 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
       }
       return;
     }
-    setState(() => _page = target);
+    setState(() {
+      _page = target;
+      _dragPage = null;
+    });
     _loader.setFocus(target);
     unawaited(_persistProgress(throttle: true));
     _restartHudTimer();
@@ -305,6 +314,9 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
       widget.data.args.chapterId,
       _page,
       _total,
+      // 阅读历史页直接用这里记下的标题，不再逐条请求详情。
+      albumTitle: widget.data.args.albumTitle,
+      chapterTitle: widget.data.title,
     );
   }
 
@@ -484,7 +496,8 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
             bottom: 0,
             child: ReaderHud(
               title: widget.data.title,
-              page: _page,
+              // 拖动进度条时显示预览页，松手才真正翻页。
+              page: _dragPage ?? _page,
               total: _total,
               mode: _mode,
               visible: _hudVisible,
@@ -493,9 +506,14 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
               onSwitchLine: _pickLine,
               onExit: _exit,
               onToggleMode: _toggleMode,
-              onJump: (page) => _goToPage(page),
+              onJump: (page) {
+                setState(() => _dragPage = null);
+                _goToPage(page);
+              },
               onSliderChanged: (value) {
-                setState(() => _page = value.round().clamp(1, _total).toInt());
+                setState(() {
+                  _dragPage = value.round().clamp(1, _total).toInt();
+                });
                 _restartHudTimer();
               },
             ),
@@ -509,7 +527,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
     if (_mode == ReaderMode.paged) {
       return ReaderTapZones(
         // 缩放中只关单击（防误翻页），双击仍可缩回 1.0。
-        enabled: !_zoomed,
+        enabled: !_locked,
         onDoubleTap: _toggleZoomCurrent,
         onPrevious: _previousPage,
         onNext: _nextPage,
@@ -518,16 +536,19 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
           controller: _pageController,
           total: _total,
           // 缩放中把横向拖动让给图片平移，否则会一边放大一边翻页。
-          physics: _zoomed ? const NeverScrollableScrollPhysics() : null,
+          physics: _locked ? const NeverScrollableScrollPhysics() : null,
           onPageChanged: (page) {
             if (page == _page) return;
-            setState(() => _page = page);
+            setState(() {
+              _page = page;
+              _dragPage = null;
+            });
             _loader.setFocus(page);
             unawaited(_persistProgress(throttle: true));
           },
           itemBuilder: (context, index) => _ZoomablePage(
             controller: _zoomControllerOf(index + 1),
-            onZoomChanged: _setZoomed,
+            onInteractionChanged: _setLocked,
             child: _pageContent(index + 1),
           ),
         ),
@@ -542,26 +563,30 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
         controller: _scrollController,
         total: _total,
         // 条漫模式同样支持双指缩放 / 双击放大；缩放时锁住纵向滚动。
-        physics: _zoomed ? const NeverScrollableScrollPhysics() : null,
+        physics: _locked ? const NeverScrollableScrollPhysics() : null,
         onPageChanged: (page) {
           if (page == _page) return;
-          setState(() => _page = page);
+          setState(() {
+            _page = page;
+            _dragPage = null;
+          });
           _loader.setFocus(page);
           unawaited(_persistProgress(throttle: true));
         },
         itemBuilder: (context, index) => _ZoomablePage(
           controller: _zoomControllerOf(index + 1),
-          onZoomChanged: _setZoomed,
+          onInteractionChanged: _setLocked,
           child: _pageContent(index + 1),
         ),
       ),
     );
   }
 
-  void _setZoomed(bool zoomed) {
-    if (_zoomed == zoomed) return;
-    setState(() => _zoomed = zoomed);
-    if (!zoomed) _restartHudTimer();
+  /// 单指未缩放时允许翻页；双指按下或已放大就锁住翻页/滚动，把拖动让给图片。
+  void _setLocked(bool locked) {
+    if (_locked == locked) return;
+    setState(() => _locked = locked);
+    if (!locked) _restartHudTimer();
   }
 
   /// 双击当前页：1.0 与 2.2 之间切换（居中放大）。
@@ -627,13 +652,15 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
 
 /// 单页缩放：双指捏合 1.0–4.0（双击由阅读器统一处理，避免和三分区争手势）。
 ///
-/// 控制器由外层持有：双击缩放要在「三分区」的中间区触发，控制器必须能跨层访问；
-/// 缩放状态通过 [onZoomChanged] 回传，用来禁用分区单击 / 翻页 / 纵向滚动。
+/// 控制器由外层持有：双击缩放要在「三分区」的中间区触发，控制器必须能跨层访问。
+/// 锁定状态（放大中 **或** 两根手指按下）通过 [onInteractionChanged] 回传：
+/// 后者是 0.3.3 修的「双指拖动」问题——之前只有放大后才锁翻页，双指刚落下时
+/// 横向拖动会先把页面翻走，看起来就是「双指拖动乱跑」。
 class _ZoomablePage extends StatefulWidget {
   const _ZoomablePage({
     required this.controller,
     required this.child,
-    required this.onZoomChanged,
+    required this.onInteractionChanged,
   });
 
   static const double doubleTapScale = 2.2;
@@ -641,7 +668,7 @@ class _ZoomablePage extends StatefulWidget {
 
   final TransformationController controller;
   final Widget child;
-  final ValueChanged<bool> onZoomChanged;
+  final ValueChanged<bool> onInteractionChanged;
 
   @override
   State<_ZoomablePage> createState() => _ZoomablePageState();
@@ -649,6 +676,7 @@ class _ZoomablePage extends StatefulWidget {
 
 class _ZoomablePageState extends State<_ZoomablePage> {
   bool _zoomed = false;
+  int _pointers = 0;
 
   @override
   void initState() {
@@ -673,27 +701,46 @@ class _ZoomablePageState extends State<_ZoomablePage> {
 
   double get _scale => widget.controller.value.getMaxScaleOnAxis();
 
+  bool get _locked => _zoomed || _pointers >= 2;
+
+  void _report() => widget.onInteractionChanged(_locked);
+
   void _onTransformChanged() {
     final zoomed = _scale > 1.01;
     if (zoomed == _zoomed) return;
     setState(() => _zoomed = zoomed);
-    widget.onZoomChanged(zoomed);
+    _report();
+  }
+
+  void _onPointerDown(PointerDownEvent event) {
+    _pointers++;
+    if (_pointers >= 2) _report();
+  }
+
+  void _onPointerUp(PointerEvent event) {
+    if (_pointers > 0) _pointers--;
+    if (_pointers < 2) _report();
   }
 
   @override
   Widget build(BuildContext context) {
-    return InteractiveViewer(
-      transformationController: widget.controller,
-      minScale: 1,
-      maxScale: _ZoomablePage.maxScale,
-      // 未放大时不吃拖动，保证翻页手势优先。
-      panEnabled: _zoomed,
-      scaleEnabled: true,
-      onInteractionEnd: (_) {
-        // 缩回 1.0 附近就彻底归位，避免留下半个像素的偏移。
-        if (_scale <= 1.01) widget.controller.value = Matrix4.identity();
-      },
-      child: widget.child,
+    return Listener(
+      onPointerDown: _onPointerDown,
+      onPointerUp: _onPointerUp,
+      onPointerCancel: _onPointerUp,
+      child: InteractiveViewer(
+        transformationController: widget.controller,
+        minScale: 1,
+        maxScale: _ZoomablePage.maxScale,
+        // 未放大时不吃单指拖动，保证翻页手势优先；双指仍然可以捏合/平移。
+        panEnabled: _zoomed,
+        scaleEnabled: true,
+        onInteractionEnd: (_) {
+          // 缩回 1.0 附近就彻底归位，避免留下半个像素的偏移。
+          if (_scale <= 1.01) widget.controller.value = Matrix4.identity();
+        },
+        child: widget.child,
+      ),
     );
   }
 }

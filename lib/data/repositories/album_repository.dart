@@ -85,7 +85,14 @@ class AlbumRepository {
   ReaderProgress? readProgress(String albumId, String chapterId) =>
       _progress.read(albumId, chapterId);
 
-  Future<void> saveProgress(String albumId, String chapterId, int page, int total) {
+  Future<void> saveProgress(
+    String albumId,
+    String chapterId,
+    int page,
+    int total, {
+    String albumTitle = '',
+    String chapterTitle = '',
+  }) {
     return _progress.write(
       albumId,
       chapterId,
@@ -93,7 +100,17 @@ class AlbumRepository {
         page: page,
         total: total,
         updatedAt: DateTime.now().millisecondsSinceEpoch,
+        albumTitle: albumTitle,
+        chapterTitle: chapterTitle,
       ),
     );
   }
+
+  /// 阅读历史（按最近阅读倒序）。
+  List<ReadingHistoryEntry> readingHistory() => _progress.entries();
+
+  Future<void> removeHistory(String albumId, String chapterId) =>
+      _progress.remove(albumId, chapterId);
+
+  Future<void> clearHistory() => _progress.clear();
 }

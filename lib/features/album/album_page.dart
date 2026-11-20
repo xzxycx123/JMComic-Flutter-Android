@@ -126,9 +126,13 @@ class _AlbumContent extends ConsumerWidget {
     final added = await repository.toggle(summary);
     ref.read(favoritesItemsProvider.notifier).reload();
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    // 先清掉排队中的旧提示：连点收藏会排一串 SnackBar，看起来就像「已收藏」永远不消失。
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
       SnackBar(
         content: Text(added ? '已收藏' : '已取消收藏'),
+        duration: const Duration(seconds: 2),
         action: SnackBarAction(
           label: '撤销',
           onPressed: () async {

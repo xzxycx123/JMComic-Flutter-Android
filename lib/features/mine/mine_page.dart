@@ -97,6 +97,12 @@ class MinePage extends ConsumerWidget {
             const SectionHeader(title: '阅读'),
             _SettingTile(
               icon: AppIcons.bookOpen,
+              title: '阅读历史',
+              value: progressCount > 0 ? '$progressCount 条' : '暂无记录',
+              onTap: () => context.push('/read-history'),
+            ),
+            _SettingTile(
+              icon: AppIcons.bookOpen,
               title: '默认阅读模式',
               value: settings.defaultReaderMode == 'vertical' ? '上下滚动' : '左右翻页',
               onTap: () => _pickReaderMode(context, ref, settings.defaultReaderMode),

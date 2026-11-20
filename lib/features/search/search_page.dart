@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/constants/jm_constants.dart';
 import '../../core/icons/app_icons.dart';
 import '../../core/theme/app_typography.dart';
 import '../home/widgets/feed_skeleton.dart';
@@ -131,6 +132,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   return Column(
                     children: <Widget>[
                       ResultHeader(total: results.total, keyword: results.keyword),
+                      _SortBar(
+                        selected: results.order,
+                        onSelected: (order) => ref
+                            .read(searchControllerProvider.notifier)
+                            .setSort(order),
+                      ),
                       Expanded(
                         child: ResultGrid(
                           items: results.items,
@@ -150,6 +157,61 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 搜索结果排序条：时间 / 阅读数 / 人气 / 最新上架（服务端 `o` 参数）。
+class _SortBar extends StatelessWidget {
+  const _SortBar({required this.selected, required this.onSelected});
+
+  final AlbumOrder selected;
+  final ValueChanged<AlbumOrder> onSelected;
+
+  static const Map<AlbumOrder, String> _labels = <AlbumOrder, String>{
+    AlbumOrder.latestUpdate: '最新更新',
+    AlbumOrder.mostViewed: '阅读数',
+    AlbumOrder.popular: '人气',
+    AlbumOrder.newest: '最新上架',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
+        itemCount: kSearchSorts.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final order = kSearchSorts[index];
+          final active = order == selected;
+          return GestureDetector(
+            onTap: () => onSelected(order),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: active ? scheme.primaryContainer : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: active ? Colors.transparent : scheme.outlineVariant,
+                ),
+              ),
+              child: Text(
+                _labels[order] ?? order.label,
+                style: AppTypography.micro.copyWith(
+                  color: active ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

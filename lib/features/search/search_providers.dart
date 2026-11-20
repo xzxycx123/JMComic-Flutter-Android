@@ -2,9 +2,22 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/constants/jm_constants.dart';
 import '../../core/di/providers.dart';
 import '../../data/models/jm_album_summary.dart';
 import '../../data/repositories/search_repository.dart';
+
+/// 搜索排序（服务端 `o` 参数，实测各值都会改变结果顺序）：
+/// 时间 = `mr`、阅读数 = `mv`、人气 = `mp`、最新上架 = `md`。
+const List<AlbumOrder> kSearchSorts = <AlbumOrder>[
+  AlbumOrder.latestUpdate,
+  AlbumOrder.mostViewed,
+  AlbumOrder.popular,
+  AlbumOrder.newest,
+];
+
+final StateProvider<AlbumOrder> searchSortProvider =
+    StateProvider<AlbumOrder>((ref) => AlbumOrder.latestUpdate);
 
 /// 搜索结果状态（首页 + 分页合并）。
 class SearchResults {
@@ -14,6 +27,7 @@ class SearchResults {
     required this.total,
     this.page = 1,
     this.loadingMore = false,
+    this.order = AlbumOrder.latestUpdate,
     this.error,
   });
 
@@ -22,6 +36,9 @@ class SearchResults {
   final int total;
   final int page;
   final bool loadingMore;
+
+  /// 当前排序（切换排序会重新从第 1 页拉）。
+  final AlbumOrder order;
   final String? error;
 
   bool get isEmpty => items.isEmpty;
@@ -31,6 +48,7 @@ class SearchResults {
     int? total,
     int? page,
     bool? loadingMore,
+    AlbumOrder? order,
     String? error,
     bool clearError = false,
   }) =>
@@ -40,6 +58,7 @@ class SearchResults {
         total: total ?? this.total,
         page: page ?? this.page,
         loadingMore: loadingMore ?? this.loadingMore,
+        order: order ?? this.order,
         error: clearError ? null : (error ?? this.error),
       );
 }
@@ -68,25 +87,36 @@ class SearchController extends AsyncNotifier<SearchResults?> {
   @override
   Future<SearchResults?> build() async => null;
 
-  Future<void> search(String keyword) async {
+  Future<void> search(String keyword, {AlbumOrder? order}) async {
     final value = keyword.trim();
     if (value.isEmpty) {
       state = const AsyncValue<SearchResults?>.data(null);
       return;
     }
+    final AlbumOrder sort = order ?? ref.read(searchSortProvider);
     state = const AsyncValue<SearchResults?>.loading();
     state = await AsyncValue.guard(() async {
       final repository = await ref.read(searchRepositoryProvider.future);
       await repository.remember(value);
       unawaited(ref.read(searchHistoryProvider.notifier).push(value));
-      final page = await repository.search(keyword: value, page: 1);
+      final page = await repository.search(keyword: value, page: 1, order: sort);
       return SearchResults(
         keyword: value,
         items: page.content,
         total: page.total,
         page: 1,
+        order: sort,
       );
     });
+  }
+
+  /// 切换排序：有结果时立刻按新顺序重拉第 1 页。
+  Future<void> setSort(AlbumOrder order) async {
+    if (ref.read(searchSortProvider) == order) return;
+    ref.read(searchSortProvider.notifier).state = order;
+    final current = state.valueOrNull;
+    if (current == null) return;
+    await search(current.keyword, order: order);
   }
 
   Future<void> loadMore() async {
@@ -97,7 +127,11 @@ class SearchController extends AsyncNotifier<SearchResults?> {
     state = AsyncValue<SearchResults?>.data(current.copyWith(loadingMore: true, clearError: true));
     try {
       final repository = await ref.read(searchRepositoryProvider.future);
-      final next = await repository.search(keyword: current.keyword, page: current.page + 1);
+      final next = await repository.search(
+        keyword: current.keyword,
+        page: current.page + 1,
+        order: current.order,
+      );
       final merged = <JmAlbumSummary>[...current.items];
       final seen = merged.map((item) => item.id).toSet();
       for (final item in next.content) {

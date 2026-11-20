@@ -9,7 +9,9 @@ import '../../features/download/history_page.dart';
 import '../../features/home/home_page.dart';
 import '../../features/mine/about_page.dart';
 import '../../features/mine/mine_page.dart';
+import '../../features/mine/read_history_page.dart';
 import '../../features/mine/settings_page.dart';
+import '../../features/pdf/pdf_viewer_page.dart';
 import '../../features/reader/reader_mode.dart';
 import '../../features/reader/reader_page.dart';
 import '../../features/search/search_page.dart';
@@ -61,6 +63,16 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/history',
         builder: (context, state) => const HistoryPage(),
+      ),
+      GoRoute(
+        path: '/read-history',
+        builder: (context, state) => const ReadHistoryPage(),
+      ),
+      GoRoute(
+        path: '/pdf',
+        builder: (context, state) => PdfViewerPage(
+          args: PdfViewerArgs.fromQuery(state.uri.queryParameters),
+        ),
       ),
       GoRoute(
         path: '/collect',

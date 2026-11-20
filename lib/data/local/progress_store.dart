@@ -9,25 +9,77 @@ class ReaderProgress {
     required this.page,
     required this.total,
     required this.updatedAt,
+    this.albumTitle = '',
+    this.chapterTitle = '',
   });
 
   final int page;
   final int total;
   final int updatedAt;
 
+  /// 阅读器写入时顺手记下标题，阅读历史页不用再逐条请求详情。
+  final String albumTitle;
+  final String chapterTitle;
+
   double get ratio => total <= 0 ? 0 : (page.clamp(1, total)) / total;
+
+  int get percent => (ratio * 100).round();
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'page': page,
         'total': total,
         'updatedAt': updatedAt,
+        if (albumTitle.isNotEmpty) 'albumTitle': albumTitle,
+        if (chapterTitle.isNotEmpty) 'chapterTitle': chapterTitle,
       };
 
   factory ReaderProgress.fromJson(Map<String, dynamic> json) => ReaderProgress(
         page: asInt(json['page'], 1),
         total: asInt(json['total']),
         updatedAt: asInt(json['updatedAt']),
+        albumTitle: asStringOr(json['albumTitle'], ''),
+        chapterTitle: asStringOr(json['chapterTitle'], ''),
       );
+}
+
+/// 一条阅读历史（进度记录 + 从 key 里还原的专辑/章节 id）。
+class ReadingHistoryEntry {
+  const ReadingHistoryEntry({
+    required this.albumId,
+    required this.chapterId,
+    required this.progress,
+  });
+
+  final String albumId;
+  final String chapterId;
+  final ReaderProgress progress;
+
+  String get displayTitle =>
+      progress.albumTitle.trim().isEmpty ? 'JM$albumId' : progress.albumTitle.trim();
+
+  String get subtitle {
+    final chapter = progress.chapterTitle.trim();
+    if (chapter.isEmpty) return '第 ${progress.page}/${progress.total} 页';
+    return '$chapter · 第 ${progress.page}/${progress.total} 页';
+  }
+
+  String get displayTime => formatHistoryTime(progress.updatedAt);
+}
+
+/// 历史时间：今天只给 HH:mm，今年给 MM-DD HH:mm，更早给 YYYY-MM-DD。
+String formatHistoryTime(int timestamp) {
+  if (timestamp <= 0) return '';
+  final time = DateTime.fromMillisecondsSinceEpoch(timestamp);
+  final now = DateTime.now();
+  final minute = time.minute.toString().padLeft(2, '0');
+  final hour = time.hour.toString().padLeft(2, '0');
+  final month = time.month.toString().padLeft(2, '0');
+  final day = time.day.toString().padLeft(2, '0');
+  if (time.year == now.year && time.month == now.month && time.day == now.day) {
+    return '$hour:$minute';
+  }
+  if (time.year == now.year) return '$month-$day $hour:$minute';
+  return '${time.year}-$month-$day';
 }
 
 class ProgressStore {
@@ -55,6 +107,29 @@ class ProgressStore {
 
   /// 阅读历史条数（我的页统计）。
   int get historyCount => _box.keys.length;
+
+  /// 全部阅读进度，按最近阅读时间倒序（阅读历史页用）。
+  List<ReadingHistoryEntry> entries() {
+    final result = <ReadingHistoryEntry>[];
+    for (final key in _box.keys) {
+      final name = '$key';
+      final parts = name.split(':');
+      if (parts.length != 3 || parts.first != 'progress') continue;
+      final raw = _box.get(key);
+      if (raw is! Map) continue;
+      result.add(
+        ReadingHistoryEntry(
+          albumId: parts[1],
+          chapterId: parts[2],
+          progress: ReaderProgress.fromJson(
+            raw.map((mapKey, value) => MapEntry('$mapKey', value)),
+          ),
+        ),
+      );
+    }
+    result.sort((a, b) => b.progress.updatedAt.compareTo(a.progress.updatedAt));
+    return result;
+  }
 
   Future<void> clear() => _box.clear();
 }
@@ -87,6 +162,5 @@ class SearchHistoryStore {
   Future<void> clear() => _box.delete(_key);
 }
 
-/// 本地收藏（v1 只存 id，不接登录接口）。
 /// 统一取 box 的小工具（冷启动时必须已 [HiveInit.initialize]）。
 Box<dynamic> appBox(String name) => Hive.box<dynamic>(name);

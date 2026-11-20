@@ -74,6 +74,15 @@ class DownloadRecord {
 
   bool get isOpenable => state == DownloadState.succeeded && (pdfUri != null || pdfPath != null);
 
+  /// 内置 PDF 阅读器用的 URI（优先 content://，其次 file://）。
+  String? get openUri {
+    final uri = pdfUri?.trim();
+    if (uri != null && uri.isNotEmpty) return uri;
+    final path = pdfPath?.trim();
+    if (path != null && path.isNotEmpty) return Uri.file(path).toString();
+    return null;
+  }
+
   String get displayTitle => title.trim().isEmpty ? 'JM$albumId' : title.trim();
 
   Duration? get elapsed => (createdAt <= 0 || updatedAt <= 0)

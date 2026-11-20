@@ -9,6 +9,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/utils/jm_id_parser.dart';
 import '../../data/models/download_record.dart';
 import '../home/widgets/feed_skeleton.dart';
+import '../pdf/pdf_viewer_page.dart';
 import 'download_providers.dart';
 import 'widgets/download_input.dart';
 import 'widgets/task_card.dart';
@@ -158,14 +159,7 @@ class _DownloadPageState extends ConsumerState<DownloadPage> {
                         final record = records[index];
                         return TaskCard(
                           record: record,
-                          onOpen: () async {
-                            final opened = await repository.open(record);
-                            if (!opened && context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('打开失败，请到文件管理器查看')),
-                              );
-                            }
-                          },
+                          onOpen: () => _openPdf(context, record),
                           onCancel: () => repository.cancel(record.workId),
                           onRetry: () => repository.retry(record.workId),
                           onRemove: () => repository.remove(record.workId),
@@ -177,6 +171,18 @@ class _DownloadPageState extends ConsumerState<DownloadPage> {
         ),
       ),
     );
+  }
+
+  /// 打开本地 PDF：优先用内置阅读器（PdfRenderer），打不开再退回系统应用。
+  void _openPdf(BuildContext context, DownloadRecord record) {
+    final uri = record.openUri;
+    if (uri == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('这个任务还没有生成 PDF 文件')),
+      );
+      return;
+    }
+    context.push(PdfViewerArgs(uri: uri, title: record.displayTitle).route);
   }
 
   Future<void> _clearFinished() async {

@@ -737,6 +737,7 @@ abstract final class AppColors {
 | 实时提示 | 输入时下方一行小字：`识别为车号 JM350234 · 回车直达详情` / `关键词 · 回车搜索`（本地判定，不请求） |
 | 历史 | 最多 10 条 chip，点击回填并立即搜索；右「清空」；存 Hive |
 | 结果头 | `共 N 条 · “关键词”`，右侧 `grid.svg` / `list.svg` 切视图 |
+| **排序条（0.3.3）** | 结果头下方一行 chips：`mr` 最新更新 / `mv` 阅读数 / `mp` 人气 / `md` 最新上架（实测四种顺序结果不同）；切换即回第 1 页重拉，`loadMore` 沿用当前排序 |
 | 结果网格 | 复用 `AlbumCard`，双列；翻页同首页（`/search` 每页 80，触底加载） |
 | 空结果 | `empty-search.svg` + 「没有找到相关本子」+ 「换个关键词」按钮 |
 
@@ -778,6 +779,8 @@ abstract final class AppColors {
 - 中区 → 切换 HUD；HUD 显示后 3s 无操作自动隐藏（翻页、拖进度条都重置计时）。
 - 分区用 `GestureDetector(behavior: HitTestBehavior.opaque)` 叠在图片层上；**双指缩放时禁用分区点击**（`InteractiveViewer.onInteractionStart` 置 `zoomed=true`，缩回 1.0 才恢复），否则拖动会误翻页。
 - **双指缩放（0.3.0 起两种模式都支持）**：每页包一层 `InteractiveViewer(minScale: 1, maxScale: 4)`，缩放中把 `PageView` / 纵向 `ListView` 的 `physics` 切成 `NeverScrollableScrollPhysics`，把拖动让给图片平移；双击任意位置 1.0 ↔ 2.2（以双击点为中心）；缩回 1.0 附近自动 `Matrix4.identity()` 归位。
+- **双指按下即锁（0.3.3 修）**：只用「已放大」当锁会漏掉「双指刚落下」的瞬间，横向拖动会先把页面翻走。现在每页用 `Listener` 数手指，`≥2` 根时就上报锁定，翻页/滚动立刻禁用；抬手后恢复。
+- **进度条拖动（0.3.3 修）**：拖动只更新 HUD 的「预览页」（`_dragPage`），松手才 `_goToPage(preview)`。之前拖动直接改 `_page`，松手时目标页 == 当前页被早退，表现为「拖了没反应」。
 - **翻页动画开关必须生效**：设置里的 `pageTurnAnimation` 为 false 时 `_goToPage` 走 `jumpToPage`（瞬切），为 true 才 `animateToPage(240ms, easeOutCubic)`；HUD 进度条跳页同样遵循该开关。
 - 双击任意位置：1.0 ↔ 2.2 缩放切换。
 - 与手势并存：左滑 = 下一页、右滑 = 上一页（`onHorizontalDragEnd`，阈值 40px）。
@@ -862,6 +865,22 @@ abstract final class AppColors {
 - **正文清洗（0.3.1）**：评论 `content` / `nickname` 是富文本，解析时统一过 `JmComment.cleanText()`（块级标签补换行、`<br>` 转换行、`&nbsp;/&lt;` 实体解码、压缩空行），列表里永不出现 `<div></div>`。
 - **不做**：评论点赞、删评论、举报、通知未读数 —— 接口未验证，宁缺不猜。
 - **限流**：评论与点赞都是用户手动触发，不做自动重试；失败只提示，避免重复发帖。
+
+### 7.12 阅读历史（0.3.3）
+
+- **账本**：复用 `jm_reader_progress`，key 仍是 `progress:{albumId}:{chapterId}`；记录新增 `albumTitle` / `chapterTitle`（旧记录缺字段回落成 `JM<车号>`，无需迁移）。
+- **页面**：我的 → 阅读 → 阅读历史（`/read-history`）；按 `updatedAt` 倒序，每行「封面 + 标题 + 章节 + 进度条 + 百分比 + 时间」；点击续读（带 `page` 进阅读器），长按删单条，右上角清空。
+- **写入**：阅读器 `_persistProgress` 写 page/total/updatedAt 时顺带写标题，历史页不再逐条请求 `/album`。
+- **校验**：`ProgressStore.entries()` 只认 `progress:*` 三段式 key，其它键忽略。
+
+### 7.13 内置 PDF 阅读器（0.3.3）
+
+- **目标**：下载好的 PDF 在 App 内直接读，不弹外部阅读器、不引第三方 PDF 插件（省 APK 体积与授权问题）。
+- **原生**：`MainActivity` 新增 MethodChannel `jm_comic/pdf_reader`（`open` / `render` / `close`），用 Android `PdfRenderer`；`content://` 走 `ContentResolver.openFileDescriptor`，`file://` 走 `ParcelFileDescriptor.open`；渲染在单线程 Executor，结果回主线程。
+- **渲染**：按目标宽度（屏宽 × DPR，夹在 720–1600）等比缩放，白色底（PDF 透明底在深色 UI 会发黑），PNG 90 压缩回传。
+- **Dart**：`PdfReaderChannel` + `pdfReaderProvider`；`PdfViewerPage`（`/pdf?uri=&title=`）复用漫画阅读器的 `PageTurnView` / `ScrollReaderView` / `ReaderTapZones` / `ReaderHud`，实现左右翻页 / 上下滚动、双指缩放（含双指锁翻页）、HUD 进度条、页缓存 LRU 12 页、前后预取 2 页。
+- **阅读模式入口（用户要求）**：HUD 右侧显示当前模式名，点它（或顶栏模式图标）弹出「阅读模式」面板（左右翻页 / 上下滚动），切换保持当前页比例。
+- **兜底**：打不开时给「重试 / 用其它应用打开」；退出页面调用 `close()` 释放原生句柄。
 
 ---
 

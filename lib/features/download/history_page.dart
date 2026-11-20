@@ -8,6 +8,7 @@ import '../../core/icons/app_images.dart';
 import '../../core/theme/app_typography.dart';
 import '../../data/models/download_record.dart';
 import '../home/widgets/feed_skeleton.dart';
+import '../pdf/pdf_viewer_page.dart';
 import 'download_providers.dart';
 import 'widgets/task_card.dart';
 
@@ -121,13 +122,15 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                       final record = records[index];
                       return TaskCard(
                         record: record,
-                        onOpen: () async {
-                          final opened = await repository.open(record);
-                          if (!opened && context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('打开失败，请到文件管理器查看')),
-                            );
-                          }
+                        onOpen: () {
+                          final uri = record.openUri;
+                          if (uri == null) return;
+                          context.push(
+                            PdfViewerArgs(
+                              uri: uri,
+                              title: record.displayTitle,
+                            ).route,
+                          );
                         },
                         onCancel: () => repository.cancel(record.workId),
                         onRetry: () => repository.retry(record.workId),
