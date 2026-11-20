@@ -1,6 +1,6 @@
 # JMComic 0.3.3 发布说明
 
-> 版本：`0.3.3+7` · 平台：Android 8.0+（minSdk 29） · 产物：`dist/JMComic-0.3.3-release.apk`（68,412,213 B / 65.2 MB，SHA-256 `2d6f0126edcd723bb846bbf2baba52be94c7d223bcac77a18b1dbe445d3f1644`）
+> 版本：`0.3.3+7` · 平台：Android 8.0+（minSdk 29） · 产物：`dist/JMComic-0.3.3-release.apk`（68,412,213 B / 65.2 MB，SHA-256 `d595375023d30df1898d3cc32071476e35fe5ab9cc25805033af13e9d6d40620`）
 > 上一版：`0.3.2+6`
 
 ## 修复

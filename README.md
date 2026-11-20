@@ -33,16 +33,13 @@
 
 ## 截图
 
-**实机截图**原图见 [`ref img/`](<ref img/>)。
+**0.3.3 实机截图**（Android 14），原图见 [`ref img/`](<ref img/>)。
 
-| 首页 | 搜索 |
-|---|---|
-| ![](<ref img/Screenshot_20261115_145850.jpg>) | ![](<ref img/Screenshot_20261115_150122.jpg>) |
-| **详情** | **我的** |
-| ![](<ref img/Screenshot_20261115_150147.jpg>) | ![](<ref img/Screenshot_20261115_150025.jpg>) |
+| 搜索（排序：最新更新 / 阅读数 / 人气 / 最新上架） | 详情（统计 / 评论区 / 相关推荐） | 阅读器（HUD 进度条） |
+|---|---|---|
+| ![](<ref img/SnowShot_2026-11-20_21-43-06.png>) | ![](<ref img/SnowShot_2026-11-20_21-44-46.png>) | ![](<ref img/SnowShot_2026-11-20_21-47-36.png>) |
 
-> 截图取自 0.2.x 实机；0.3.x 新增的**五角星收藏、点赞、评论区、自动同步、阅读历史、内置 PDF 阅读器**见
-> [`docs/INTERACTION.md`](docs/INTERACTION.md) 与 [`docs/RELEASE_NOTES_0.3.3.md`](docs/RELEASE_NOTES_0.3.3.md)。
+> 文字说明见 [`docs/INTERACTION.md`](docs/INTERACTION.md)，本版变更见 [`docs/RELEASE_NOTES_0.3.3.md`](docs/RELEASE_NOTES_0.3.3.md)。
 
 ---
 
