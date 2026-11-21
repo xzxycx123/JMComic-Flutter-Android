@@ -310,6 +310,7 @@ class _AlbumContent extends ConsumerWidget {
                 Expanded(
                   child: AppButton(
                     height: 48,
+                    cornerRadius: 18,
                     onPressed: () =>
                         _openReader(context, primaryChapter, page: resumePage),
                     leadingIcon: const SvgIcon(AppIcons.play, size: 18),
@@ -321,6 +322,7 @@ class _AlbumContent extends ConsumerWidget {
                   width: 108,
                   child: AppButton.secondary(
                     height: 48,
+                    cornerRadius: 18,
                     onPressed: () => _download(context, ref),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,

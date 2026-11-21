@@ -280,7 +280,10 @@ class AppButton extends StatelessWidget {
               child: IconTheme.merge(
                 data: IconThemeData(color: ink),
                 child: DefaultTextStyle.merge(
-                  style: AppTypography.bodyStrong.copyWith(color: ink),
+                  style: AppTypography.bodyStrong.copyWith(
+                    color: ink,
+                    decoration: TextDecoration.none,
+                  ),
                   child: contents,
                 ),
               ),

@@ -33,6 +33,7 @@ class SectionHeader extends StatelessWidget {
           ),
           if (onMore != null)
             AppButton.text(
+              cornerRadius: 18,
               onPressed: onMore,
               style: TextButton.styleFrom(
                 foregroundColor: scheme.onSurfaceVariant,

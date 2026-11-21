@@ -117,6 +117,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
               child: AppButton.secondary(
+                cornerRadius: 18,
                 onPressed: () => setState(() => _expanded = true),
                 child: Text(
                   '查看全部 ${state.total > 0 ? state.total : state.items.length} 条评论',
@@ -127,6 +128,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
               child: AppButton.secondary(
+                cornerRadius: 18,
                 onPressed: () => ref
                     .read(albumCommentsProvider(widget.albumId).notifier)
                     .loadMore(),
