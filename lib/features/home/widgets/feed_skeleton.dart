@@ -77,6 +77,9 @@ class _ShimmerBoxState extends State<ShimmerBox>
 }
 
 /// 首页首屏骨架：轮播 1 + 横滑 1 + 网格 6（PLAN §7.0）。
+///
+/// 骨架的横排固定宽度在 375~400dp 的窄屏上比可用宽度更宽，统一套横向
+/// [SingleChildScrollView]（不可滚）做裁剪，避免出现黄黑条溢出。
 class FeedSkeleton extends StatelessWidget {
   const FeedSkeleton({super.key});
 
@@ -88,7 +91,7 @@ class FeedSkeleton extends StatelessWidget {
       children: const <Widget>[
         ShimmerBox(height: 180, radius: AppColors.radiusCover),
         SizedBox(height: 20),
-        Row(
+        _SkeletonRow(
           children: <Widget>[
             ShimmerBox(width: 140, height: 30, radius: AppColors.radiusPill),
             SizedBox(width: 10),
@@ -100,7 +103,7 @@ class FeedSkeleton extends StatelessWidget {
         SizedBox(height: 22),
         ShimmerBox(width: 120, height: 18),
         SizedBox(height: 12),
-        Row(
+        _SkeletonRow(
           children: <Widget>[
             ShimmerBox(width: 148, height: 196),
             SizedBox(width: 12),
@@ -112,7 +115,7 @@ class FeedSkeleton extends StatelessWidget {
         SizedBox(height: 26),
         ShimmerBox(width: 120, height: 18),
         SizedBox(height: 12),
-        Row(
+        _SkeletonRow(
           children: <Widget>[
             ShimmerBox(width: 170, height: 240),
             SizedBox(width: 12),
@@ -120,6 +123,23 @@ class FeedSkeleton extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// 固定宽度的骨架横排：超出可视宽度时裁掉，不参与滚动。
+class _SkeletonRow extends StatelessWidget {
+  const _SkeletonRow({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const NeverScrollableScrollPhysics(),
+      clipBehavior: Clip.hardEdge,
+      child: Row(mainAxisSize: MainAxisSize.min, children: children),
     );
   }
 }
@@ -211,7 +231,11 @@ class EmptyState extends StatelessWidget {
             ],
             if (actionLabel != null && onAction != null) ...<Widget>[
               SizedBox(height: compact ? 10 : 20),
-              AppButton(onPressed: onAction, label: actionLabel!),
+              AppButton(
+                onPressed: onAction,
+                label: actionLabel!,
+                cornerRadius: AppColors.radiusPill,
+              ),
             ],
           ],
         );

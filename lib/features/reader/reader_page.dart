@@ -16,6 +16,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/ui/app_toast.dart';
 import '../../core/ui/glass/app_glass.dart';
 import '../../data/local/endpoint_store.dart';
+import '../../data/local/progress_store.dart';
 import '../../data/local/settings_store.dart';
 import '../../data/repositories/album_repository.dart';
 import 'reader_mode.dart';
@@ -156,6 +157,9 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   );
 
   late final ReaderPageLoader _loader;
+
+  /// 进度落盘器（串行化 + 最后一次写入优先）。initState 里取好，dispose 也能直接用。
+  late final ProgressRecorder _recorder;
   AlbumRepository? _repository;
   late ReaderMode _mode;
   late int _page;
@@ -184,6 +188,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
     super.initState();
     _mode = widget.data.mode;
     _page = widget.data.initialPage;
+    _recorder = ref.read(readerProgressRecorderProvider);
     _pageController = PageController(initialPage: _page - 1);
     _scrollController = ScrollController();
     _loader = ReaderPageLoader(
@@ -214,7 +219,10 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
       controller.dispose();
     }
     _pageZoom.clear();
+    // 任何退出路径（HUD / 系统返回 / 侧滑手势 / 路由被替换）都在这里兜一次：
+    // 同步取快照入队，再尽力 flush 落盘，不依赖 widget 树还活着。
     unawaited(_persistProgress());
+    unawaited(_recorder.flush());
     unawaited(_applySystemUi(false));
     super.dispose();
   }
@@ -255,7 +263,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   // ---------------------------------------------------------------- 翻页
   /// [animate] 为 null 时按设置里的「翻页动画」开关决定：关掉就是瞬切。
   void _goToPage(int page, {bool? animate, bool bounceAtEdge = true}) {
-    final target = page.clamp(1, _total == 0 ? 1 : _total).toInt();
+    final target = clampReaderPage(page, _total);
     if (target == _page) {
       if (bounceAtEdge && (target <= 1 || target >= _total)) {
         _bounceController.forward(from: 0);
@@ -313,24 +321,37 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
     _goToPage(_page + 1);
   }
 
+  /// 当前阅读位置的快照：同步取值，不依赖 widget 树 / 仓储是否就绪。
+  ///
+  /// `total == 0`（空章节，没有任何可读页）时返回 null：不写脏进度。
+  ProgressSnapshot? _progressSnapshot() {
+    final total = _total;
+    if (total <= 0) return null;
+    return ProgressSnapshot(
+      albumId: widget.data.args.albumId,
+      chapterId: widget.data.args.chapterId,
+      page: clampReaderPage(_page, total),
+      total: total,
+      // 阅读历史页直接用这里记下的标题，不再逐条请求详情。
+      albumTitle: widget.data.args.albumTitle,
+      chapterTitle: widget.data.title,
+    );
+  }
+
+  /// 落盘当前进度。
+  ///
+  /// 不再走 `_repository`（仓储还没初始化的退出路径会把进度直接丢掉）：
+  /// 直接交给 [ProgressRecorder]，由它串行化 + 最后一次写入优先地写进 ProgressStore。
   Future<void> _persistProgress({bool throttle = false}) async {
-    final repository = _repository;
-    if (repository == null) return;
+    final snapshot = _progressSnapshot();
+    if (snapshot == null) return;
     if (throttle &&
         DateTime.now().difference(_lastProgressWrite) <
             AppConfig.progressWriteThrottle) {
       return;
     }
     _lastProgressWrite = DateTime.now();
-    await repository.saveProgress(
-      widget.data.args.albumId,
-      widget.data.args.chapterId,
-      _page,
-      _total,
-      // 阅读历史页直接用这里记下的标题，不再逐条请求详情。
-      albumTitle: widget.data.args.albumTitle,
-      chapterTitle: widget.data.title,
-    );
+    await _recorder.record(snapshot);
   }
 
   // ---------------------------------------------------------------- HUD
@@ -379,9 +400,18 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
     });
   }
 
-  void _exit() {
-    unawaited(_persistProgress());
+  /// HUD 退出：先把当前页落盘（尽量 await），再弹栈。
+  Future<void> _exit() async {
+    await _persistProgress();
+    await _recorder.flush();
+    if (!mounted) return;
     _safePop(context);
+  }
+
+  /// 系统返回 / 侧滑返回：先同步取快照入队，再尽力 flush。
+  void _handleSystemPop(bool didPop) {
+    unawaited(_persistProgress());
+    if (didPop) unawaited(_recorder.flush());
   }
 
   // ---------------------------------------------------------------- 分流
@@ -456,9 +486,11 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
         children: <Widget>[
           Padding(
             padding: EdgeInsets.fromLTRB(glass ? 16 : 20, 0, 20, 6),
-            child: Text('切换分流',
-                style: AppTypography.sectionTitle
-                    .copyWith(color: AppColors.readerInk),),
+            child: Text(
+              '切换分流',
+              style: AppTypography.sectionTitle
+                  .copyWith(color: AppColors.readerInk),
+            ),
           ),
           if (!glass)
             Padding(
@@ -466,7 +498,8 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
               child: Text(
                 'JMComic 常用 4 条分流（线路1-4）；切换后重新拉 /setting 取该线路图床，并按当前页重载',
                 style: AppTypography.micro.copyWith(
-                    color: AppColors.readerInk.withValues(alpha: .65),),
+                  color: AppColors.readerInk.withValues(alpha: .65),
+                ),
               ),
             ),
           for (final host in hosts)
@@ -516,6 +549,9 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
 
     return PopScope(
       canPop: true,
+      // 系统返回键 / 侧滑手势：didPop 时弹栈已开始，这里同步取快照入队并 flush，
+      // 不依赖 HUD 退出按钮（dispose 还会再兜一次）。
+      onPopInvokedWithResult: (didPop, result) => _handleSystemPop(didPop),
       child: Stack(
         children: <Widget>[
           Positioned.fill(
@@ -545,7 +581,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
                 _hudPickerOpen = open;
                 _restartHudTimer();
               },
-              onExit: _exit,
+              onExit: () => unawaited(_exit()),
               onToggleMode: _toggleMode,
               onJump: _commitHudSeek,
               onSliderCancel: () {
@@ -553,7 +589,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
               },
               onSliderChanged: (value) {
                 setState(() {
-                  _dragPage = value.round().clamp(1, _total).toInt();
+                  _dragPage = clampReaderPage(value.round(), _total);
                 });
                 _restartHudTimer();
               },

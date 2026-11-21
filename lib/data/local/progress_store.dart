@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:hive_ce/hive.dart';
 
 import '../models/json_field.dart';
@@ -91,6 +93,32 @@ class ProgressStore {
   static String keyFor(String albumId, String chapterId) =>
       'progress:$albumId:$chapterId';
 
+  /// 落盘版本号：每次 write / remove / clear 之后 +1。
+  ///
+  /// 普通 `Provider<ProgressStore>` 不会因为 Hive `put` 自动失效，
+  /// Riverpod 侧靠这个版本号让 `chapterProgressProvider` 之类的 Provider 重算。
+  int _revision = 0;
+  final List<void Function()> _listeners = <void Function()>[];
+
+  int get revision => _revision;
+
+  void addListener(void Function() listener) => _listeners.add(listener);
+
+  void removeListener(void Function() listener) => _listeners.remove(listener);
+
+  /// 手动广播一次「进度已变更」。
+  ///
+  /// 只有直接改 box（绕过 [write]）或测试替身才需要；正常写入会自动广播。
+  void notifyChanged() => _markChanged();
+
+  void _markChanged() {
+    _revision++;
+    // 复制一份再遍历：监听器里可能立刻反注册。
+    for (final listener in List<void Function()>.of(_listeners)) {
+      listener();
+    }
+  }
+
   ReaderProgress? read(String albumId, String chapterId) {
     final raw = _box.get(keyFor(albumId, chapterId));
     if (raw is! Map) return null;
@@ -104,10 +132,12 @@ class ProgressStore {
     ReaderProgress progress,
   ) async {
     await _box.put(keyFor(albumId, chapterId), progress.toJson());
+    _markChanged();
   }
 
   Future<void> remove(String albumId, String chapterId) async {
     await _box.delete(keyFor(albumId, chapterId));
+    _markChanged();
   }
 
   /// 阅读历史条数（我的页统计）。
@@ -136,7 +166,127 @@ class ProgressStore {
     return result;
   }
 
-  Future<void> clear() => _box.clear();
+  Future<void> clear() async {
+    await _box.clear();
+    _markChanged();
+  }
+}
+
+/// 一次阅读进度落盘快照：脱离 widget 树构造，dispose / 系统返回时也能直接取。
+class ProgressSnapshot {
+  const ProgressSnapshot({
+    required this.albumId,
+    required this.chapterId,
+    required this.page,
+    required this.total,
+    this.albumTitle = '',
+    this.chapterTitle = '',
+  });
+
+  final String albumId;
+  final String chapterId;
+  final int page;
+  final int total;
+  final String albumTitle;
+  final String chapterTitle;
+
+  /// 缺 album / chapter 的进度没有意义（写进去会污染阅读历史）。
+  bool get isEmpty => albumId.isEmpty || chapterId.isEmpty;
+
+  ReaderProgress toProgress(int updatedAt) => ReaderProgress(
+        page: page,
+        total: total,
+        updatedAt: updatedAt,
+        albumTitle: albumTitle,
+        chapterTitle: chapterTitle,
+      );
+}
+
+/// 阅读进度落盘器：**写入串行化 + 最后一次写入优先**。
+///
+/// 1. [record] 只把最新快照放进队列：尚未开始写的旧快照直接被覆盖，
+///    因此「旧页异步慢一步落地、把新页盖回去」不会发生；
+/// 2. 队列由唯一 worker 顺序消费，同一时刻最多一次 Hive `put`；
+/// 3. [record] 返回的 future 在「本次快照或更新的快照」真正落盘后完成；
+/// 4. [flush] 等队列清空，供 HUD 退出 / dispose 使用。
+class ProgressRecorder {
+  ProgressRecorder({
+    required ProgressStore store,
+    DateTime Function()? clock,
+  })  : _store = store,
+        _clock = clock ?? DateTime.now;
+
+  final ProgressStore _store;
+  final DateTime Function() _clock;
+
+  ProgressSnapshot? _queued;
+  final List<Completer<void>> _waiters = <Completer<void>>[];
+  Future<void>? _worker;
+  Object? _lastError;
+  int _writes = 0;
+
+  /// 实际落盘次数（被覆盖的快照不计），用于诊断与测试。
+  int get writes => _writes;
+
+  Object? get lastError => _lastError;
+
+  bool get idle => _worker == null;
+
+  Future<void> record(ProgressSnapshot snapshot) {
+    if (snapshot.isEmpty) return Future<void>.value();
+    _queued = snapshot;
+    final waiter = Completer<void>();
+    _waiters.add(waiter);
+    _schedule();
+    return waiter.future;
+  }
+
+  /// 等当前队列全部落盘（录制期间又来的快照也会一起写掉）。
+  Future<void> flush() async {
+    while (true) {
+      final worker = _worker;
+      if (worker == null) {
+        if (_queued == null) return;
+        _schedule();
+        continue;
+      }
+      await worker;
+      if (identical(worker, _worker)) return;
+    }
+  }
+
+  void _schedule() {
+    if (_worker != null) return;
+    _worker = _drain().whenComplete(() {
+      _worker = null;
+      // 兜底：worker 收尾瞬间进来的快照不能丢。
+      if (_queued != null) _schedule();
+    });
+  }
+
+  Future<void> _drain() async {
+    while (true) {
+      final snapshot = _queued;
+      if (snapshot == null) return;
+      _queued = null;
+      final waiters = List<Completer<void>>.of(_waiters);
+      _waiters.clear();
+      try {
+        await _store.write(
+          snapshot.albumId,
+          snapshot.chapterId,
+          snapshot.toProgress(_clock().millisecondsSinceEpoch),
+        );
+        _writes++;
+        _lastError = null;
+      } catch (error) {
+        _lastError = error;
+      }
+      for (final waiter in waiters) {
+        if (!waiter.isCompleted) waiter.complete();
+      }
+    }
+  }
 }
 
 class SearchHistoryStore {

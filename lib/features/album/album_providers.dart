@@ -15,11 +15,34 @@ final FutureProviderFamily<JmAlbumDetail, String> albumDetailProvider =
 });
 
 /// 章节阅读进度（详情页「继续阅读 · 第 12 页」）。
+///
+/// [progressStoreProvider] 只是普通 `Provider`：Hive `put` 不会让它失效。
+/// 这里额外 watch [progressRevisionProvider]，阅读器落盘后进度/provider 立刻重算。
 final ProviderFamily<ReaderProgress?, ({String albumId, String chapterId})>
     chapterProgressProvider =
     Provider.family<ReaderProgress?, ({String albumId, String chapterId})>(
-  (ref, args) => ref.watch(progressStoreProvider).read(args.albumId, args.chapterId),
+  (ref, args) {
+    ref.watch(progressRevisionProvider);
+    return ref.watch(progressStoreProvider).read(args.albumId, args.chapterId);
+  },
 );
+
+/// 阅读进度版本号：`ProgressStore` 每次落盘（write / remove / clear）+1。
+final NotifierProvider<ProgressRevisionNotifier, int> progressRevisionProvider =
+    NotifierProvider<ProgressRevisionNotifier, int>(
+  ProgressRevisionNotifier.new,
+);
+
+class ProgressRevisionNotifier extends Notifier<int> {
+  @override
+  int build() {
+    final store = ref.watch(progressStoreProvider);
+    void onChange() => state = store.revision;
+    store.addListener(onChange);
+    ref.onDispose(() => store.removeListener(onChange));
+    return store.revision;
+  }
+}
 
 // ---------------------------------------------------------------- 点赞
 /// 点赞状态：`liked` 取服务端 `/album.liked`，`likes` 是「喜歡」数。

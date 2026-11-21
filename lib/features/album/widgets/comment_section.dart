@@ -16,15 +16,27 @@ import '../../../data/sources/jm_api_client.dart';
 import '../../collect/collect_providers.dart';
 import '../../home/widgets/section_header.dart';
 import '../album_providers.dart';
+import '../comment_filter.dart';
 
 /// 详情页评论区：列表（先铺 5 条，按需展开）+「写评论」入口。
 ///
 /// 接口：`GET /forum?page&aid&mode=manhua`（未登录可读）。
+///
+/// 默认隐藏「emoji 数量 > [kAdEmojiThreshold]」的条目（顶层与 replies 都过滤），
+/// 只有用户展开评论、并滑到评论列表底部后，才给一个找回入口。
 class CommentSection extends ConsumerStatefulWidget {
-  const CommentSection({required this.albumId, super.key, this.totalHint = 0});
+  const CommentSection({
+    required this.albumId,
+    super.key,
+    this.totalHint = 0,
+    this.bottomReached = false,
+  });
 
   final String albumId;
   final int totalHint;
+
+  /// 外层 `CustomScrollView` 是否已经滑到列表底部（由详情页滚动通知驱动）。
+  final bool bottomReached;
 
   @override
   ConsumerState<CommentSection> createState() => _CommentSectionState();
@@ -33,12 +45,21 @@ class CommentSection extends ConsumerStatefulWidget {
 class _CommentSectionState extends ConsumerState<CommentSection> {
   bool _expanded = false;
 
+  /// 用户是否点了「显示可能存在广告的评论」。
+  bool _showHidden = false;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final async = ref.watch(albumCommentsProvider(widget.albumId));
     final state = async.valueOrNull;
     final total = (state?.total ?? 0) > 0 ? state!.total : widget.totalHint;
+    // 过滤只作用于展示：服务端列表与 total 原样保留。
+    final allItems = state?.items ?? const <JmComment>[];
+    final filter = CommentFilter(showHidden: _showHidden);
+    final hiddenCount = filter.hiddenCount(allItems);
+    final showHiddenButton =
+        _expanded && widget.bottomReached && hiddenCount > 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -101,11 +122,13 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
           )
         else ...<Widget>[
           ...() {
-            final items = _expanded ? state.items : state.preview;
+            final source = _expanded ? allItems : state.preview;
+            final items = filter.apply(source);
             final api = ref.watch(jmApiProvider);
             return items.map(
               (comment) => CommentTile(
                 comment: comment,
+                filter: filter,
                 resolveAvatar: (path) => _resolveAvatar(api, path),
                 imageHeaders: api.imageHeaders,
                 onReply: () =>
@@ -117,7 +140,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
               child: AppButton.secondary(
-                cornerRadius: 18,
+                cornerRadius: AppColors.radiusPill,
                 onPressed: () => setState(() => _expanded = true),
                 child: Text(
                   '查看全部 ${state.total > 0 ? state.total : state.items.length} 条评论',
@@ -128,12 +151,30 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
               child: AppButton.secondary(
-                cornerRadius: 18,
+                cornerRadius: AppColors.radiusPill,
                 onPressed: () => ref
                     .read(albumCommentsProvider(widget.albumId).notifier)
                     .loadMore(),
                 loading: state.loadingMore,
                 label: '加载更多评论',
+              ),
+            ),
+          if (showHiddenButton)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+              child: AppButton.secondary(
+                cornerRadius: AppColors.radiusPill,
+                height: 40,
+                semanticLabel: _showHidden
+                    ? '隐藏可能存在广告的评论（$hiddenCount 条）'
+                    : '显示可能存在广告的评论（$hiddenCount 条）',
+                onPressed: () => setState(() => _showHidden = !_showHidden),
+                leadingIcon: SvgIcon(
+                  _showHidden ? AppIcons.eyeOff : AppIcons.eye,
+                  size: 16,
+                  color: scheme.onSurface,
+                ),
+                label: _showHidden ? '隐藏可能存在广告的评论' : '显示可能存在广告的评论',
               ),
             ),
         ],
@@ -287,6 +328,7 @@ class CommentTile extends StatelessWidget {
     super.key,
     this.onReply,
     this.isReply = false,
+    this.filter = const CommentFilter(),
   });
 
   final JmComment comment;
@@ -294,6 +336,9 @@ class CommentTile extends StatelessWidget {
   final Map<String, String> imageHeaders;
   final VoidCallback? onReply;
   final bool isReply;
+
+  /// 回复列表同样按 emoji 规则过滤（这里只影响展示，不改原始对象）。
+  final CommentFilter filter;
 
   @override
   Widget build(BuildContext context) {
@@ -379,7 +424,7 @@ class CommentTile extends StatelessWidget {
                     ],
                   ],
                 ),
-                for (final reply in comment.replies.take(3))
+                for (final reply in filter.repliesOf(comment).take(3))
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: CommentTile(
@@ -387,6 +432,7 @@ class CommentTile extends StatelessWidget {
                       resolveAvatar: resolveAvatar,
                       imageHeaders: imageHeaders,
                       isReply: true,
+                      filter: filter,
                     ),
                   ),
               ],
@@ -589,6 +635,7 @@ class _ComposerSheetState extends ConsumerState<_ComposerSheet> {
               ),
               const SizedBox(width: 6),
               AppButton(
+                cornerRadius: AppColors.radiusPill,
                 onPressed: _controller.text.trim().isEmpty ? null : _submit,
                 label: '发送',
               ),

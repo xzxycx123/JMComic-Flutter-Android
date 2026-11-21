@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/icons/app_icons.dart';
 import '../../../core/icons/app_images.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -36,16 +37,35 @@ class AlbumCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isRail = layout == AlbumCardLayout.rail;
+    // 标签来自模型的 displayTags（已过滤空值 / N/A / 超长 / 重复，最多 2 个）。
+    //
+    // 调用方自带 caption（搜索结果卡在自己那行渲染标签 chips）时，封面不再重复
+    // 渲染同一批标签，避免同一张卡上出现两份相同文案。
+    final tags = caption == null ? album.displayTags : const <String>[];
     final cover = Stack(
       fit: StackFit.expand,
       children: <Widget>[
         CoverImage(albumId: album.id),
-        if (album.categoryTitle.isNotEmpty)
+        if (tags.isNotEmpty)
           Positioned(
             left: 8,
             top: 8,
-            child: _CategoryBadge(text: album.categoryTitle),
+            right: album.isNew ? 40 : 8,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                for (var index = 0; index < tags.length; index++) ...<Widget>[
+                  if (index > 0) const SizedBox(width: 4),
+                  Flexible(child: _CoverTag(text: tags[index])),
+                ],
+              ],
+            ),
           ),
+        Positioned(
+          left: 8,
+          bottom: 8,
+          child: _CoverLikes(album: album),
+        ),
         if (album.isNew)
           Positioned(
             right: 6,
@@ -71,13 +91,15 @@ class AlbumCard extends StatelessWidget {
         const SizedBox(height: 8),
         Stack(
           children: <Widget>[
+            // 滚动内容里的标题底衬用实色，不用玻璃（避免折射层套在列表里）。
             if (context.isLiquidGlass)
               Positioned.fill(
                 child: IgnorePointer(
-                  child: AppSurface(
-                    kind: AppSurfaceKind.controlGroup,
-                    borderRadius: BorderRadius.circular(6),
-                    child: const SizedBox.expand(),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
                   ),
                 ),
               ),
@@ -135,29 +157,74 @@ class _CardCaption extends StatelessWidget {
   }
 }
 
-class _CategoryBadge extends StatelessWidget {
-  const _CategoryBadge({required this.text});
+/// 封面左上角标签：实色药丸（列表内容不用玻璃），最多 2 个、单行省略。
+class _CoverTag extends StatelessWidget {
+  const _CoverTag({required this.text});
 
   final String text;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final label = Text(
-      text,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
-    );
-    return AppBadge(
-      label: label,
-      metalChild: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: scheme.surface.withValues(alpha: 0.86),
-          borderRadius: BorderRadius.circular(AppColors.radiusPill),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: scheme.surface.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(AppColors.radiusPill),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.micro.copyWith(
+          color: scheme.onSurfaceVariant,
+          height: 1.1,
         ),
-        child: label,
+      ),
+    );
+  }
+}
+
+/// 封面左下角喜欢数：心形 SVG + 数字（无计数统一 `--`）。
+class _CoverLikes extends StatelessWidget {
+  const _CoverLikes({required this.album});
+
+  final JmAlbumSummary album;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final hasCount = album.displayLikes != JmAlbumSummary.noLikeCount;
+    final ink = album.liked ? scheme.primary : scheme.onSurfaceVariant;
+    return Semantics(
+      label: hasCount ? '喜欢 ${album.likes}' : '暂无喜欢数',
+      child: ExcludeSemantics(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: scheme.surface.withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(AppColors.radiusPill),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              SvgIcon(
+                album.liked ? AppIcons.heartFilled : AppIcons.heart,
+                size: 11,
+                color: ink,
+              ),
+              const SizedBox(width: 3),
+              Text(
+                album.displayLikes,
+                maxLines: 1,
+                style: AppTypography.micro.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  height: 1.1,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

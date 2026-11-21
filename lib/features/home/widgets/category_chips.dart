@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/glass/app_glass.dart';
 import '../../../data/models/jm_category.dart';
 
-/// 粘性分类条：高 44，chip 高 32、圆角 999、选中 primary 实底。
+/// 粘性分类条：高 44，chip 高约 27、圆角 999（药丸）、solid 实底，选中 primary 实底。
 class CategoryChips extends StatelessWidget {
   const CategoryChips({
     required this.categories,
@@ -17,16 +18,19 @@ class CategoryChips extends StatelessWidget {
   final String selectedId;
   final ValueChanged<String> onSelected;
 
+  /// 分类条高度（与 [CategoryBarDelegate] 的 extent 一致）。
+  static const double barHeight = 44;
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 44,
+      height: barHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         clipBehavior: context.isLiquidGlass ? Clip.none : Clip.hardEdge,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         itemCount: categories.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 8),
+        separatorBuilder: (context, index) => const SizedBox(width: 6),
         itemBuilder: (context, index) {
           final category = categories[index];
           final selected = category.id == selectedId;
@@ -36,14 +40,15 @@ class CategoryChips extends StatelessWidget {
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             ),
           );
-          const padding = EdgeInsets.symmetric(horizontal: 14);
+          const padding = EdgeInsets.symmetric(horizontal: 14, vertical: 5);
           void select() => onSelected(category.id);
           return AppChip(
             label: label,
             selected: selected,
             onTap: select,
             kind: AppChipKind.choice,
-            cornerRadius: 10,
+            semanticLabel: category.name,
+            cornerRadius: AppColors.radiusPill,
             fillSelected: true,
             padding: padding,
           );
@@ -70,10 +75,10 @@ class CategoryBarDelegate extends SliverPersistentHeaderDelegate {
   final Color divider;
 
   @override
-  double get minExtent => 44;
+  double get minExtent => CategoryChips.barHeight;
 
   @override
-  double get maxExtent => 44;
+  double get maxExtent => CategoryChips.barHeight;
 
   @override
   Widget build(

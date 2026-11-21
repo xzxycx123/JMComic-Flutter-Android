@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../data/local/check_in_store.dart';
 import '../../data/local/download_store.dart';
 import '../../data/local/credential_store.dart';
 import '../../data/local/endpoint_store.dart';
@@ -113,6 +114,11 @@ final FutureProvider<UserSession> sessionProvider =
 // ---------------------------------------------------------------- 本地存储
 final Provider<ProgressStore> progressStoreProvider = Provider<ProgressStore>(
   (ref) => ProgressStore(Hive.box<dynamic>(HiveBoxes.readerProgress)),
+);
+
+/// 每日签到的本地日期存储（`jm_check_ins`，键 `yyyy-MM-dd`）。
+final Provider<CheckInStore> checkInStoreProvider = Provider<CheckInStore>(
+  (ref) => CheckInStore(Hive.box<dynamic>(HiveBoxes.checkIns)),
 );
 
 /// 会话 / cookie 持久化（`jm_session`）。放在 DI 层，网络层与账号层都要用。

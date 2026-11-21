@@ -8,6 +8,7 @@ import '../../features/download/download_page.dart';
 import '../../features/download/history_page.dart';
 import '../../features/home/home_page.dart';
 import '../../features/mine/about_page.dart';
+import '../../features/mine/daily_check_in_page.dart';
 import '../../features/mine/mine_page.dart';
 import '../../features/mine/read_history_page.dart';
 import '../../features/mine/settings_page.dart';
@@ -50,6 +51,10 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'about',
                     builder: (context, state) => const AboutPage(),
+                  ),
+                  GoRoute(
+                    path: 'check-in',
+                    builder: (context, state) => const DailyCheckInPage(),
                   ),
                 ],
               ),

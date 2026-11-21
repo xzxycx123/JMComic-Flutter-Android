@@ -23,6 +23,7 @@ Future<void> initTestStores() async {
     HiveBoxes.favoriteFolders,
     HiveBoxes.favoriteOutbox,
     HiveBoxes.session,
+    HiveBoxes.checkIns,
   ]) {
     if (!Hive.isBoxOpen(name)) {
       await Hive.openBox<dynamic>(name);
@@ -47,6 +48,7 @@ Future<void> clearTestBoxes() async {
     HiveBoxes.favoriteFolders,
     HiveBoxes.favoriteOutbox,
     HiveBoxes.session,
+    HiveBoxes.checkIns,
   ]) {
     if (Hive.isBoxOpen(name)) {
       await Hive.box<dynamic>(name).clear();

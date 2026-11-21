@@ -32,6 +32,11 @@ class _HomePageState extends ConsumerState<HomePage> {
   final ScrollController _controller = ScrollController();
   bool _elevated = false;
 
+  /// 排序条折叠状态：默认展开，收起后仍显示当前排序。
+  bool _sortCollapsed = false;
+
+  void _toggleSort() => setState(() => _sortCollapsed = !_sortCollapsed);
+
   @override
   void initState() {
     super.initState();
@@ -217,6 +222,8 @@ class _HomePageState extends ConsumerState<HomePage> {
       SliverToBoxAdapter(
         child: SortChips(
           selected: ref.watch(albumOrderProvider),
+          collapsed: _sortCollapsed,
+          onToggle: _toggleSort,
           onSelected: (order) {
             _controller.jumpTo(0);
             ref.read(homeFeedProvider.notifier).selectOrder(order);

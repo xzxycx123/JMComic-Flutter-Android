@@ -18,6 +18,7 @@ import '../collect/collect_providers.dart';
 import '../collect/favorites_sync.dart';
 import '../download/download_providers.dart';
 import '../home/widgets/section_header.dart';
+import 'check_in_providers.dart';
 
 /// 我的：资料卡 + 统计 + 五组设置入口。
 class MinePage extends ConsumerWidget {
@@ -38,6 +39,7 @@ class MinePage extends ConsumerWidget {
     final progressCount = ref.watch(progressStoreProvider).historyCount;
     final session = ref.watch(sessionProvider).valueOrNull;
     final syncState = ref.watch(favoritesSyncProvider);
+    final checkIn = ref.watch(checkInProvider);
 
     return AppGlassPage(
       showBackground: false,
@@ -54,6 +56,15 @@ class MinePage extends ConsumerWidget {
                 (label: '收藏', value: '$favoriteCount'),
                 (label: '阅读历史', value: '$progressCount'),
               ],
+            ),
+            const SizedBox(height: 12),
+            // 签到摘要：与签到页共用 checkInProvider，签到返回后立即刷新。
+            _SettingTile(
+              icon: AppIcons.check,
+              title: '每日签到',
+              value: '${checkIn.todayChecked ? '今日已签到' : '今日可签到'}'
+                  ' · 连续 ${checkIn.streak} 天',
+              onTap: () => context.push('/mine/check-in'),
             ),
             const SizedBox(height: 18),
             const SectionHeader(title: '账号与收藏'),

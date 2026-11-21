@@ -8,6 +8,8 @@ import '../../../data/models/download_record.dart';
 import '../../home/widgets/cover_image.dart';
 
 /// 任务卡：封面缩略 + 标题 + 状态胶囊 + 环形进度 + 操作菜单。
+///
+/// 任务列表属于滚动内容 / 密集列表：整卡用 solid 实色表面，不放玻璃。
 class TaskCard extends StatelessWidget {
   const TaskCard({
     required this.record,
@@ -29,12 +31,10 @@ class TaskCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final active = record.isActive;
 
-    return AppSurface(
-      kind: AppSurfaceKind.controlGroup,
-      borderRadius: BorderRadius.circular(AppColors.radiusCard),
+    return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
-      metalDecoration: BoxDecoration(
+      decoration: BoxDecoration(
         color: scheme.surfaceContainer,
         borderRadius: BorderRadius.circular(AppColors.radiusCard),
         border: Border.all(color: scheme.outlineVariant),

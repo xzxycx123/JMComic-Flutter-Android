@@ -16,6 +16,7 @@ class JmAlbumSummary {
     this.addDate = '',
     this.liked = false,
     this.isFavorite = false,
+    this.likes = 0,
   });
 
   final String id;
@@ -36,9 +37,63 @@ class JmAlbumSummary {
   final bool liked;
   final bool isFavorite;
 
+  /// 「喜歡」数。列表接口（`/latest`、`/promote`、`/categories/filter`）不一定带
+  /// 这个字段，缺失/无法解析时按 0 处理（卡片统一显示 `--`）。
+  final int likes;
+
   String get displayTitle => title.trim().isEmpty ? 'JM$id' : title.trim();
 
   String get displayAuthor => hasKnownAuthor ? author.trim() : '未知作者';
+
+  /// 卡片左上角标签：`tags` 优先，其次子分类，最后一级分类。
+  ///
+  /// 过滤空串 / `N/A` / `null` 之类的占位值、超过 [_maxTagRunes] 个字的异常长文本
+  /// 与重复项，最多保留 [_maxCardTags] 个，避免遮挡封面。
+  List<String> get displayTags {
+    final result = <String>[];
+    for (final raw in <String>[...tags, subCategoryTitle, categoryTitle]) {
+      final label = _normalizeTag(raw);
+      if (label == null || result.contains(label)) continue;
+      result.add(label);
+      if (result.length >= _maxCardTags) break;
+    }
+    return List<String>.unmodifiable(result);
+  }
+
+  /// 卡片左下角喜欢数：无计数统一 `--`；上万压缩成「1.2万」。
+  String get displayLikes {
+    if (likes <= 0) return noLikeCount;
+    if (likes < 10000) return '$likes';
+    final wan = likes / 10000;
+    final fixed = wan >= 100 ? wan.toStringAsFixed(0) : wan.toStringAsFixed(1);
+    final trimmed =
+        fixed.endsWith('.0') ? fixed.substring(0, fixed.length - 2) : fixed;
+    return '$trimmed万';
+  }
+
+  /// 没有喜欢数时的统一占位（首页卡片 / 后续复用方都用这个常量）。
+  static const String noLikeCount = '--';
+
+  static const int _maxCardTags = 2;
+  static const int _maxTagRunes = 8;
+
+  static const Set<String> _placeholderTags = <String>{
+    'n/a',
+    'na',
+    'null',
+    'none',
+    'undefined',
+    '-',
+    '--',
+  };
+
+  static String? _normalizeTag(String raw) {
+    final label = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (label.isEmpty) return null;
+    if (_placeholderTags.contains(label.toLowerCase())) return null;
+    if (label.runes.length > _maxTagRunes) return null;
+    return label;
+  }
 
   DateTime? get updatedTime => updateAt <= 0
       ? null
@@ -66,6 +121,12 @@ class JmAlbumSummary {
       addDate: asStringOr(json['adddate'], ''),
       liked: asBool(json['liked']),
       isFavorite: asBool(json['is_favorite']),
+      likes: _asLikeCount(
+        json['likes'] ??
+            json['like_count'] ??
+            json['likes_count'] ??
+            json['like'],
+      ),
     );
   }
 
@@ -83,9 +144,11 @@ class JmAlbumSummary {
         'adddate': addDate,
         'liked': liked,
         'is_favorite': isFavorite,
+        'likes': likes,
       };
 
-  JmAlbumSummary copyWith({bool? liked, bool? isFavorite}) => JmAlbumSummary(
+  JmAlbumSummary copyWith({bool? liked, bool? isFavorite, int? likes}) =>
+      JmAlbumSummary(
         id: id,
         title: title,
         author: author,
@@ -97,6 +160,7 @@ class JmAlbumSummary {
         addDate: addDate,
         liked: liked ?? this.liked,
         isFavorite: isFavorite ?? this.isFavorite,
+        likes: likes ?? this.likes,
       );
 
   @override
@@ -104,4 +168,28 @@ class JmAlbumSummary {
 
   @override
   int get hashCode => id.hashCode;
+}
+
+/// 喜欢数解析：兼容 `4321` / `"4321"` / `"4,321"` / `"1.2k"` / `"1.2万"`，
+/// 缺失、负数、乱码一律按 0。
+int _asLikeCount(dynamic value) {
+  if (value == null) return 0;
+  if (value is int) return value <= 0 ? 0 : value;
+  if (value is num) return value.toInt() <= 0 ? 0 : value.toInt();
+  if (value is bool) return 0;
+  final text = value.toString().replaceAll(RegExp(r'[,\s+]'), '').trim();
+  if (text.isEmpty) return 0;
+  final match =
+      RegExp(r'^([0-9]+(?:\.[0-9]+)?)([kKmMwW千万元]?)$').firstMatch(text);
+  if (match == null) return 0;
+  final base = double.tryParse(match.group(1)!) ?? 0;
+  final unit = (match.group(2) ?? '').toLowerCase();
+  final factor = switch (unit) {
+    'k' || '千' => 1000.0,
+    'm' => 1000000.0,
+    'w' || '万' => 10000.0,
+    _ => 1.0,
+  };
+  final count = (base * factor).round();
+  return count <= 0 ? 0 : count;
 }

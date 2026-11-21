@@ -14,6 +14,9 @@ abstract final class HiveBoxes {
   static const String favoriteOutbox = 'jm_favorite_outbox';
   static const String session = 'jm_session';
   static const String endpoints = 'jm_endpoints';
+
+  /// 每日签到：键为 `yyyy-MM-dd`。
+  static const String checkIns = 'jm_check_ins';
 }
 
 abstract final class HiveInit {
@@ -34,6 +37,7 @@ abstract final class HiveInit {
       HiveBoxes.favoriteFolders,
       HiveBoxes.favoriteOutbox,
       HiveBoxes.session,
+      HiveBoxes.checkIns,
     ]) {
       if (!Hive.isBoxOpen(name)) {
         await Hive.openBox<dynamic>(name);

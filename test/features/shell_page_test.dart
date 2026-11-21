@@ -84,6 +84,19 @@ void main() {
     expect(find.text('下载与历史'), findsOneWidget);
 
     // 二级菜单：历史记录（空态）
+    // 「我的」顶部新增「每日签到」入口后，下载 / 历史记录整体下移，会落进悬浮
+    // Dock 的遮挡区；用固定偏移滚动列表，避免点命中 Dock 的玻璃层。
+    final mineList = find.descendant(
+      of: find.byType(MinePage),
+      matching: find.byType(Scrollable),
+    );
+    void scrollMineTo(double offset) {
+      tester.state<ScrollableState>(mineList.first).position.jumpTo(offset);
+    }
+
+    expect(find.text('未登录 · 本地模式'), findsOneWidget);
+    scrollMineTo(120);
+    await _pumpFrames(tester, frames: 2);
     await tester.tap(find.text('历史记录').first);
     await _pumpFrames(tester, frames: 12);
     expect(find.text('还没有下载记录'), findsOneWidget);
@@ -91,7 +104,11 @@ void main() {
     // 返回「我的」，再进下载
     await tester.tap(find.byTooltip('返回'));
     await _pumpFrames(tester, frames: 12);
+    scrollMineTo(0);
+    await _pumpFrames(tester, frames: 2);
     expect(find.text('未登录 · 本地模式'), findsOneWidget);
+    scrollMineTo(120);
+    await _pumpFrames(tester, frames: 2);
     await tester.tap(find.text('下载').first);
     await _pumpFrames(tester, frames: 12);
     expect(find.text('加入队列'), findsOneWidget);

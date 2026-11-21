@@ -90,10 +90,32 @@ class _AlbumScaffold extends StatelessWidget {
   }
 }
 
-class _AlbumContent extends ConsumerWidget {
+class _AlbumContent extends ConsumerStatefulWidget {
   const _AlbumContent({required this.album});
 
   final JmAlbumDetail album;
+
+  @override
+  ConsumerState<_AlbumContent> createState() => _AlbumContentState();
+}
+
+class _AlbumContentState extends ConsumerState<_AlbumContent> {
+  /// 用户是否已经滑到评论列表底部。
+  ///
+  /// 只置位、不复位：一旦滑到底，「显示可能存在广告的评论」按钮就一直可用，
+  /// 否则按钮自身会把列表撑长，用户往回滚一点按钮就消失，形成死锁。
+  bool _commentsBottomReached = false;
+
+  JmAlbumDetail get album => widget.album;
+
+  bool _onScroll(ScrollNotification notification) {
+    if (_commentsBottomReached) return false;
+    if (notification.metrics.axis != Axis.vertical) return false;
+    // extentAfter 接近 0 才算真正触底（首屏渲染不会派发 ScrollNotification）。
+    if (notification.metrics.extentAfter > 24) return false;
+    setState(() => _commentsBottomReached = true);
+    return false;
+  }
 
   void _openReader(BuildContext context, JmChapterRef chapter, {int page = 1}) {
     final query = <String, String>{
@@ -158,7 +180,7 @@ class _AlbumContent extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final primaryChapter = album.primaryChapter;
     final progress = ref.watch(
@@ -167,135 +189,141 @@ class _AlbumContent extends ConsumerWidget {
       ),
     );
     final isFavorite = ref.watch(favoriteIdsProvider).contains(album.id);
+    // 有任何进度（含第 1 页 / 最后一页）都算「继续阅读」，页号取有效进度页。
     final resumePage =
-        progress == null || progress.page <= 1 ? 1 : progress.page;
-    final ctaLabel = progress == null || progress.page <= 1
-        ? '开始阅读'
-        : '继续阅读 · 第 $resumePage 页';
+        progress == null || progress.page <= 0 ? 1 : progress.page;
+    final ctaLabel = progress == null ? '开始阅读' : '继续阅读 · 第 $resumePage 页';
 
     return AppGlassPage(
       body: Stack(
         children: <Widget>[
-          CustomScrollView(
-            slivers: <Widget>[
-              SliverAppBar(
-                pinned: true,
-                expandedHeight: 260,
-                backgroundColor:
-                    context.isLiquidGlass ? Colors.transparent : null,
-                surfaceTintColor:
-                    context.isLiquidGlass ? Colors.transparent : null,
-                leading: AppIconButton(
-                  tooltip: '返回',
-                  icon: IconTheme(
-                    data: IconThemeData(color: scheme.onSurface),
-                    child: const SvgIcon(AppIcons.back, size: 22),
-                  ),
-                  onPressed: () => context.pop(),
-                ),
-                actions: <Widget>[
-                  AppIconButton(
-                    tooltip: isFavorite ? '取消收藏' : '收藏',
-                    selected: isFavorite,
-                    color: isFavorite ? scheme.primary : scheme.onSurface,
-                    icon: SvgIcon(
-                      isFavorite ? AppIcons.starFilled : AppIcons.star,
-                      size: 22,
+          NotificationListener<ScrollNotification>(
+            onNotification: _onScroll,
+            child: CustomScrollView(
+              slivers: <Widget>[
+                SliverAppBar(
+                  pinned: true,
+                  expandedHeight: 260,
+                  titleSpacing: 4,
+                  title: _AlbumIdBadge(albumId: album.id),
+                  backgroundColor:
+                      context.isLiquidGlass ? Colors.transparent : null,
+                  surfaceTintColor:
+                      context.isLiquidGlass ? Colors.transparent : null,
+                  leading: AppIconButton(
+                    tooltip: '返回',
+                    icon: IconTheme(
+                      data: IconThemeData(color: scheme.onSurface),
+                      child: const SvgIcon(AppIcons.back, size: 22),
                     ),
-                    onPressed: () => _toggleFavorite(context, ref, album),
+                    onPressed: () => context.pop(),
                   ),
-                  const SizedBox(width: 10),
-                  AppIconButton(
-                    tooltip: '分享',
-                    color: scheme.onSurface,
-                    icon: const SvgIcon(AppIcons.share, size: 20),
-                    onPressed: () => _share(context),
-                  ),
-                  const SizedBox(width: 4),
-                ],
-                flexibleSpace: Stack(
-                  fit: StackFit.expand,
-                  children: <Widget>[
-                    FlexibleSpaceBar(background: _CoverHeader(album: album)),
-                    if (context.isLiquidGlass)
-                      const Positioned(
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        child: _CollapsedChrome(),
+                  actions: <Widget>[
+                    AppIconButton(
+                      tooltip: isFavorite ? '取消收藏' : '收藏',
+                      selected: isFavorite,
+                      color: isFavorite ? scheme.primary : scheme.onSurface,
+                      icon: SvgIcon(
+                        isFavorite ? AppIcons.starFilled : AppIcons.star,
+                        size: 22,
                       ),
+                      onPressed: () => _toggleFavorite(context, ref, album),
+                    ),
+                    const SizedBox(width: 10),
+                    AppIconButton(
+                      tooltip: '分享',
+                      color: scheme.onSurface,
+                      icon: const SvgIcon(AppIcons.share, size: 20),
+                      onPressed: () => _share(context),
+                    ),
+                    const SizedBox(width: 4),
                   ],
+                  flexibleSpace: Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      FlexibleSpaceBar(background: _CoverHeader(album: album)),
+                      if (context.isLiquidGlass)
+                        const Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: _CollapsedChrome(),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-              SliverToBoxAdapter(child: _InfoSection(album: album)),
-              SliverToBoxAdapter(child: _InteractionBar(album: album)),
-              SliverToBoxAdapter(
-                child:
-                    SectionHeader(title: album.isSingleChapter ? '单行本' : '章节'),
-              ),
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final chapter = album.chapters[index];
-                    final chapterProgress = ref.watch(
-                      chapterProgressProvider(
-                        (albumId: album.id, chapterId: chapter.id),
-                      ),
-                    );
-                    return ChapterTile(
-                      chapter: chapter,
-                      index: index + 1,
-                      trailingLabel: chapterProgress == null
-                          ? null
-                          : '读到 ${chapterProgress.page}/${chapterProgress.total}',
-                      onTap: () => _openReader(
-                        context,
-                        chapter,
-                        page: chapterProgress?.page ?? 1,
-                      ),
-                    );
-                  },
-                  childCount: album.chapters.length,
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: CommentSection(
-                  albumId: album.id,
-                  totalHint: album.commentTotal,
-                ),
-              ),
-              if (album.related.isNotEmpty) ...<Widget>[
+                SliverToBoxAdapter(child: _InfoSection(album: album)),
+                SliverToBoxAdapter(child: _InteractionBar(album: album)),
                 SliverToBoxAdapter(
-                  child: ColoredBox(
-                    color: scheme.surface,
-                    child: const SectionHeader(title: '相关推荐'),
+                  child: SectionHeader(
+                    title: album.isSingleChapter ? '单行本' : '章节',
                   ),
                 ),
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  sliver: SliverGrid(
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 0.52,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 16,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final related = album.related[index];
-                        return AlbumCard(
-                          album: related,
-                          onTap: () => context.push('/album/${related.id}'),
-                        );
-                      },
-                      childCount: album.related.length.clamp(0, 6).toInt(),
-                    ),
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final chapter = album.chapters[index];
+                      final chapterProgress = ref.watch(
+                        chapterProgressProvider(
+                          (albumId: album.id, chapterId: chapter.id),
+                        ),
+                      );
+                      return ChapterTile(
+                        chapter: chapter,
+                        index: index + 1,
+                        trailingLabel: chapterProgress == null
+                            ? null
+                            : '读到 ${chapterProgress.page}/${chapterProgress.total}',
+                        onTap: () => _openReader(
+                          context,
+                          chapter,
+                          page: chapterProgress?.page ?? 1,
+                        ),
+                      );
+                    },
+                    childCount: album.chapters.length,
                   ),
                 ),
+                SliverToBoxAdapter(
+                  child: CommentSection(
+                    albumId: album.id,
+                    totalHint: album.commentTotal,
+                    bottomReached: _commentsBottomReached,
+                  ),
+                ),
+                if (album.related.isNotEmpty) ...<Widget>[
+                  SliverToBoxAdapter(
+                    child: ColoredBox(
+                      color: scheme.surface,
+                      child: const SectionHeader(title: '相关推荐'),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    sliver: SliverGrid(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        childAspectRatio: 0.52,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 16,
+                      ),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final related = album.related[index];
+                          return AlbumCard(
+                            album: related,
+                            onTap: () => context.push('/album/${related.id}'),
+                          );
+                        },
+                        childCount: album.related.length.clamp(0, 6).toInt(),
+                      ),
+                    ),
+                  ),
+                ],
+                const SliverToBoxAdapter(child: SizedBox(height: 120)),
               ],
-              const SliverToBoxAdapter(child: SizedBox(height: 120)),
-            ],
+            ),
           ),
         ],
       ),
@@ -310,7 +338,7 @@ class _AlbumContent extends ConsumerWidget {
                 Expanded(
                   child: AppButton(
                     height: 48,
-                    cornerRadius: 18,
+                    cornerRadius: AppColors.radiusPill,
                     onPressed: () =>
                         _openReader(context, primaryChapter, page: resumePage),
                     leadingIcon: const SvgIcon(AppIcons.play, size: 18),
@@ -322,7 +350,7 @@ class _AlbumContent extends ConsumerWidget {
                   width: 108,
                   child: AppButton.secondary(
                     height: 48,
-                    cornerRadius: 18,
+                    cornerRadius: AppColors.radiusPill,
                     onPressed: () => _download(context, ref),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -339,6 +367,39 @@ class _AlbumContent extends ConsumerWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 详情页顶部的作品编号：`JM{id}`，实色药丸避免盖住返回/收藏/分享。
+class _AlbumIdBadge extends StatelessWidget {
+  const _AlbumIdBadge({required this.albumId});
+
+  final String albumId;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      label: '作品编号 JM$albumId',
+      child: ExcludeSemantics(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(AppColors.radiusPill),
+          ),
+          child: Text(
+            'JM$albumId',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.caption.copyWith(
+              color: scheme.onSurface,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
@@ -534,13 +595,7 @@ class _CoverHeader extends StatelessWidget {
                       style: AppTypography.title.copyWith(color: Colors.white),
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      album.displayAuthor,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          AppTypography.caption.copyWith(color: Colors.white70),
-                    ),
+                    _AuthorLine(album: album),
                   ],
                 ),
               ),
@@ -548,6 +603,48 @@ class _CoverHeader extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 封面上的作者行：作者可搜时点一下就去关键词搜索该作者。
+class _AuthorLine extends StatelessWidget {
+  const _AuthorLine({required this.album});
+
+  final JmAlbumDetail album;
+
+  /// 空作者 / 未知作者 / N/A 不给点击，免得搜出来一片空列表。
+  static bool canSearch(JmAlbumDetail album) {
+    final raw = album.author.trim().toLowerCase();
+    if (raw.isEmpty || raw == 'n/a' || raw == 'na') return false;
+    return album.displayAuthor != '未知作者';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Text(
+      album.displayAuthor,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: AppTypography.caption.copyWith(color: Colors.white70),
+    );
+    if (!canSearch(album)) return text;
+    return Semantics(
+      label: '搜索作者 ${album.displayAuthor}',
+      button: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () =>
+            context.push(SearchPage.keywordLocation(album.displayAuthor)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Flexible(child: text),
+            const SizedBox(width: 4),
+            const SvgIcon(AppIcons.forward, size: 12, color: Colors.white70),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -577,12 +674,18 @@ class _InfoSection extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: album.tags.take(12).map((tag) {
+                // 药丸标签：caption 行高 16.8 + 上下各 6 ≈ 28.8dp 总高。
                 const padding =
-                    EdgeInsets.symmetric(horizontal: 10, vertical: 15);
-                final label = Text(
-                  tag,
-                  style: AppTypography.micro
-                      .copyWith(color: scheme.onSurfaceVariant),
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 6);
+                final label = ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 200),
+                  child: Text(
+                    tag,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption
+                        .copyWith(color: scheme.onSurfaceVariant),
+                  ),
                 );
                 void openTagSearch() => context.push(
                       SearchPage.keywordLocation(tag),
@@ -591,9 +694,10 @@ class _InfoSection extends StatelessWidget {
                   label: label,
                   onTap: openTagSearch,
                   padding: padding,
-                  cornerRadius: 10,
+                  cornerRadius: AppColors.radiusPill,
                   kind: AppChipKind.action,
                   foregroundColor: scheme.onSurfaceVariant,
+                  semanticLabel: '搜索标签 $tag',
                 );
               }).toList(growable: false),
             ),
