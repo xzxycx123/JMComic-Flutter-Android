@@ -1,6 +1,6 @@
-# JMComic for Android（非官方 Flutter 客户端）
+# JMComic for Android
 
-一个 Android 优先、**本地优先**的 JM 客户端：首页浏览、搜索、阅读器、PDF 下载归档，以及登录后可双向同步的收藏夹。
+一个 Android 优先、**本地优先**的 JM 客户端：首页浏览、搜索、阅读器、PDF 下载归档，以及登录后可双向同步的收藏夹，且拥有LiquidGlass主题
 （主要是JM官方的太丑太卡了，所以重做了一个）
 
 > 本项目是非官方第三方客户端，与站点运营方无关；所有内容版权归原作者与站点所有，本客户端仅做浏览与个人离线备份，不提供内容源、不绕过任何付费/权限。
@@ -17,23 +17,20 @@
 
 | 模块 | 说明 |
 |---|---|
-| 首页 | 轮播 + 分类 chips + 排序（最新/日榜/周榜/月榜/人气）+ 无限流；**冷启动先用上次缓存秒开**；**标签页内存缓存 + 空闲预热**：点回已看过的分类立刻出内容，超过 5 分钟才在后台静默刷新 |
-| 搜索 | 纯车号（`350234` / `JM350234` / 链接）直达详情；关键词走 `/search` 分页，结果支持**按时间 / 阅读数 / 人气 / 最新上架排序**（服务端 `o` 参数） |
-| 详情 | 模糊封面头、章节列表、统计与标签、**点赞按钮（点了立刻生效、后台发送）**、**评论区（列表 + 发评论 + 富文本清洗）**、相关推荐、双 CTA（阅读 / 下载） |
-| 阅读器 | 上下滚动 / 左右翻页双模式，三分区点击、HUD 进度条（**拖动预览、松手跳页**）、**双指缩放 + 双击放大 + 双指按下锁翻页**、进度记忆；「翻页动画」开关关掉即瞬切 |
-| 阅读历史 | 我的 → 阅读 → 阅读历史：按最近阅读倒序，显示封面 / 章节 / 进度 / 时间，点一条续读，可删单条或清空 |
-| 下载 | 批量车号 → 队列（3 并发）→ 切片还原 → PNG → PDF，落到 `Documents/JMComics/`，同名自动 `(2)`；**下载完可直接在 App 内阅读** |
-| PDF 阅读器 | 内置（Android `PdfRenderer`，不依赖第三方插件）：左右翻页 / 上下滚动、双指缩放、HUD 进度条；**HUD 里可切换阅读模式** |
-| 前台服务 | 下载中锁屏/切后台不中断，通知栏显示进度 |
-| 收藏 | **五角星一键收藏**；**本地账本 + 服务端镜像**：断网可收藏、撤销、分文件夹、按更新时间排序；登录后对账并自愈 toggle |
+| 首页 | 轮播 + 分类 chips + 排序（最新/日榜/周榜/月榜/人气）+ 无限流；**标签页内存缓存 + 空闲预热**：点回已看过的分类立刻出内容，超过 5 分钟才在后台静默刷新 |
+| 搜索 | 纯车号直达详情；关键词走 `/search` 分页，结果支持**按时间 / 阅读数 / 人气 / 最新上架排序** |
+| 详情 | 模糊封面头、章节列表、统计与标签、点赞、评论区、相关推荐、双 CTA（阅读 / 下载） |
+| 阅读器 | 上下滚动 / 左右翻页双模式，三分区点击（符合电子书设计）、阅读进度条、进度记忆 |
+| 下载 | 批量车号 → 队列（3 并发）→ 切片还原 → PNG → PDF，落到 `Documents/JMComics/`；**下载完可直接在 App 内阅读** |
 | 账号 | 会话 cookie + **记住密码（系统密钥库）自动重登**：cookie 每次响应后回写、冷启动先跑 `/setting` 再校验，失效时用保存的密码静默重登一次；登录成功即**自动双向同步收藏** |
 | 其它 | 深浅主题、线路健康度与测速、本地搜索历史、LICENSE：GPL-3.0 |
+| 主题 | Android 原生Metal主题 和 LiquidGlass主题 |
 
 ---
 
 ## 截图
 
-**0.3.3 实机截图**（Android 14），原图见 [`ref img/`](<ref img/>)。
+**0.3.3 实机截图**（Android 15），原图见 [`ref img/`](<ref img/>)。
 
 | 搜索（排序：最新更新 / 阅读数 / 人气 / 最新上架） | 详情（统计 / 评论区 / 相关推荐） | 阅读器（HUD 进度条） |
 |---|---|---|
@@ -122,7 +119,6 @@ $env:Path = 'C:\path\to\flutter\bin;' + $env:JAVA_HOME + '\bin;' + $env:Path
 | `cmdline-tools component is missing` | 安装 Android Command-line Tools，解压到 `<SDK>/cmdline-tools/latest` |
 | `plugin compiles against 36` | 工程 `compileSdk = 36`，需装 `platforms;android-36` |
 | 首次 `flutter` 卡在 Downloading Dart SDK | 手动下载对应 engine 的 `dart-sdk-windows-x64.zip` 放进 `flutter/bin/cache` |
-| 接口全部超时 / TLS 失败 | 换代理节点；或在「我的 → 网络 → 线路测速」里换线路 |
 
 ---
 
@@ -138,13 +134,7 @@ tools/         probe_api.ps1 / probe_forum.ps1 / probe_hosts.ps1 / scaffold.ps1 
 docs/          设计文档（NETWORK_MODULE / FAVORITES / INTERACTION）、UI 草稿、审查记录
 ```
 
-### 协议与实现说明
 
-- API：移动端 JSON 接口，`token = md5(ts + salt)`，响应 `AES-256-ECB/PKCS7`（key = md5hex 的 32 个 ASCII 字节）；线路与图床地址会漂移，客户端内置种子 + 多源发现 + 健康度排序。
-- 下载：与 [JmScript](https://github.com/hect0x7) 的 Kotlin 实现 1:1 对齐（切片段数算法、PNG 重编码、PDF 页尺寸上限 14400、`IS_PENDING` 写 MediaStore）。
-- 收藏：`POST /favorite` 是 **toggle**，因此同步时必须核对返回的 `type`，不符就反向补发一次（防静默丢收藏）。
-- 互动：点赞 `POST /like {id}`（只回 `{code,msg,status}`、不回计数）、评论列表 `GET /forum?page&aid&mode=manhua`（游客可读）、发评论 `POST /comment`（multipart `comment/aid/status/comment_id`，需登录，未登录返回 401）。
-- 站点域名与字段随时可能变化，协议争议以 `tools/probe_api.ps1` / `tools/probe_forum.ps1` 的实时输出为准。
 
 ---
 
@@ -159,15 +149,17 @@ pwsh -File tools/probe_api.ps1 -Proxy http://127.0.0.1:7890                     
 pwsh -File tools/check_ui_rules.ps1                                                  # UI 守卫（禁 emoji / 禁 Icons.*）
 ```
 
-贡献：欢迎 PR；请保持 `flutter analyze` 0 issue、`flutter test` 全绿、UI 守卫通过。涉及协议改动请同步更新 `docs/`。
+贡献：欢迎 PR；
 
 ---
 
 ## 许可证
 
 本项目以 **GNU General Public License v3.0** 发布，版权归 **Copyright (C) 2026 xzxycx** 所有。
-全文见 [LICENSE](LICENSE)；你也可以在 App 内「我的 → 关于 → 开源许可」查看。
+全文见 [LICENSE](LICENSE)
 
 主要参考与致谢：
 - [JMComic-Crawler-Python](https://github.com/hect0x7/JMComic-Crawler-Python)（协议字段核对）
 - [jm-mobile](https://github.com/Dedicatus546/jm-mobile)（登录/收藏流程参考，GPL-3.0）
+- [LiquidGlass项目](https://github.com/sdegenaar/liquid_glass_widgets) （LiquidGlass主题）
+
