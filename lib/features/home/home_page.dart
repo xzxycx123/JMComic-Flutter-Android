@@ -65,6 +65,9 @@ class _HomePageState extends ConsumerState<HomePage> {
     final settings = ref.watch(settingsProvider);
 
     return Scaffold(
+      backgroundColor: settings.interfaceStyle == AppInterfaceStyle.liquidGlass
+          ? Colors.transparent
+          : null,
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -79,8 +82,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                 pinned: false,
                 elevation: 0,
                 surfaceTintColor: Colors.transparent,
-                backgroundColor:
-                    _elevated ? scheme.surface.withValues(alpha: 0.86) : Colors.transparent,
+                backgroundColor: _elevated
+                    ? scheme.surface.withValues(alpha: 0.86)
+                    : Colors.transparent,
                 titleSpacing: 16,
                 title: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -90,7 +94,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                     const SizedBox(width: 8),
                     Text(
                       AppConfig.appName,
-                      style: AppTypography.wordmark.copyWith(color: scheme.onSurface),
+                      style: AppTypography.wordmark
+                          .copyWith(color: scheme.onSurface),
                     ),
                   ],
                 ),
@@ -128,7 +133,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                       title: '线路暂时不可用',
                       description: '$error',
                       actionLabel: '重新加载',
-                      onAction: () => ref.read(homeFeedProvider.notifier).refresh(),
+                      onAction: () =>
+                          ref.read(homeFeedProvider.notifier).refresh(),
                     ),
                   ),
                 ],
@@ -163,7 +169,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                 const SizedBox(width: 6),
                 Text(
                   '上次内容 · ${_formatClock(feed.updatedAt!)} · 正在更新',
-                  style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+                  style: AppTypography.micro
+                      .copyWith(color: scheme.onSurfaceVariant),
                 ),
               ],
             ),
@@ -198,7 +205,8 @@ class _HomePageState extends ConsumerState<HomePage> {
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: Text(
               feed.partialErrors.join(' · '),
-              style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+              style:
+                  AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
             ),
           ),
         ),
@@ -266,7 +274,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: module.items.length,
-                  separatorBuilder: (context, index) => const SizedBox(width: 12),
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(width: 12),
                   itemBuilder: (context, index) {
                     final album = module.items[index];
                     return AlbumCard(

@@ -8,6 +8,7 @@ import '../../core/icons/app_icons.dart';
 import '../../core/icons/app_images.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/theme/interface_style_selector.dart';
 import '../../data/local/settings_store.dart';
 import '../../data/models/account_session.dart';
 import '../../data/models/user_session.dart';
@@ -37,6 +38,9 @@ class MinePage extends ConsumerWidget {
     final syncState = ref.watch(favoritesSyncProvider);
 
     return Scaffold(
+      backgroundColor: settings.interfaceStyle == AppInterfaceStyle.liquidGlass
+          ? Colors.transparent
+          : null,
       body: SafeArea(
         bottom: false,
         child: ListView(
@@ -105,19 +109,22 @@ class MinePage extends ConsumerWidget {
               icon: AppIcons.bookOpen,
               title: '默认阅读模式',
               value: settings.defaultReaderMode == 'vertical' ? '上下滚动' : '左右翻页',
-              onTap: () => _pickReaderMode(context, ref, settings.defaultReaderMode),
+              onTap: () =>
+                  _pickReaderMode(context, ref, settings.defaultReaderMode),
             ),
             _SettingTile(
               icon: AppIcons.pageMode,
               title: '翻页动画',
               trailing: Switch.adaptive(
                 value: settings.pageTurnAnimation,
-                onChanged: (value) =>
-                    ref.read(settingsProvider.notifier).setPageTurnAnimation(value),
+                onChanged: (value) => ref
+                    .read(settingsProvider.notifier)
+                    .setPageTurnAnimation(value),
               ),
             ),
             const SizedBox(height: 10),
             const SectionHeader(title: '外观'),
+            const InterfaceStyleSelector(),
             _SettingTile(
               icon: AppIcons.theme,
               title: '主题模式',
@@ -129,7 +136,9 @@ class MinePage extends ConsumerWidget {
             _SettingTile(
               icon: AppIcons.refresh,
               title: '当前线路',
-              value: session == null || session.apiHost.isEmpty ? '探测中' : session.apiHost,
+              value: session == null || session.apiHost.isEmpty
+                  ? '探测中'
+                  : session.apiHost,
               onTap: () => context.push('/mine/settings'),
             ),
             _SettingTile(
@@ -137,8 +146,9 @@ class MinePage extends ConsumerWidget {
               title: '自动切换线路',
               trailing: Switch.adaptive(
                 value: settings.autoSwitchHost,
-                onChanged: (value) =>
-                    ref.read(settingsProvider.notifier).setAutoSwitchHost(value),
+                onChanged: (value) => ref
+                    .read(settingsProvider.notifier)
+                    .setAutoSwitchHost(value),
               ),
             ),
             const SizedBox(height: 10),
@@ -163,7 +173,8 @@ class MinePage extends ConsumerWidget {
             const SizedBox(height: 14),
             Text(
               '收藏本地优先：登录后自动双向同步；开启「记住密码」后 cookie 失效会自动重登，点赞与评论也需要登录。',
-              style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+              style:
+                  AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -211,11 +222,16 @@ class MinePage extends ConsumerWidget {
 
   Future<void> _copyPath(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
-    final location = await ref.read(downloadRepositoryProvider).describeLocation();
+    final location =
+        await ref.read(downloadRepositoryProvider).describeLocation();
     messenger.showSnackBar(SnackBar(content: Text('目录：$location')));
   }
 
-  Future<void> _pickTheme(BuildContext context, WidgetRef ref, AppThemeMode current) async {
+  Future<void> _pickTheme(
+    BuildContext context,
+    WidgetRef ref,
+    AppThemeMode current,
+  ) async {
     final selected = await showModalBottomSheet<AppThemeMode>(
       context: context,
       showDragHandle: true,
@@ -308,7 +324,8 @@ class _AccountCard extends StatelessWidget {
                     '收藏 ${session.favoritesCount}'
                     '${session.favoritesMax > 0 ? ' / ${session.favoritesMax}' : ''}'
                     '${session.lastSyncAt > 0 ? ' · 上次同步 ${_clock(session.lastSyncAt)}' : ''}',
-                    style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+                    style: AppTypography.micro
+                        .copyWith(color: scheme.onSurfaceVariant),
                   ),
                   if (session.nearLimit) ...<Widget>[
                     const SizedBox(height: 2),
@@ -395,7 +412,8 @@ class _ProfileCard extends StatelessWidget {
               children: <Widget>[
                 Text(
                   title,
-                  style: AppTypography.bodyStrong.copyWith(color: scheme.onSurface),
+                  style: AppTypography.bodyStrong
+                      .copyWith(color: scheme.onSurface),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -404,7 +422,8 @@ class _ProfileCard extends StatelessWidget {
                       : '${session!.apiHost} · ${session!.displayImageHost}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+                  style: AppTypography.micro
+                      .copyWith(color: scheme.onSurfaceVariant),
                 ),
               ],
             ),
@@ -438,12 +457,14 @@ class _StatsRow extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     item.value,
-                    style: AppTypography.title.copyWith(color: scheme.onSurface),
+                    style:
+                        AppTypography.title.copyWith(color: scheme.onSurface),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     item.label,
-                    style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+                    style: AppTypography.micro
+                        .copyWith(color: scheme.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -502,7 +523,8 @@ class _SettingTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.right,
-                      style: AppTypography.caption.copyWith(color: scheme.onSurfaceVariant),
+                      style: AppTypography.caption
+                          .copyWith(color: scheme.onSurfaceVariant),
                     ),
                   ),
                 if (trailing != null) trailing!,
@@ -548,7 +570,8 @@ class _OptionSheet<T> extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Text(
                 title,
-                style: AppTypography.sectionTitle.copyWith(color: scheme.onSurface),
+                style: AppTypography.sectionTitle
+                    .copyWith(color: scheme.onSurface),
               ),
             ),
           ),

@@ -2,12 +2,13 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../../core/icons/app_icons.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 
-/// 玻璃胶囊 Dock（两档：首页 / 我的；下载与历史收进「我的」二级菜单）。
+/// 默认 Metal 胶囊 Dock（两档：首页 / 我的；下载与历史收进「我的」）。
 class GlassNavBar extends StatelessWidget {
   const GlassNavBar({
     required this.currentIndex,
@@ -18,7 +19,8 @@ class GlassNavBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onSelect;
 
-  static const List<({String icon, String label})> items = <({String icon, String label})>[
+  static const List<({String icon, String label})> items =
+      <({String icon, String label})>[
     (icon: AppIcons.home, label: '首页'),
     (icon: AppIcons.user, label: '我的'),
   ];
@@ -72,6 +74,50 @@ class GlassNavBar extends StatelessWidget {
   }
 }
 
+/// iOS 27 Liquid Glass Dock：悬浮玻璃底盘 + 弹性选中透镜 + 动态光影。
+class LiquidGlassNavBar extends StatelessWidget {
+  const LiquidGlassNavBar({
+    required this.currentIndex,
+    required this.onSelect,
+    super.key,
+  });
+
+  final int currentIndex;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return GlassTabBar.bottom(
+      tabs: <GlassTab>[
+        for (final item in GlassNavBar.items)
+          GlassTab(
+            icon: SvgIcon(item.icon, size: 22),
+            activeIcon: SvgIcon(item.icon, size: 22),
+            label: item.label,
+            semanticLabel: item.label,
+          ),
+      ],
+      selectedIndex: currentIndex,
+      onTabSelected: (index) {
+        HapticFeedback.selectionClick();
+        onSelect(index);
+      },
+      iconSize: 22,
+      selectedIconColor: scheme.primary,
+      unselectedIconColor: scheme.onSurfaceVariant,
+      selectedLabelColor: scheme.primary,
+      unselectedLabelColor: scheme.onSurfaceVariant,
+      selectedLabelStyle: AppTypography.micro.copyWith(
+        fontWeight: FontWeight.w600,
+      ),
+      unselectedLabelStyle: AppTypography.micro,
+      indicatorColor: scheme.primary.withValues(alpha: 0.08),
+      interactionGlowColor: scheme.primary,
+    );
+  }
+}
+
 class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.icon,
@@ -101,7 +147,9 @@ class _NavItem extends StatelessWidget {
             vertical: 8,
           ),
           decoration: BoxDecoration(
-            color: selected ? scheme.primary.withValues(alpha: 0.14) : Colors.transparent,
+            color: selected
+                ? scheme.primary.withValues(alpha: 0.14)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(AppColors.radiusPill),
           ),
           child: Row(

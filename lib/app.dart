@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import 'core/config/app_config.dart';
 import 'core/router/app_router.dart';
@@ -20,13 +21,17 @@ class JmComicApp extends ConsumerWidget {
     // 别等用户点进「我的」才去校验（那时点赞/评论已经因为未登录被拦了）。
     ref.read(accountSessionProvider);
 
-    return MaterialApp.router(
-      title: AppConfig.appName,
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      themeMode: themeMode,
-      routerConfig: router,
+    return LiquidGlassWidgets.wrap(
+      theme: const GlassThemeData.ios27(),
+      brightnessResolver: Theme.maybeBrightnessOf,
+      child: MaterialApp.router(
+        title: AppConfig.appName,
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeMode: themeMode,
+        routerConfig: router,
+      ),
     );
   }
 }

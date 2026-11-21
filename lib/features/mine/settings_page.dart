@@ -10,6 +10,7 @@ import '../../core/di/providers.dart';
 import '../../core/icons/app_icons.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/theme/interface_style_selector.dart';
 import '../../core/utils/host_normalizer.dart';
 import '../../data/local/settings_store.dart';
 import '../../data/models/jm_host_entry.dart';
@@ -41,6 +42,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final records = ref.watch(downloadRecordsProvider);
 
     return Scaffold(
+      backgroundColor: settings.interfaceStyle == AppInterfaceStyle.liquidGlass
+          ? Colors.transparent
+          : null,
       appBar: AppBar(
         leading: IconButton(
           icon: IconTheme(
@@ -89,6 +93,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           const SizedBox(height: 8),
           const SectionHeader(title: '外观'),
+          const InterfaceStyleSelector(),
           _SettingsTile(
             icon: AppIcons.theme,
             title: '主题模式',
@@ -288,7 +293,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 trailing: mode == current
                     ? IconTheme(
                         data: IconThemeData(
-                            color: Theme.of(context).colorScheme.primary,),
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                         child: const SvgIcon(AppIcons.check, size: 20),
                       )
                     : null,
@@ -321,7 +327,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 trailing: entry.code == current
                     ? IconTheme(
                         data: IconThemeData(
-                            color: Theme.of(context).colorScheme.primary,),
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                         child: const SvgIcon(AppIcons.check, size: 20),
                       )
                     : null,
@@ -485,8 +492,10 @@ class _LineStatusList extends StatelessWidget {
                     data: IconThemeData(
                       color: item.ok ? scheme.primary : scheme.onSurfaceVariant,
                     ),
-                    child: SvgIcon(item.ok ? AppIcons.check : AppIcons.close,
-                        size: 16,),
+                    child: SvgIcon(
+                      item.ok ? AppIcons.check : AppIcons.close,
+                      size: 16,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -502,7 +511,9 @@ class _LineStatusList extends StatelessWidget {
                     Container(
                       margin: const EdgeInsets.only(right: 6),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 1,),
+                        horizontal: 6,
+                        vertical: 1,
+                      ),
                       decoration: BoxDecoration(
                         color: scheme.primaryContainer,
                         borderRadius: BorderRadius.circular(6),

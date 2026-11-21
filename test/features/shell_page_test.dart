@@ -1,10 +1,13 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jm_comic/app.dart';
 import 'package:jm_comic/core/di/providers.dart';
 import 'package:jm_comic/data/local/download_store.dart';
 import 'package:jm_comic/data/repositories/home_repository.dart';
+import 'package:jm_comic/features/mine/mine_page.dart';
 import 'package:jm_comic/features/shell/glass_nav_bar.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../helpers/fixtures.dart';
 import '../helpers/test_env.dart';
@@ -28,7 +31,10 @@ void main() {
 
   test('Dock 只有两档：首页 / 我的', () {
     expect(GlassNavBar.items.length, 2);
-    expect(GlassNavBar.items.map((item) => item.label).toList(), <String>['首页', '我的']);
+    expect(
+      GlassNavBar.items.map((item) => item.label).toList(),
+      <String>['首页', '我的'],
+    );
   });
 
   testWidgets('Dock 两档切换 + 「我的」二级菜单进入下载与历史', (tester) async {
@@ -53,7 +59,8 @@ void main() {
     final barRect = tester.getRect(find.byType(GlassNavBar));
 
     // 第二档：我的（两项均分，右半区即「我的」）
-    await tester.tapAt(Offset(barRect.left + barRect.width * 0.75, barRect.center.dy));
+    await tester
+        .tapAt(Offset(barRect.left + barRect.width * 0.75, barRect.center.dy));
     await _pumpFrames(tester);
     expect(find.text('未登录 · 本地模式'), findsOneWidget);
     expect(find.text('下载与历史'), findsOneWidget);
@@ -74,8 +81,73 @@ void main() {
     // 回「我的」再切回首页
     await tester.tap(find.byTooltip('返回'));
     await _pumpFrames(tester, frames: 12);
-    await tester.tapAt(Offset(barRect.left + barRect.width * 0.25, barRect.center.dy));
+    await tester
+        .tapAt(Offset(barRect.left + barRect.width * 0.25, barRect.center.dy));
     await _pumpFrames(tester, frames: 12);
     expect(find.text('JMComic'), findsWidgets);
+  });
+
+  testWidgets('「我的」可切换 LiquidGlass / Metal，Dock 即时更新', (
+    tester,
+  ) async {
+    final prefs = await testPreferences();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          downloadHistoryProvider.overrideWithValue(MemoryDownloadHistory()),
+          jmApiProvider.overrideWithValue(FakeJmApi()),
+          jmBootstrapProvider.overrideWith((ref) async => FakeJmApi()),
+          homeRepositoryProvider.overrideWith(
+            (ref) async => HomeRepository(api: FakeJmApi()),
+          ),
+        ],
+        child: const JmComicApp(),
+      ),
+    );
+    await _pumpFrames(tester);
+
+    expect(find.byType(GlassNavBar), findsOneWidget);
+    final metalRect = tester.getRect(find.byType(GlassNavBar));
+    await tester.tapAt(
+      Offset(metalRect.left + metalRect.width * 0.75, metalRect.center.dy),
+    );
+    await _pumpFrames(tester);
+
+    final mineScrollable = find.descendant(
+      of: find.byType(MinePage),
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.text('LiquidGlass'),
+      240,
+      scrollable: mineScrollable.first,
+    );
+    expect(find.text('Metal'), findsOneWidget);
+    await tester.ensureVisible(find.text('LiquidGlass'));
+    await tester.pump();
+    await tester.tap(find.text('LiquidGlass'));
+    await _pumpFrames(tester, frames: 12);
+
+    expect(find.byType(LiquidGlassNavBar), findsOneWidget);
+    expect(find.byType(GlassTabBar), findsOneWidget);
+    expect(find.byType(GlassNavBar), findsNothing);
+
+    final liquidScrollable = find.descendant(
+      of: find.byType(MinePage),
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.text('Metal'),
+      240,
+      scrollable: liquidScrollable.first,
+    );
+    await tester.ensureVisible(find.text('Metal'));
+    await tester.pump();
+    await tester.tap(find.text('Metal'));
+    await _pumpFrames(tester, frames: 12);
+
+    expect(find.byType(GlassNavBar), findsOneWidget);
+    expect(find.byType(LiquidGlassNavBar), findsNothing);
   });
 }

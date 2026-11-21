@@ -137,6 +137,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.2"
+  cupertino_icons:
+    dependency: "direct main"
+    description:
+      name: cupertino_icons
+      sha256: ba631d1c7f7bef6b729a622b7b752645a2d076dba9976925b8f25725a30e1ee6
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.8"
   cupertino_ui:
     dependency: transitive
     description:
@@ -461,6 +469,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.1.1"
+  liquid_glass_widgets:
+    dependency: "direct main"
+    description:
+      name: liquid_glass_widgets
+      sha256: ec477e8724e9e74576dbfec1fd083591acb618e64c87d4f826ccfa4d44e07c11
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.19.0"
   listen:
     dependency: transitive
     description:

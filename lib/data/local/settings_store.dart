@@ -29,10 +29,30 @@ enum AppThemeMode {
   }
 }
 
-/// 应用设置（主题、默认阅读模式、翻页动画、自动切换线路、自动登录）。
+/// 界面材质（与浅色 / 深色模式独立，默认保留 Metal）。
+enum AppInterfaceStyle {
+  metal('metal', 'Metal', '经典 Metal 界面与悬浮 Dock'),
+  liquidGlass('liquidGlass', 'LiquidGlass', 'iOS 27 液态玻璃、折射与动态光影');
+
+  const AppInterfaceStyle(this.code, this.label, this.description);
+
+  final String code;
+  final String label;
+  final String description;
+
+  static AppInterfaceStyle fromCode(String? code) {
+    for (final style in AppInterfaceStyle.values) {
+      if (style.code == code) return style;
+    }
+    return AppInterfaceStyle.metal;
+  }
+}
+
+/// 应用设置（界面材质、明暗模式、阅读与网络偏好）。
 class AppSettings {
   const AppSettings({
     this.themeMode = AppThemeMode.light,
+    this.interfaceStyle = AppInterfaceStyle.metal,
     this.defaultReaderMode = 'paged',
     this.pageTurnAnimation = true,
     this.autoSwitchHost = true,
@@ -40,6 +60,7 @@ class AppSettings {
   });
 
   final AppThemeMode themeMode;
+  final AppInterfaceStyle interfaceStyle;
 
   /// 'paged'（左右翻页） / 'vertical'（上下滚动）。
   final String defaultReaderMode;
@@ -51,6 +72,7 @@ class AppSettings {
 
   AppSettings copyWith({
     AppThemeMode? themeMode,
+    AppInterfaceStyle? interfaceStyle,
     String? defaultReaderMode,
     bool? pageTurnAnimation,
     bool? autoSwitchHost,
@@ -58,6 +80,7 @@ class AppSettings {
   }) =>
       AppSettings(
         themeMode: themeMode ?? this.themeMode,
+        interfaceStyle: interfaceStyle ?? this.interfaceStyle,
         defaultReaderMode: defaultReaderMode ?? this.defaultReaderMode,
         pageTurnAnimation: pageTurnAnimation ?? this.pageTurnAnimation,
         autoSwitchHost: autoSwitchHost ?? this.autoSwitchHost,
@@ -70,6 +93,7 @@ class SettingsStore {
   SettingsStore(this._box);
 
   static const String _keyThemeMode = 'themeMode';
+  static const String _keyInterfaceStyle = 'interfaceStyle';
   static const String _keyReaderMode = 'readerMode';
   static const String _keyPageTurnAnimation = 'pageTurnAnimation';
   static const String _keyAutoSwitchHost = 'autoSwitchHost';
@@ -79,6 +103,8 @@ class SettingsStore {
 
   AppSettings read() => AppSettings(
         themeMode: AppThemeMode.fromCode(_box.get(_keyThemeMode) as String?),
+        interfaceStyle:
+            AppInterfaceStyle.fromCode(_box.get(_keyInterfaceStyle) as String?),
         defaultReaderMode: (_box.get(_keyReaderMode) as String?) ?? 'paged',
         pageTurnAnimation: (_box.get(_keyPageTurnAnimation) as bool?) ?? true,
         autoSwitchHost: (_box.get(_keyAutoSwitchHost) as bool?) ?? true,
@@ -87,6 +113,7 @@ class SettingsStore {
 
   Future<void> write(AppSettings settings) async {
     await _box.put(_keyThemeMode, settings.themeMode.code);
+    await _box.put(_keyInterfaceStyle, settings.interfaceStyle.code);
     await _box.put(_keyReaderMode, settings.defaultReaderMode);
     await _box.put(_keyPageTurnAnimation, settings.pageTurnAnimation);
     await _box.put(_keyAutoSwitchHost, settings.autoSwitchHost);
@@ -113,6 +140,9 @@ class SettingsNotifier extends Notifier<AppSettings> {
   Future<void> setThemeMode(AppThemeMode mode) =>
       _commit(state.copyWith(themeMode: mode));
 
+  Future<void> setInterfaceStyle(AppInterfaceStyle style) =>
+      _commit(state.copyWith(interfaceStyle: style));
+
   Future<void> setDefaultReaderMode(String mode) =>
       _commit(state.copyWith(defaultReaderMode: mode));
 
@@ -129,4 +159,10 @@ class SettingsNotifier extends Notifier<AppSettings> {
 /// 便捷派生：MaterialApp 的 ThemeMode。
 final Provider<ThemeMode> themeModeProvider = Provider<ThemeMode>(
   (ref) => ref.watch(settingsProvider).themeMode.themeMode,
+);
+
+/// 便捷派生：Metal / LiquidGlass 界面材质。
+final Provider<AppInterfaceStyle> interfaceStyleProvider =
+    Provider<AppInterfaceStyle>(
+  (ref) => ref.watch(settingsProvider).interfaceStyle,
 );

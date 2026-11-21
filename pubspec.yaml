@@ -37,6 +37,8 @@ dependencies:
   html: ^0.15.5
   collection: ^1.18.0
   flutter_secure_storage: 9.2.2
+  liquid_glass_widgets: 1.19.0
+  cupertino_icons: 1.0.8
 
 dev_dependencies:
   flutter_test:
