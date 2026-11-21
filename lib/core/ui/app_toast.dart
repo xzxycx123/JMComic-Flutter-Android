@@ -3,8 +3,13 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
+import '../icons/app_icons.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_glass_theme.dart';
 import '../theme/app_typography.dart';
+import '../theme/interface_style_scope.dart';
+import 'glass/app_button.dart';
+import 'glass/app_surface.dart';
 
 /// 自绘轻提示（底部细胶囊），**不依赖 SnackBar 的计时器**。
 ///
@@ -27,18 +32,18 @@ class AppToast {
     String message, {
     String? actionLabel,
     VoidCallback? onAction,
-    IconData? icon,
+    String? icon,
     Duration duration = const Duration(milliseconds: 1600),
   }) {
-    final overlay = Overlay.maybeOf(context, rootOverlay: true) ??
-        Overlay.maybeOf(context);
+    final overlay =
+        Overlay.maybeOf(context, rootOverlay: true) ?? Overlay.maybeOf(context);
     if (overlay == null) return;
 
     dismiss();
     final token = ++_token;
-    final hold = actionLabel == null
-        ? duration
-        : duration + const Duration(milliseconds: 1400);
+    final hasAction = actionLabel != null && onAction != null;
+    final hold =
+        hasAction ? duration + const Duration(milliseconds: 1400) : duration;
 
     final key = GlobalKey<_ToastBubbleState>();
     final entry = OverlayEntry(
@@ -46,12 +51,13 @@ class AppToast {
         key: key,
         message: message,
         icon: icon,
-        actionLabel: actionLabel,
-        onAction: actionLabel == null
+        actionLabel: hasAction ? actionLabel : null,
+        onAction: !hasAction
             ? null
             : () {
-                onAction?.call();
+                if (token != _token || _entry == null) return;
                 dismiss();
+                onAction();
               },
       ),
     );
@@ -105,7 +111,7 @@ class _ToastBubble extends StatefulWidget {
   });
 
   final String message;
-  final IconData? icon;
+  final String? icon;
   final String? actionLabel;
   final VoidCallback? onAction;
 
@@ -150,22 +156,67 @@ class _ToastBubbleState extends State<_ToastBubble>
   );
 
   bool _dismissing = false;
+  bool _started = false;
 
   @override
-  void initState() {
-    super.initState();
-    _controller.forward();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.value = 1;
+    } else {
+      _controller.forward();
+    }
   }
 
   /// 播放退场动画，调用方在完成后移除 OverlayEntry。
   Future<void> dismiss() async {
     if (_dismissing) return;
     _dismissing = true;
+    if (MediaQuery.disableAnimationsOf(context)) return;
     try {
-      await _controller.reverse();
+      await _controller.reverse().orCancel;
     } catch (_) {
       // Ticker 在 dispose 后会被取消，忽略即可。
     }
+  }
+
+  Widget _buildGlass(BuildContext context) {
+    final tokens = AppGlassTheme.of(context);
+    final action = widget.actionLabel;
+    return AppSurface(
+      kind: AppSurfaceKind.overlay,
+      borderRadius: BorderRadius.circular(AppColors.radiusPill),
+      padding: EdgeInsets.fromLTRB(16, 6, action == null ? 16 : 6, 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.icon case final icon?) ...[
+            SvgIcon(icon, size: 14, color: tokens.accent),
+            const SizedBox(width: 7),
+          ],
+          Flexible(
+            child: Text(
+              widget.message,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: AppTypography.caption
+                  .copyWith(color: tokens.scheme.onSurface, height: 1.2),
+            ),
+          ),
+          if (action != null) ...[
+            const SizedBox(width: 6),
+            AppButton.text(
+              label: action,
+              onPressed: widget.onAction,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -202,104 +253,113 @@ class _ToastBubbleState extends State<_ToastBubble>
                     child: ConstrainedBox(
                       // 窄一点，细长条更显轻。
                       constraints: const BoxConstraints(maxWidth: 320),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(999),
-                          boxShadow: <BoxShadow>[
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.16),
-                              blurRadius: 20,
-                              spreadRadius: -4,
-                              offset: const Offset(0, 8),
-                            ),
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.06),
-                              blurRadius: 4,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(999),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                            child: Container(
-                              // 关键：垂直 padding 收到 7，单行总高 ≈ 28。
-                              padding: EdgeInsets.fromLTRB(
-                                hasIcon ? 14 : 16,
-                                7,
-                                hasAction ? 6 : 16,
-                                7,
-                              ),
+                      child: context.isLiquidGlass
+                          ? _buildGlass(context)
+                          : DecoratedBox(
                               decoration: BoxDecoration(
-                                color:
-                                    AppColors.lightInk.withValues(alpha: 0.90),
                                 borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                  width: 0.8,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: <Widget>[
-                                  if (hasIcon) ...<Widget>[
-                                    Icon(
-                                      widget.icon,
-                                      size: 14,
-                                      color: AppColors.darkPrimary,
-                                    ),
-                                    const SizedBox(width: 7),
-                                  ],
-                                  Flexible(
-                                    child: Text(
-                                      widget.message,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                      // 行高 1.15，两行时也不会把胶囊撑胖。
-                                      style: AppTypography.caption.copyWith(
-                                        color: AppColors.darkInk,
-                                        height: 1.15,
-                                        fontWeight: FontWeight.w500,
-                                        letterSpacing: 0.1,
-                                      ),
-                                    ),
+                                boxShadow: <BoxShadow>[
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.16),
+                                    blurRadius: 20,
+                                    spreadRadius: -4,
+                                    offset: const Offset(0, 8),
                                   ),
-                                  if (hasAction) ...<Widget>[
-                                    const SizedBox(width: 6),
-                                    TextButton(
-                                      onPressed: widget.onAction,
-                                      style: TextButton.styleFrom(
-                                        foregroundColor:
-                                            AppColors.darkPrimary,
-                                        backgroundColor: AppColors.darkPrimary
-                                            .withValues(alpha: 0.15),
-                                        minimumSize: Size.zero,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 5,
-                                        ),
-                                        tapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                        visualDensity: VisualDensity.compact,
-                                        shape: const StadiumBorder(),
-                                        textStyle:
-                                            AppTypography.caption.copyWith(
-                                          fontSize: 11,
-                                          height: 1.1,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      child: Text(widget.actionLabel!),
-                                    ),
-                                  ],
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.06),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 1),
+                                  ),
                                 ],
                               ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(999),
+                                child: BackdropFilter(
+                                  filter:
+                                      ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                                  child: Container(
+                                    // 关键：垂直 padding 收到 7，单行总高 ≈ 28。
+                                    padding: EdgeInsets.fromLTRB(
+                                      hasIcon ? 14 : 16,
+                                      7,
+                                      hasAction ? 6 : 16,
+                                      7,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.lightInk
+                                          .withValues(alpha: 0.90),
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.08),
+                                        width: 0.8,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: <Widget>[
+                                        if (hasIcon) ...<Widget>[
+                                          SvgIcon(
+                                            widget.icon!,
+                                            size: 14,
+                                            color: AppColors.darkPrimary,
+                                          ),
+                                          const SizedBox(width: 7),
+                                        ],
+                                        Flexible(
+                                          child: Text(
+                                            widget.message,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            textAlign: TextAlign.center,
+                                            // 行高 1.15，两行时也不会把胶囊撑胖。
+                                            style:
+                                                AppTypography.caption.copyWith(
+                                              color: AppColors.darkInk,
+                                              height: 1.15,
+                                              fontWeight: FontWeight.w500,
+                                              letterSpacing: 0.1,
+                                            ),
+                                          ),
+                                        ),
+                                        if (hasAction) ...<Widget>[
+                                          const SizedBox(width: 6),
+                                          TextButton(
+                                            onPressed: widget.onAction,
+                                            style: TextButton.styleFrom(
+                                              foregroundColor:
+                                                  AppColors.darkPrimary,
+                                              backgroundColor: AppColors
+                                                  .darkPrimary
+                                                  .withValues(alpha: 0.15),
+                                              minimumSize: Size.zero,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 5,
+                                              ),
+                                              tapTargetSize:
+                                                  MaterialTapTargetSize
+                                                      .shrinkWrap,
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                              shape: const StadiumBorder(),
+                                              textStyle: AppTypography.caption
+                                                  .copyWith(
+                                                fontSize: 11,
+                                                height: 1.1,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            child: Text(widget.actionLabel!),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                      ),
                     ),
                   ),
                 ),

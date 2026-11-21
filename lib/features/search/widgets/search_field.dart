@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/icons/app_icons.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/ui/glass/app_glass.dart';
 
 /// 搜索框：高 44、圆角 999、前缀 search 图标、右侧清空 + 取消。
 class SearchField extends StatelessWidget {
@@ -29,7 +30,7 @@ class SearchField extends StatelessWidget {
         Expanded(
           child: SizedBox(
             height: 44,
-            child: TextField(
+            child: AppSearchBar(
               controller: controller,
               focusNode: focusNode,
               autofocus: true,
@@ -40,7 +41,8 @@ class SearchField extends StatelessWidget {
               decoration: InputDecoration(
                 isDense: true,
                 hintText: '车号 or 关键词',
-                prefixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                prefixIconConstraints:
+                    const BoxConstraints(minWidth: 40, minHeight: 40),
                 prefixIcon: Padding(
                   padding: const EdgeInsets.only(left: 14, right: 8),
                   child: IconTheme(
@@ -52,7 +54,10 @@ class SearchField extends StatelessWidget {
                   valueListenable: controller,
                   builder: (context, value, child) {
                     if (value.text.isEmpty) return const SizedBox.shrink();
-                    return IconButton(
+                    return AppIconButton(
+                      glassTransparent: true,
+                      glassSize: 36,
+                      tooltip: '清空搜索',
                       icon: IconTheme(
                         data: IconThemeData(color: scheme.onSurfaceVariant),
                         child: const SvgIcon(AppIcons.close, size: 16),
@@ -69,7 +74,7 @@ class SearchField extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        TextButton(
+        AppButton.text(
           onPressed: onCancel,
           style: TextButton.styleFrom(
             foregroundColor: scheme.onSurfaceVariant,
@@ -90,12 +95,14 @@ class HistoryChips extends StatelessWidget {
     required this.history,
     required this.onSelect,
     required this.onClear,
+    this.onRemove,
     super.key,
   });
 
   final List<String> history;
   final ValueChanged<String> onSelect;
   final VoidCallback onClear;
+  final ValueChanged<String>? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -111,7 +118,7 @@ class HistoryChips extends StatelessWidget {
               style: AppTypography.bodyStrong.copyWith(color: scheme.onSurface),
             ),
             const Spacer(),
-            TextButton(
+            AppButton.text(
               onPressed: onClear,
               style: TextButton.styleFrom(
                 foregroundColor: scheme.onSurfaceVariant,
@@ -127,14 +134,24 @@ class HistoryChips extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: history.map((keyword) {
-            return ActionChip(
-              label: Text(keyword),
-              onPressed: () => onSelect(keyword),
-              labelStyle: AppTypography.caption.copyWith(color: scheme.onSurface),
-              backgroundColor: scheme.surfaceContainer,
-              side: BorderSide(color: scheme.outlineVariant),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppColors.radiusPill),
+            void select() => onSelect(keyword);
+            final label = Text(keyword);
+            final remove = onRemove;
+            return AppChip(
+              label: Text(keyword, style: AppTypography.caption),
+              onTap: select,
+              onDeleted: remove == null ? null : () => remove(keyword),
+              kind: AppChipKind.input,
+              metalChild: ActionChip(
+                label: label,
+                onPressed: select,
+                labelStyle:
+                    AppTypography.caption.copyWith(color: scheme.onSurface),
+                backgroundColor: scheme.surfaceContainer,
+                side: BorderSide(color: scheme.outlineVariant),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppColors.radiusPill),
+                ),
               ),
             );
           }).toList(growable: false),

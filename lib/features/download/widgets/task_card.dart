@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/icons/app_icons.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/ui/glass/app_glass.dart';
 import '../../../data/models/download_record.dart';
 import '../../home/widgets/cover_image.dart';
 
@@ -28,10 +29,12 @@ class TaskCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final active = record.isActive;
 
-    return Container(
+    return AppSurface(
+      kind: AppSurfaceKind.controlGroup,
+      borderRadius: BorderRadius.circular(AppColors.radiusCard),
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
+      metalDecoration: BoxDecoration(
         color: scheme.surfaceContainer,
         borderRadius: BorderRadius.circular(AppColors.radiusCard),
         border: Border.all(color: scheme.outlineVariant),
@@ -42,7 +45,11 @@ class TaskCard extends StatelessWidget {
           SizedBox(
             width: 48,
             height: 64,
-            child: CoverImage(albumId: record.albumId, radius: 8, showPlaceholderIcon: false),
+            child: CoverImage(
+              albumId: record.albumId,
+              radius: 8,
+              showPlaceholderIcon: false,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -56,7 +63,8 @@ class TaskCard extends StatelessWidget {
                         record.displayTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTypography.cardTitle.copyWith(color: scheme.onSurface),
+                        style: AppTypography.cardTitle
+                            .copyWith(color: scheme.onSurface),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -68,7 +76,8 @@ class TaskCard extends StatelessWidget {
                   _statusLine(record),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+                  style: AppTypography.micro
+                      .copyWith(color: scheme.onSurfaceVariant),
                 ),
                 if (record.error != null) ...<Widget>[
                   const SizedBox(height: 4),
@@ -92,19 +101,22 @@ class TaskCard extends StatelessWidget {
                   child: Stack(
                     alignment: Alignment.center,
                     children: <Widget>[
-                      CircularProgressIndicator(
-                        value: record.percent <= 0 ? null : record.percent / 100,
+                      AppProgressIndicator.circular(
+                        size: 34,
+                        value:
+                            record.percent <= 0 ? null : record.percent / 100,
                         strokeWidth: 2.4,
                       ),
                       Text(
                         '${record.percent}',
-                        style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+                        style: AppTypography.micro
+                            .copyWith(color: scheme.onSurfaceVariant),
                       ),
                     ],
                   ),
                 )
               else
-                PopupMenuButton<String>(
+                AppMenu<String>(
                   icon: IconTheme(
                     data: IconThemeData(color: scheme.onSurfaceVariant),
                     child: const SvgIcon(AppIcons.settings, size: 18),
@@ -122,17 +134,21 @@ class TaskCard extends StatelessWidget {
                         break;
                     }
                   },
-                  itemBuilder: (context) => <PopupMenuEntry<String>>[
+                  items: <AppMenuItem<String>>[
                     if (record.isOpenable)
-                      const PopupMenuItem<String>(value: 'open', child: Text('打开 PDF')),
+                      const AppMenuItem<String>(value: 'open', label: '打开 PDF'),
                     if (record.state == DownloadState.failed ||
                         record.state == DownloadState.cancelled)
-                      const PopupMenuItem<String>(value: 'retry', child: Text('重试')),
-                    const PopupMenuItem<String>(value: 'remove', child: Text('删除记录')),
+                      const AppMenuItem<String>(value: 'retry', label: '重试'),
+                    const AppMenuItem<String>(
+                      value: 'remove',
+                      label: '删除记录',
+                      destructive: true,
+                    ),
                   ],
                 ),
               if (active)
-                IconButton(
+                AppIconButton(
                   tooltip: '取消',
                   onPressed: onCancel,
                   icon: IconTheme(
@@ -173,15 +189,24 @@ class _StatePill extends StatelessWidget {
       DownloadState.cancelled => scheme.onSurfaceVariant,
       _ => scheme.secondary,
     };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(AppColors.radiusPill),
-      ),
-      child: Text(
-        state.label,
-        style: AppTypography.micro.copyWith(color: color),
+    const padding = EdgeInsets.symmetric(horizontal: 8, vertical: 3);
+    final label = Text(
+      state.label,
+      style: AppTypography.micro.copyWith(color: color),
+    );
+    return AppChip(
+      kind: AppChipKind.staticLabel,
+      label: label,
+      padding: padding,
+      color: color.withValues(alpha: 0.14),
+      foregroundColor: color,
+      metalChild: Container(
+        padding: padding,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(AppColors.radiusPill),
+        ),
+        child: label,
       ),
     );
   }

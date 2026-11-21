@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/constants/jm_constants.dart';
 import '../../core/icons/app_icons.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/ui/glass/app_glass.dart';
 import '../home/widgets/feed_skeleton.dart';
 import 'search_providers.dart';
 import 'widgets/result_grid.dart';
@@ -59,7 +60,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     final resultState = ref.watch(searchControllerProvider);
     final history = ref.watch(searchHistoryProvider);
 
-    return Scaffold(
+    return AppGlassPage(
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -86,7 +87,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   _liveHint,
-                  style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+                  style: AppTypography.micro
+                      .copyWith(color: scheme.onSurfaceVariant),
                 ),
               ),
             ),
@@ -96,7 +98,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   child: SizedBox(
                     width: 26,
                     height: 26,
-                    child: CircularProgressIndicator(strokeWidth: 2.4),
+                    child: AppProgressIndicator.circular(strokeWidth: 2.4),
                   ),
                 ),
                 error: (error, stackTrace) => EmptyState(
@@ -113,6 +115,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                       onSelectHistory: _fillHistory,
                       onClearHistory: () =>
                           ref.read(searchHistoryProvider.notifier).clear(),
+                      onRemoveHistory: (keyword) => ref
+                          .read(searchHistoryProvider.notifier)
+                          .remove(keyword),
                       onSelectHot: _fillHistory,
                     );
                   }
@@ -131,7 +136,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   }
                   return Column(
                     children: <Widget>[
-                      ResultHeader(total: results.total, keyword: results.keyword),
+                      ResultHeader(
+                        total: results.total,
+                        keyword: results.keyword,
+                      ),
                       _SortBar(
                         selected: results.order,
                         onSelected: (order) => ref
@@ -143,10 +151,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                           items: results.items,
                           loadingMore: results.loadingMore,
                           error: results.error,
-                          onRetry: () =>
-                              ref.read(searchControllerProvider.notifier).loadMore(),
-                          onLoadMore: () =>
-                              ref.read(searchControllerProvider.notifier).loadMore(),
+                          onRetry: () => ref
+                              .read(searchControllerProvider.notifier)
+                              .loadMore(),
+                          onLoadMore: () => ref
+                              .read(searchControllerProvider.notifier)
+                              .loadMore(),
                           onTap: (album) => context.push('/album/${album.id}'),
                         ),
                       ),
@@ -183,31 +193,45 @@ class _SortBar extends StatelessWidget {
       height: 40,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
+        clipBehavior: context.isLiquidGlass ? Clip.none : Clip.hardEdge,
         padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
         itemCount: kSearchSorts.length,
         separatorBuilder: (context, index) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final order = kSearchSorts[index];
           final active = order == selected;
-          return GestureDetector(
-            onTap: () => onSelected(order),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: active ? scheme.primaryContainer : Colors.transparent,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: active ? Colors.transparent : scheme.outlineVariant,
+          void select() => onSelected(order);
+          final foreground =
+              active ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
+          final label = Text(
+            _labels[order] ?? order.label,
+            style: AppTypography.micro.copyWith(
+              color: foreground,
+              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+            ),
+          );
+          const padding = EdgeInsets.symmetric(horizontal: 14);
+          return AppChip(
+            label: label,
+            foregroundColor: foreground,
+            onTap: select,
+            selected: active,
+            kind: AppChipKind.choice,
+            padding: padding,
+            metalChild: GestureDetector(
+              onTap: select,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                padding: padding,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: active ? scheme.primaryContainer : Colors.transparent,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: active ? Colors.transparent : scheme.outlineVariant,
+                  ),
                 ),
-              ),
-              child: Text(
-                _labels[order] ?? order.label,
-                style: AppTypography.micro.copyWith(
-                  color: active ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                ),
+                child: label,
               ),
             ),
           );
@@ -222,12 +246,14 @@ class _IdleBody extends StatelessWidget {
     required this.history,
     required this.onSelectHistory,
     required this.onClearHistory,
+    required this.onRemoveHistory,
     required this.onSelectHot,
   });
 
   final List<String> history;
   final ValueChanged<String> onSelectHistory;
   final VoidCallback onClearHistory;
+  final ValueChanged<String> onRemoveHistory;
   final ValueChanged<String> onSelectHot;
 
   @override
@@ -240,21 +266,34 @@ class _IdleBody extends StatelessWidget {
           history: history,
           onSelect: onSelectHistory,
           onClear: onClearHistory,
+          onRemove: onRemoveHistory,
         ),
         if (history.isNotEmpty) const SizedBox(height: 18),
-        Text('热门搜索', style: AppTypography.bodyStrong.copyWith(color: scheme.onSurface)),
+        Text(
+          '热门搜索',
+          style: AppTypography.bodyStrong.copyWith(color: scheme.onSurface),
+        ),
         const SizedBox(height: 10),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: kHotKeywords.map((keyword) {
-            return ActionChip(
-              label: Text(keyword),
-              onPressed: () => onSelectHot(keyword),
-              labelStyle: AppTypography.caption.copyWith(color: scheme.onSurface),
-              backgroundColor: scheme.surfaceContainer,
-              side: BorderSide(color: scheme.outlineVariant),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+            void select() => onSelectHot(keyword);
+            return AppChip(
+              label: Text(keyword, style: AppTypography.caption),
+              onTap: select,
+              kind: AppChipKind.action,
+              metalChild: ActionChip(
+                label: Text(keyword),
+                onPressed: select,
+                labelStyle:
+                    AppTypography.caption.copyWith(color: scheme.onSurface),
+                backgroundColor: scheme.surfaceContainer,
+                side: BorderSide(color: scheme.outlineVariant),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
             );
           }).toList(growable: false),
         ),
@@ -269,7 +308,8 @@ class _IdleBody extends StatelessWidget {
             Expanded(
               child: Text(
                 '输入纯车号会直接进详情页；输入关键词会走服务端搜索。',
-                style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+                style: AppTypography.micro
+                    .copyWith(color: scheme.onSurfaceVariant),
               ),
             ),
           ],

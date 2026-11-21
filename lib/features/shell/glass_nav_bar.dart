@@ -6,6 +6,7 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../../core/icons/app_icons.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_glass_theme.dart';
 import '../../core/theme/app_typography.dart';
 
 /// 默认 Metal 胶囊 Dock（两档：首页 / 我的；下载与历史收进「我的」）。
@@ -87,7 +88,8 @@ class LiquidGlassNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final tokens = AppGlassTheme.of(context);
+    final scheme = tokens.scheme;
     return GlassTabBar.bottom(
       tabs: <GlassTab>[
         for (final item in GlassNavBar.items)
@@ -104,16 +106,20 @@ class LiquidGlassNavBar extends StatelessWidget {
         onSelect(index);
       },
       iconSize: 22,
-      selectedIconColor: scheme.primary,
+      selectedIconColor: tokens.accent,
       unselectedIconColor: scheme.onSurfaceVariant,
-      selectedLabelColor: scheme.primary,
+      selectedLabelColor: tokens.accent,
       unselectedLabelColor: scheme.onSurfaceVariant,
       selectedLabelStyle: AppTypography.micro.copyWith(
         fontWeight: FontWeight.w600,
       ),
       unselectedLabelStyle: AppTypography.micro,
-      indicatorColor: scheme.primary.withValues(alpha: 0.08),
+      indicatorColor: tokens.selection,
       interactionGlowColor: scheme.primary,
+      interactionBehavior: tokens.reduceMotion
+          ? GlassInteractionBehavior.none
+          : GlassInteractionBehavior.full,
+      indicatorPinchStrength: tokens.reduceMotion ? 0 : .4,
     );
   }
 }

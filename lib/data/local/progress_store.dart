@@ -54,8 +54,9 @@ class ReadingHistoryEntry {
   final String chapterId;
   final ReaderProgress progress;
 
-  String get displayTitle =>
-      progress.albumTitle.trim().isEmpty ? 'JM$albumId' : progress.albumTitle.trim();
+  String get displayTitle => progress.albumTitle.trim().isEmpty
+      ? 'JM$albumId'
+      : progress.albumTitle.trim();
 
   String get subtitle {
     final chapter = progress.chapterTitle.trim();
@@ -97,7 +98,11 @@ class ProgressStore {
     return ReaderProgress.fromJson(map);
   }
 
-  Future<void> write(String albumId, String chapterId, ReaderProgress progress) async {
+  Future<void> write(
+    String albumId,
+    String chapterId,
+    ReaderProgress progress,
+  ) async {
     await _box.put(keyFor(albumId, chapterId), progress.toJson());
   }
 
@@ -157,6 +162,13 @@ class SearchHistoryStore {
     ].take(limit).toList(growable: false);
     await _box.put(_key, next);
     return next;
+  }
+
+  Future<void> remove(String keyword) async {
+    final current = read();
+    final next =
+        current.where((item) => item != keyword).toList(growable: false);
+    if (next.length != current.length) await _box.put(_key, next);
   }
 
   Future<void> clear() => _box.delete(_key);

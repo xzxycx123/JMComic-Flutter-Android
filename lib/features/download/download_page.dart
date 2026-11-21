@@ -6,6 +6,8 @@ import '../../core/di/providers.dart';
 import '../../core/icons/app_icons.dart';
 import '../../core/icons/app_images.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/ui/app_toast.dart';
+import '../../core/ui/glass/app_glass.dart';
 import '../../core/utils/jm_id_parser.dart';
 import '../../data/models/download_record.dart';
 import '../home/widgets/feed_skeleton.dart';
@@ -34,10 +36,11 @@ class _DownloadPageState extends ConsumerState<DownloadPage> {
   }
 
   Future<void> _submit() async {
+    if (_busy) return;
     final preview = previewJmIds(_controller.text);
-    final messenger = ScaffoldMessenger.of(context);
+    const duration = Duration(seconds: 4);
     if (preview.isEmpty) {
-      messenger.showSnackBar(const SnackBar(content: Text('没有识别到有效车号')));
+      AppToast.show(context, '没有识别到有效车号', duration: duration);
       return;
     }
 
@@ -45,15 +48,17 @@ class _DownloadPageState extends ConsumerState<DownloadPage> {
     try {
       final repository = ref.read(downloadRepositoryProvider);
       final result = await repository.enqueueInput(_controller.text);
+      if (!mounted) return;
       _controller.clear();
       ref.read(downloadInputProvider.notifier).state = '';
       final parts = <String>['已加入 ${result.added} 个任务'];
       if (result.skipped > 0) {
         parts.add('${result.skipped} 个已在队列中');
       }
-      messenger.showSnackBar(SnackBar(content: Text(parts.join(' · '))));
+      AppToast.show(context, parts.join(' · '), duration: duration);
     } catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text('加入队列失败：$error')));
+      if (!mounted) return;
+      AppToast.show(context, '加入队列失败：$error', duration: duration);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -68,21 +73,23 @@ class _DownloadPageState extends ConsumerState<DownloadPage> {
     final activeCount = ref.watch(activeDownloadCountProvider);
     final repository = ref.watch(downloadRepositoryProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
+    return AppGlassPage(
+      appBar: AppGlassAppBar(
+        leading: AppIconButton(
           tooltip: '返回',
           icon: IconTheme(
             data: IconThemeData(color: scheme.onSurface),
             child: const SvgIcon(AppIcons.back, size: 22),
           ),
-          onPressed: () => context.canPop() ? context.pop() : context.go('/mine'),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go('/mine'),
         ),
         title: const Text('下载'),
         actions: <Widget>[
           if (allRecords.any((record) => record.isFinished))
-            TextButton(
-              onPressed: () => _clearFinished(),
+            AppButton.text(
+              onPressed: _clearFinished,
+              foregroundColor: scheme.onSurfaceVariant,
               style: TextButton.styleFrom(
                 foregroundColor: scheme.onSurfaceVariant,
                 textStyle: AppTypography.caption,
@@ -109,13 +116,13 @@ class _DownloadPageState extends ConsumerState<DownloadPage> {
               child: Row(
                 children: <Widget>[
                   Expanded(
-                    child: SegmentedButton<DownloadFilter>(
-                      segments: <ButtonSegment<DownloadFilter>>[
-                        ButtonSegment<DownloadFilter>(
+                    child: AppSegmentedControl<DownloadFilter>(
+                      segments: <AppSegment<DownloadFilter>>[
+                        AppSegment<DownloadFilter>(
                           value: DownloadFilter.all,
                           label: Text(DownloadFilter.all.label),
                         ),
-                        ButtonSegment<DownloadFilter>(
+                        AppSegment<DownloadFilter>(
                           value: DownloadFilter.active,
                           label: Text(
                             activeCount > 0
@@ -123,17 +130,17 @@ class _DownloadPageState extends ConsumerState<DownloadPage> {
                                 : DownloadFilter.active.label,
                           ),
                         ),
-                        ButtonSegment<DownloadFilter>(
+                        AppSegment<DownloadFilter>(
                           value: DownloadFilter.finished,
                           label: Text(DownloadFilter.finished.label),
                         ),
                       ],
-                      selected: <DownloadFilter>{filter},
-                      showSelectedIcon: false,
-                      onSelectionChanged: (selection) {
-                        ref.read(downloadFilterProvider.notifier).state = selection.first;
+                      selected: filter,
+                      scrollable: true,
+                      onChanged: (value) {
+                        ref.read(downloadFilterProvider.notifier).state = value;
                       },
-                      style: SegmentedButton.styleFrom(
+                      metalStyle: SegmentedButton.styleFrom(
                         textStyle: AppTypography.caption,
                         side: BorderSide(color: scheme.outline),
                         selectedBackgroundColor: scheme.primaryContainer,
@@ -149,7 +156,9 @@ class _DownloadPageState extends ConsumerState<DownloadPage> {
               child: records.isEmpty
                   ? EmptyState(
                       imageAsset: AppImages.rocket,
-                      title: filter == DownloadFilter.all ? '输入车号开始下载' : '这个分组还没有任务',
+                      title: filter == DownloadFilter.all
+                          ? '输入车号开始下载'
+                          : '这个分组还没有任务',
                       description: '车号可从本子链接 /album/[JMCODE]/ 中获取',
                     )
                   : ListView.builder(
@@ -177,8 +186,10 @@ class _DownloadPageState extends ConsumerState<DownloadPage> {
   void _openPdf(BuildContext context, DownloadRecord record) {
     final uri = record.openUri;
     if (uri == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('这个任务还没有生成 PDF 文件')),
+      AppToast.show(
+        context,
+        '这个任务还没有生成 PDF 文件',
+        duration: const Duration(seconds: 4),
       );
       return;
     }
@@ -186,24 +197,21 @@ class _DownloadPageState extends ConsumerState<DownloadPage> {
   }
 
   Future<void> _clearFinished() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await AppDialog.show<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('清空已完成'),
-        content: const Text('只清理记录，已导出的 PDF 不受影响。'),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('清空'),
-          ),
-        ],
-      ),
+      title: '清空已完成',
+      message: '只清理记录，已导出的 PDF 不受影响。',
+      actions: const <AppDialogAction<bool>>[
+        AppDialogAction<bool>(label: '取消', result: false),
+        AppDialogAction<bool>(
+          label: '清空',
+          result: true,
+          primary: true,
+          destructive: true,
+        ),
+      ],
     );
-    if (confirmed != true) return;
+    if (confirmed != true || !mounted) return;
     await ref.read(downloadRepositoryProvider).clearFinished();
   }
 }

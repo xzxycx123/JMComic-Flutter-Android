@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jm_comic/core/theme/interface_style_scope.dart';
 import 'package:jm_comic/core/ui/app_toast.dart';
+import 'package:jm_comic/data/local/settings_store.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 /// 收藏提示（自绘 toast）必须**一定会自己消失**。
 ///
@@ -41,6 +44,46 @@ void main() {
 
     expect(find.text('已收藏'), findsNothing);
     expect(find.text('撤销'), findsNothing);
+  });
+
+  testWidgets('玻璃提示可撤销，普通提示不遮挡页面点击', (tester) async {
+    var underneath = 0;
+    var undone = 0;
+    await tester.pumpWidget(
+      LiquidGlassWidgets.wrap(
+        child: MaterialApp(
+          builder: (_, child) => InterfaceStyleScope(
+            style: AppInterfaceStyle.liquidGlass,
+            child: child!,
+          ),
+          home: Scaffold(
+            body: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => underneath++,
+              child: const SizedBox.expand(),
+            ),
+          ),
+        ),
+      ),
+    );
+    final context = tester.element(find.byType(Scaffold));
+    AppToast.show(context, '普通提示');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.byType(GlassContainer), findsOneWidget);
+    await tester.tapAt(tester.getCenter(find.text('普通提示')));
+    expect(underneath, 1);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('普通提示'), findsNothing);
+
+    AppToast.show(context, '已添加', actionLabel: '撤销', onAction: () => undone++);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.tap(find.text('撤销'));
+    expect(undone, 1);
+    await tester.pumpAndSettle();
+    expect(find.text('已添加'), findsNothing);
   });
 
   testWidgets('连续两次提示只保留最新的那条', (tester) async {

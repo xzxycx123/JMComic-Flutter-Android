@@ -6,6 +6,8 @@ import '../../core/di/providers.dart';
 import '../../core/icons/app_icons.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/ui/app_toast.dart';
+import '../../core/ui/glass/app_glass.dart';
 import '../../data/local/progress_store.dart';
 import '../home/widgets/cover_image.dart';
 import '../home/widgets/feed_skeleton.dart';
@@ -19,7 +21,8 @@ final NotifierProvider<ReadingHistoryNotifier, List<ReadingHistoryEntry>>
 
 class ReadingHistoryNotifier extends Notifier<List<ReadingHistoryEntry>> {
   @override
-  List<ReadingHistoryEntry> build() => ref.watch(progressStoreProvider).entries();
+  List<ReadingHistoryEntry> build() =>
+      ref.watch(progressStoreProvider).entries();
 
   void reload() => state = ref.read(progressStoreProvider).entries();
 
@@ -58,20 +61,21 @@ class _ReadHistoryPageState extends ConsumerState<ReadHistoryPage> {
     final scheme = Theme.of(context).colorScheme;
     final entries = ref.watch(readingHistoryProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
+    return AppGlassPage(
+      appBar: AppGlassAppBar(
+        leading: AppIconButton(
           tooltip: '返回',
           icon: IconTheme(
             data: IconThemeData(color: scheme.onSurface),
             child: const SvgIcon(AppIcons.back, size: 22),
           ),
-          onPressed: () => context.canPop() ? context.pop() : context.go('/mine'),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go('/mine'),
         ),
         title: const Text('阅读历史'),
         actions: <Widget>[
           if (entries.isNotEmpty)
-            TextButton(
+            AppButton.text(
               onPressed: _confirmClear,
               style: TextButton.styleFrom(
                 foregroundColor: scheme.onSurfaceVariant,
@@ -117,14 +121,14 @@ class _ReadHistoryPageState extends ConsumerState<ReadHistoryPage> {
   }
 
   Future<void> _showEntryMenu(ReadingHistoryEntry entry) async {
-    final action = await showModalBottomSheet<String>(
+    final action = await AppSheet.show<String>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            ListTile(
+            AppListTile(
               title: Text(
                 entry.displayTitle,
                 maxLines: 1,
@@ -133,7 +137,7 @@ class _ReadHistoryPageState extends ConsumerState<ReadHistoryPage> {
               subtitle: Text(entry.subtitle),
             ),
             const Divider(height: 1),
-            ListTile(
+            AppListTile(
               leading: IconTheme(
                 data: IconThemeData(color: Theme.of(context).colorScheme.error),
                 child: const SvgIcon(AppIcons.trash, size: 20),
@@ -149,32 +153,32 @@ class _ReadHistoryPageState extends ConsumerState<ReadHistoryPage> {
         ),
       ),
     );
-    if (action != 'remove') return;
+    if (action != 'remove' || !mounted) return;
     await ref.read(readingHistoryProvider.notifier).remove(entry);
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('已删除该条阅读记录')));
+    AppToast.show(
+      context,
+      '已删除该条阅读记录',
+      duration: const Duration(seconds: 4),
+    );
   }
 
   Future<void> _confirmClear() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await AppDialog.show<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('清空阅读历史'),
-        content: const Text('只清空「读到第几页」的记录，不影响收藏与下载。'),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('清空'),
-          ),
-        ],
-      ),
+      title: '清空阅读历史',
+      message: '只清空「读到第几页」的记录，不影响收藏与下载。',
+      actions: const <AppDialogAction<bool>>[
+        AppDialogAction(label: '取消', result: false),
+        AppDialogAction(
+          label: '清空',
+          result: true,
+          primary: true,
+          destructive: true,
+        ),
+      ],
     );
-    if (confirmed != true) return;
+    if (confirmed != true || !mounted) return;
     await ref.read(readingHistoryProvider.notifier).clear();
   }
 }
@@ -194,80 +198,86 @@ class _HistoryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final progress = entry.progress;
-    return Material(
-      color: scheme.surfaceContainer,
-      borderRadius: BorderRadius.circular(AppColors.radiusCard),
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(AppColors.radiusCard),
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Row(
+    final radius = BorderRadius.circular(AppColors.radiusCard);
+    final child = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        SizedBox(
+          width: 56,
+          height: 76,
+          child: CoverImage(albumId: entry.albumId, radius: 10),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              SizedBox(
-                width: 56,
-                height: 76,
-                child: CoverImage(albumId: entry.albumId, radius: 10),
+              Text(
+                entry.displayTitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style:
+                    AppTypography.bodyStrong.copyWith(color: scheme.onSurface),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      entry.displayTitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.bodyStrong
-                          .copyWith(color: scheme.onSurface),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      entry.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.micro
-                          .copyWith(color: scheme.onSurfaceVariant),
-                    ),
-                    const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(999),
-                      child: LinearProgressIndicator(
-                        value: progress.ratio,
-                        minHeight: 4,
-                        backgroundColor: scheme.surfaceContainerHigh,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: <Widget>[
-                        Text(
-                          '${progress.percent}%',
-                          style: AppTypography.micro
-                              .copyWith(color: scheme.primary),
-                        ),
-                        const Spacer(),
-                        Text(
-                          entry.displayTime,
-                          style: AppTypography.micro
-                              .copyWith(color: scheme.onSurfaceVariant),
-                        ),
-                        const SizedBox(width: 6),
-                        IconTheme(
-                          data: IconThemeData(color: scheme.onSurfaceVariant),
-                          child: const SvgIcon(AppIcons.forward, size: 16),
-                        ),
-                      ],
-                    ),
-                  ],
+              const SizedBox(height: 4),
+              Text(
+                entry.subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.micro
+                    .copyWith(color: scheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: AppProgressIndicator.linear(
+                  value: progress.ratio,
+                  minHeight: 4,
+                  backgroundColor: scheme.surfaceContainerHigh,
                 ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: <Widget>[
+                  Text(
+                    '${progress.percent}%',
+                    style: AppTypography.micro.copyWith(color: scheme.primary),
+                  ),
+                  const Spacer(),
+                  Text(
+                    entry.displayTime,
+                    style: AppTypography.micro
+                        .copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                  const SizedBox(width: 6),
+                  IconTheme(
+                    data: IconThemeData(color: scheme.onSurfaceVariant),
+                    child: const SvgIcon(AppIcons.forward, size: 16),
+                  ),
+                ],
               ),
             ],
           ),
         ),
+      ],
+    );
+    return AppSurface(
+      kind: AppSurfaceKind.controlGroup,
+      borderRadius: radius,
+      padding: const EdgeInsets.all(10),
+      onTap: onTap,
+      onLongPress: onLongPress,
+      metalChild: Material(
+        color: scheme.surfaceContainer,
+        borderRadius: radius,
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          borderRadius: radius,
+          child: Padding(padding: const EdgeInsets.all(10), child: child),
+        ),
       ),
+      child: child,
     );
   }
 }

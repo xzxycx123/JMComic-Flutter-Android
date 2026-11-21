@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/icons/app_icons.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/ui/glass/app_glass.dart';
 
 /// shimmer 骨架块（不引图片素材，纯代码绘制）。
 class ShimmerBox extends StatefulWidget {
@@ -21,7 +22,8 @@ class ShimmerBox extends StatefulWidget {
   State<ShimmerBox> createState() => _ShimmerBoxState();
 }
 
-class _ShimmerBoxState extends State<ShimmerBox> with SingleTickerProviderStateMixin {
+class _ShimmerBoxState extends State<ShimmerBox>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1200),
@@ -36,6 +38,11 @@ class _ShimmerBoxState extends State<ShimmerBox> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final glass = context.isLiquidGlass;
+    final surface =
+        scheme.surfaceContainerHigh.withValues(alpha: glass ? 0.7 : 1);
+    final highlight =
+        scheme.surfaceContainer.withValues(alpha: glass ? 0.4 : 1);
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
@@ -47,9 +54,9 @@ class _ShimmerBoxState extends State<ShimmerBox> with SingleTickerProviderStateM
               begin: Alignment(-1 + shift, -0.4),
               end: Alignment(1 + shift, 0.4),
               colors: <Color>[
-                scheme.surfaceContainerHigh,
-                scheme.surfaceContainer,
-                scheme.surfaceContainerHigh,
+                surface,
+                highlight,
+                surface,
               ],
               stops: const <double>[0.2, 0.5, 0.8],
             ).createShader(bounds);
@@ -61,7 +68,7 @@ class _ShimmerBoxState extends State<ShimmerBox> with SingleTickerProviderStateM
         width: widget.width,
         height: widget.height,
         decoration: BoxDecoration(
-          color: scheme.surfaceContainerHigh,
+          color: surface,
           borderRadius: BorderRadius.circular(widget.radius),
         ),
       ),
@@ -155,7 +162,8 @@ class EmptyState extends StatelessWidget {
         final available = constraints.maxHeight;
         final compact = available.isFinite && available < 280;
         final effectiveImageHeight = compact ? 56.0 : imageHeight;
-        final minHeight = available.isFinite && available > 32 ? available - 32 : 0.0;
+        final minHeight =
+            available.isFinite && available > 32 ? available - 32 : 0.0;
 
         final content = Column(
           mainAxisSize: MainAxisSize.min,
@@ -189,19 +197,21 @@ class EmptyState extends StatelessWidget {
             Text(
               title,
               textAlign: TextAlign.center,
-              style: AppTypography.sectionTitle.copyWith(color: scheme.onSurface),
+              style:
+                  AppTypography.sectionTitle.copyWith(color: scheme.onSurface),
             ),
             if (description != null && !compact) ...<Widget>[
               const SizedBox(height: 8),
               Text(
                 description!,
                 textAlign: TextAlign.center,
-                style: AppTypography.caption.copyWith(color: scheme.onSurfaceVariant),
+                style: AppTypography.caption
+                    .copyWith(color: scheme.onSurfaceVariant),
               ),
             ],
             if (actionLabel != null && onAction != null) ...<Widget>[
               SizedBox(height: compact ? 10 : 20),
-              FilledButton(onPressed: onAction, child: Text(actionLabel!)),
+              AppButton(onPressed: onAction, label: actionLabel!),
             ],
           ],
         );

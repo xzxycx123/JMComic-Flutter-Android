@@ -11,6 +11,8 @@ import '../../core/icons/app_icons.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/interface_style_selector.dart';
+import '../../core/ui/app_toast.dart';
+import '../../core/ui/glass/app_glass.dart';
 import '../../core/utils/host_normalizer.dart';
 import '../../data/local/settings_store.dart';
 import '../../data/models/jm_host_entry.dart';
@@ -41,12 +43,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final session = ref.watch(sessionProvider);
     final records = ref.watch(downloadRecordsProvider);
 
-    return Scaffold(
-      backgroundColor: settings.interfaceStyle == AppInterfaceStyle.liquidGlass
-          ? Colors.transparent
-          : null,
-      appBar: AppBar(
-        leading: IconButton(
+    return AppGlassPage(
+      appBar: AppGlassAppBar(
+        leading: AppIconButton(
           icon: IconTheme(
             data: IconThemeData(color: scheme.onSurface),
             child: const SvgIcon(AppIcons.back, size: 22),
@@ -68,7 +67,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           _SettingsTile(
             icon: AppIcons.pageMode,
             title: '翻页动画',
-            trailing: Switch.adaptive(
+            trailing: AppSwitch.adaptive(
               value: settings.pageTurnAnimation,
               onChanged: (value) => ref
                   .read(settingsProvider.notifier)
@@ -81,7 +80,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             icon: AppIcons.user,
             title: '记住密码（自动登录）',
             value: settings.rememberPassword ? '已开启' : '已关闭',
-            trailing: Switch.adaptive(
+            trailing: AppSwitch.adaptive(
               value: settings.rememberPassword,
               onChanged: (value) => _setRememberPassword(value),
             ),
@@ -120,7 +119,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           _SettingsTile(
             icon: AppIcons.settings,
             title: '自动切换线路',
-            trailing: Switch.adaptive(
+            trailing: AppSwitch.adaptive(
               value: settings.autoSwitchHost,
               onChanged: (value) =>
                   ref.read(settingsProvider.notifier).setAutoSwitchHost(value),
@@ -196,30 +195,31 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (!value) await ref.read(authRepositoryProvider).forgetPassword();
   }
 
+  void _showToast(String message) {
+    if (!mounted) return;
+    AppToast.show(context, message, duration: const Duration(seconds: 4));
+  }
+
   Future<void> _clearSavedPassword() async {
-    final messenger = ScaffoldMessenger.of(context);
     await ref.read(authRepositoryProvider).forgetPassword();
-    messenger.showSnackBar(const SnackBar(content: Text('已清除保存的密码')));
+    _showToast('已清除保存的密码');
   }
 
   Future<void> _rediscover() async {
     setState(() => _busy = true);
-    final messenger = ScaffoldMessenger.of(context);
+    final container = ProviderScope.containerOf(context, listen: false);
     try {
       final repository = ref.read(sessionRepositoryProvider);
       await repository.rediscover();
       // 仓储持有的是旧的 JmApi 实例，必须一起作废，否则回首页仍是旧线路。
-      ref.invalidate(jmBootstrapProvider);
-      ref.invalidate(homeRepositoryProvider);
-      if (mounted) {
-        final report = repository.lastReport;
-        setState(() => _reportSummary = report?.summary ?? '');
-      }
-      messenger.showSnackBar(
-        SnackBar(content: Text('线路已刷新：${repository.current.apiHost}')),
-      );
+      container.invalidate(jmBootstrapProvider);
+      container.invalidate(homeRepositoryProvider);
+      if (!mounted) return;
+      final report = repository.lastReport;
+      setState(() => _reportSummary = report?.summary ?? '');
+      _showToast('线路已刷新：${repository.current.apiHost}');
     } catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text('重新探测失败：$error')));
+      _showToast('重新探测失败：$error');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -228,7 +228,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   /// 全量测速：所有已知 API 线路 + 图床跑一遍，结果直接列在设置页。
   Future<void> _probeLines() async {
     setState(() => _probing = true);
-    final messenger = ScaffoldMessenger.of(context);
     try {
       final report = await ref.read(sessionRepositoryProvider).probeAll();
       if (!mounted) return;
@@ -236,51 +235,42 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _probeResults = report.probes;
         _reportSummary = report.summary;
       });
-      messenger.showSnackBar(SnackBar(content: Text('测速完成：${report.message}')));
+      _showToast('测速完成：${report.message}');
     } catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text('测速失败：$error')));
+      _showToast('测速失败：$error');
     } finally {
       if (mounted) setState(() => _probing = false);
     }
   }
 
   Future<void> _editManualHost() async {
-    final controller = TextEditingController(
-      text: ref.read(sessionRepositoryProvider).manualHost,
-    );
-    final value = await showDialog<String>(
+    final current = ref.read(sessionRepositoryProvider).manualHost;
+    var text = current;
+    final value = await AppDialog.show<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('手动填写域名'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: '如 www.cdnutc.cc'),
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('保存'),
-          ),
-        ],
+      title: '手动填写域名',
+      contentBuilder: (_) => _ManualHostField(
+        initialValue: current,
+        onChanged: (value) => text = value,
       ),
+      actions: <AppDialogAction<String>>[
+        const AppDialogAction(label: '取消'),
+        AppDialogAction(
+          label: '保存',
+          primary: true,
+          resultBuilder: () => text.trim(),
+        ),
+      ],
     );
-    controller.dispose();
-    if (value == null) return;
+    if (value == null || !mounted) return;
+    final container = ProviderScope.containerOf(context, listen: false);
     await ref.read(sessionRepositoryProvider).setManualHost(value);
-    ref.invalidate(jmBootstrapProvider);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(value.isEmpty ? '已清除手动域名' : '已保存：$value')),
-    );
+    container.invalidate(jmBootstrapProvider);
+    _showToast(value.isEmpty ? '已清除手动域名' : '已保存：$value');
   }
 
   Future<void> _pickTheme(AppThemeMode current) async {
-    final selected = await showModalBottomSheet<AppThemeMode>(
+    final selected = await AppSheet.show<AppThemeMode>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
@@ -288,7 +278,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             for (final mode in AppThemeMode.values)
-              ListTile(
+              AppListTile(
                 title: Text(mode.label),
                 trailing: mode == current
                     ? IconTheme(
@@ -305,13 +295,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
       ),
     );
-    if (selected != null) {
+    if (selected != null && mounted) {
       await ref.read(settingsProvider.notifier).setThemeMode(selected);
     }
   }
 
   Future<void> _pickReaderMode(String current) async {
-    final selected = await showModalBottomSheet<String>(
+    final selected = await AppSheet.show<String>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
@@ -322,7 +312,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               (code: 'paged', label: '左右翻页'),
               (code: 'vertical', label: '上下滚动'),
             ])
-              ListTile(
+              AppListTile(
                 title: Text(entry.label),
                 trailing: entry.code == current
                     ? IconTheme(
@@ -339,20 +329,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
       ),
     );
-    if (selected != null) {
+    if (selected != null && mounted) {
       await ref.read(settingsProvider.notifier).setDefaultReaderMode(selected);
     }
   }
 
   Future<void> _showLocation() async {
-    final messenger = ScaffoldMessenger.of(context);
     final location =
         await ref.read(downloadRepositoryProvider).describeLocation();
-    messenger.showSnackBar(SnackBar(content: Text('导出目录：$location')));
+    _showToast('导出目录：$location');
   }
 
   Future<void> _clearTemp() async {
-    final messenger = ScaffoldMessenger.of(context);
     try {
       final cache = await getTemporaryDirectory();
       final workRoot =
@@ -364,28 +352,53 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           removed++;
         }
       }
-      messenger.showSnackBar(SnackBar(content: Text('已清理 $removed 个临时目录')));
+      _showToast('已清理 $removed 个临时目录');
     } catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text('清理失败：$error')));
+      _showToast('清理失败：$error');
     }
   }
 
   Future<void> _clearImageCache() async {
-    final messenger = ScaffoldMessenger.of(context);
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();
-    messenger.showSnackBar(const SnackBar(content: Text('封面缓存已清理')));
+    _showToast('封面缓存已清理');
   }
 
   Future<void> _exportRecords() async {
-    final messenger = ScaffoldMessenger.of(context);
     final records = ref.read(downloadRecordsProvider);
     final payload =
         records.map((record) => record.toJson()).toList(growable: false);
     await Clipboard.setData(ClipboardData(text: payload.toString()));
-    messenger
-        .showSnackBar(SnackBar(content: Text('已复制 ${records.length} 条记录到剪贴板')));
+    _showToast('已复制 ${records.length} 条记录到剪贴板');
   }
+}
+
+class _ManualHostField extends StatefulWidget {
+  const _ManualHostField({required this.initialValue, required this.onChanged});
+
+  final String initialValue;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<_ManualHostField> createState() => _ManualHostFieldState();
+}
+
+class _ManualHostFieldState extends State<_ManualHostField> {
+  late final _controller = TextEditingController(text: widget.initialValue);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AppTextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(hintText: '如 www.cdnutc.cc'),
+        onChanged: widget.onChanged,
+      );
 }
 
 class _SettingsTile extends StatelessWidget {
@@ -408,6 +421,27 @@ class _SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    if (context.isLiquidGlass) {
+      return AppSurface(
+        kind: AppSurfaceKind.controlGroup,
+        borderRadius: BorderRadius.circular(AppColors.radiusCard),
+        margin: const EdgeInsets.only(bottom: 8),
+        child: AppListTile(
+          leading: SvgIcon(icon, size: 20, color: scheme.onSurfaceVariant),
+          title: Text(title, style: AppTypography.body),
+          subtitle: value == null || value!.isEmpty
+              ? null
+              : Text(value!, maxLines: 1, overflow: TextOverflow.ellipsis),
+          trailing: busy
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: AppProgressIndicator.circular(strokeWidth: 2),
+                )
+              : trailing,
+          onTap: busy ? null : onTap,
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
@@ -435,7 +469,7 @@ class _SettingsTile extends StatelessWidget {
                   const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: AppProgressIndicator.circular(strokeWidth: 2),
                   )
                 else if (value != null)
                   Flexible(
@@ -474,12 +508,15 @@ class _LineStatusList extends StatelessWidget {
       });
     if (api.isEmpty) return const SizedBox.shrink();
 
-    return Container(
+    final radius = BorderRadius.circular(AppColors.radiusCard);
+    return AppSurface(
+      kind: AppSurfaceKind.controlGroup,
+      borderRadius: radius,
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
+      metalDecoration: BoxDecoration(
         color: scheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(AppColors.radiusCard),
+        borderRadius: radius,
       ),
       child: Column(
         children: <Widget>[
@@ -508,20 +545,26 @@ class _LineStatusList extends StatelessWidget {
                     ),
                   ),
                   if (isDomesticHost(item.host))
-                    Container(
-                      margin: const EdgeInsets.only(right: 6),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: scheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        '国内',
-                        style: AppTypography.micro
-                            .copyWith(color: scheme.onPrimaryContainer),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: AppBadge(
+                        label: const Text('国内', style: AppTypography.micro),
+                        color: scheme.primary,
+                        metalChild: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: scheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '国内',
+                            style: AppTypography.micro
+                                .copyWith(color: scheme.onPrimaryContainer),
+                          ),
+                        ),
                       ),
                     ),
                   Text(

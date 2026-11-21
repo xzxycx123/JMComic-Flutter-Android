@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/icons/app_icons.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/ui/glass/app_glass.dart';
 
 /// 分节头：标题 16 w700 + 「更多」+ forward 图标。
 class SectionHeader extends StatelessWidget {
@@ -26,11 +27,12 @@ class SectionHeader extends StatelessWidget {
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTypography.sectionTitle.copyWith(color: scheme.onSurface),
+              style:
+                  AppTypography.sectionTitle.copyWith(color: scheme.onSurface),
             ),
           ),
           if (onMore != null)
-            TextButton(
+            AppButton.text(
               onPressed: onMore,
               style: TextButton.styleFrom(
                 foregroundColor: scheme.onSurfaceVariant,
@@ -41,7 +43,11 @@ class SectionHeader extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  Text('更多', style: AppTypography.caption.copyWith(color: scheme.onSurfaceVariant)),
+                  Text(
+                    '更多',
+                    style: AppTypography.caption
+                        .copyWith(color: scheme.onSurfaceVariant),
+                  ),
                   const SizedBox(width: 2),
                   IconTheme(
                     data: IconThemeData(color: scheme.onSurfaceVariant),

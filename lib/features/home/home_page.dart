@@ -8,6 +8,7 @@ import '../../core/icons/app_icons.dart';
 import '../../core/icons/app_images.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/ui/glass/app_glass.dart';
 import '../../data/local/settings_store.dart';
 import '../../data/models/home_feed.dart';
 import '../../data/models/jm_category.dart';
@@ -64,10 +65,9 @@ class _HomePageState extends ConsumerState<HomePage> {
     final feedState = ref.watch(homeFeedProvider);
     final settings = ref.watch(settingsProvider);
 
-    return Scaffold(
-      backgroundColor: settings.interfaceStyle == AppInterfaceStyle.liquidGlass
-          ? Colors.transparent
-          : null,
+    return AppGlassPage(
+      showBackground: false,
+      backgroundColor: context.isLiquidGlass ? Colors.transparent : null,
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -82,9 +82,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                 pinned: false,
                 elevation: 0,
                 surfaceTintColor: Colors.transparent,
-                backgroundColor: _elevated
+                backgroundColor: _elevated && !context.isLiquidGlass
                     ? scheme.surface.withValues(alpha: 0.86)
                     : Colors.transparent,
+                flexibleSpace: _elevated && context.isLiquidGlass
+                    ? const AppGlassChrome(child: SizedBox.expand())
+                    : null,
                 titleSpacing: 16,
                 title: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -325,20 +328,24 @@ class _AppBarAction extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: Tooltip(
-        message: tooltip,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(AppColors.radiusPill),
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: IconTheme(
-              data: IconThemeData(color: scheme.onSurface),
-              child: SvgIcon(icon, size: 20),
+      child: context.isLiquidGlass
+          ? AppIconButton(
+              icon: SvgIcon(icon, size: 20),
+              onPressed: onTap,
+              tooltip: tooltip,
+              color: scheme.onSurface,
+            )
+          : Tooltip(
+              message: tooltip,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(AppColors.radiusPill),
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: SvgIcon(icon, size: 20, color: scheme.onSurface),
+                ),
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -363,13 +370,11 @@ class _GridFooter extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 18),
         child: Center(
-          child: TextButton.icon(
+          child: AppButton.text(
             onPressed: onRetry,
-            icon: IconTheme(
-              data: IconThemeData(color: scheme.primary),
-              child: const SvgIcon(AppIcons.refresh, size: 16),
-            ),
-            label: const Text('加载失败，点此重试'),
+            leadingIcon:
+                SvgIcon(AppIcons.refresh, size: 16, color: scheme.primary),
+            label: '加载失败，点此重试',
           ),
         ),
       );
@@ -381,7 +386,7 @@ class _GridFooter extends StatelessWidget {
           child: SizedBox(
             width: 22,
             height: 22,
-            child: CircularProgressIndicator(strokeWidth: 2.4),
+            child: AppProgressIndicator.circular(strokeWidth: 2.4),
           ),
         ),
       );

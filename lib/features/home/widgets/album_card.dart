@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/icons/app_images.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/ui/glass/app_glass.dart';
 import '../../../core/utils/logger.dart';
 import '../../../data/models/jm_album_summary.dart';
 import 'cover_image.dart';
@@ -32,7 +33,6 @@ class AlbumCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final isRail = layout == AlbumCardLayout.rail;
     final cover = Stack(
       fit: StackFit.expand,
@@ -67,18 +67,20 @@ class AlbumCard extends StatelessWidget {
         else
           AspectRatio(aspectRatio: 3 / 4, child: cover),
         const SizedBox(height: 8),
-        Text(
-          album.displayTitle,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: AppTypography.cardTitle.copyWith(color: scheme.onSurface),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          album.displayAuthor,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+        Stack(
+          children: <Widget>[
+            if (context.isLiquidGlass)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: AppSurface(
+                    kind: AppSurfaceKind.controlGroup,
+                    borderRadius: BorderRadius.circular(6),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+              ),
+            _CardCaption(album: album),
+          ],
         ),
       ],
     );
@@ -101,6 +103,36 @@ class AlbumCard extends StatelessWidget {
   }
 }
 
+class _CardCaption extends StatelessWidget {
+  const _CardCaption({required this.album});
+
+  final JmAlbumSummary album;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          album.displayTitle,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.cardTitle.copyWith(color: scheme.onSurface),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          album.displayAuthor,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+}
+
 class _CategoryBadge extends StatelessWidget {
   const _CategoryBadge({required this.text});
 
@@ -109,15 +141,21 @@ class _CategoryBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: scheme.surface.withValues(alpha: 0.86),
-        borderRadius: BorderRadius.circular(AppColors.radiusPill),
-      ),
-      child: Text(
-        text,
-        style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+    final label = Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+    );
+    return AppBadge(
+      label: label,
+      metalChild: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: scheme.surface.withValues(alpha: 0.86),
+          borderRadius: BorderRadius.circular(AppColors.radiusPill),
+        ),
+        child: label,
       ),
     );
   }

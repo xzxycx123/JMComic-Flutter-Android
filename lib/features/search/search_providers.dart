@@ -63,8 +63,11 @@ class SearchResults {
       );
 }
 
-final NotifierProvider<SearchHistoryNotifier, List<String>> searchHistoryProvider =
-    NotifierProvider<SearchHistoryNotifier, List<String>>(SearchHistoryNotifier.new);
+final NotifierProvider<SearchHistoryNotifier, List<String>>
+    searchHistoryProvider =
+    NotifierProvider<SearchHistoryNotifier, List<String>>(
+  SearchHistoryNotifier.new,
+);
 
 class SearchHistoryNotifier extends Notifier<List<String>> {
   @override
@@ -74,14 +77,23 @@ class SearchHistoryNotifier extends Notifier<List<String>> {
     state = await ref.read(searchHistoryStoreProvider).push(keyword);
   }
 
+  Future<void> remove(String keyword) async {
+    final store = ref.read(searchHistoryStoreProvider);
+    await store.remove(keyword);
+    state = store.read();
+  }
+
   Future<void> clear() async {
     await ref.read(searchHistoryStoreProvider).clear();
     state = const <String>[];
   }
 }
 
-final AsyncNotifierProvider<SearchController, SearchResults?> searchControllerProvider =
-    AsyncNotifierProvider<SearchController, SearchResults?>(SearchController.new);
+final AsyncNotifierProvider<SearchController, SearchResults?>
+    searchControllerProvider =
+    AsyncNotifierProvider<SearchController, SearchResults?>(
+  SearchController.new,
+);
 
 class SearchController extends AsyncNotifier<SearchResults?> {
   @override
@@ -99,7 +111,8 @@ class SearchController extends AsyncNotifier<SearchResults?> {
       final repository = await ref.read(searchRepositoryProvider.future);
       await repository.remember(value);
       unawaited(ref.read(searchHistoryProvider.notifier).push(value));
-      final page = await repository.search(keyword: value, page: 1, order: sort);
+      final page =
+          await repository.search(keyword: value, page: 1, order: sort);
       return SearchResults(
         keyword: value,
         items: page.content,
@@ -124,7 +137,9 @@ class SearchController extends AsyncNotifier<SearchResults?> {
     if (current == null || current.loadingMore) return;
     if (current.items.length >= current.total) return;
 
-    state = AsyncValue<SearchResults?>.data(current.copyWith(loadingMore: true, clearError: true));
+    state = AsyncValue<SearchResults?>.data(
+      current.copyWith(loadingMore: true, clearError: true),
+    );
     try {
       final repository = await ref.read(searchRepositoryProvider.future);
       final next = await repository.search(
@@ -160,4 +175,11 @@ class SearchController extends AsyncNotifier<SearchResults?> {
 SearchQuery resolveQuery(String input) => resolveSearchQuery(input);
 
 /// 热门词（v1 用固定文案，点击直接搜索）。
-const List<String> kHotKeywords = <String>['同人', '單本', '韓漫', 'C108', '中文', '全彩'];
+const List<String> kHotKeywords = <String>[
+  '同人',
+  '單本',
+  '韓漫',
+  'C108',
+  '中文',
+  '全彩',
+];

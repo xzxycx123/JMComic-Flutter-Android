@@ -32,7 +32,7 @@ enum AppThemeMode {
 /// 界面材质（与浅色 / 深色模式独立，默认保留 Metal）。
 enum AppInterfaceStyle {
   metal('metal', 'Metal', '经典 Metal 界面与悬浮 Dock'),
-  liquidGlass('liquidGlass', 'LiquidGlass', 'iOS 27 液态玻璃、折射与动态光影');
+  liquidGlass('liquidGlass', 'LiquidGlass', 'iOS 27同款 液态玻璃、折射与动态光影');
 
   const AppInterfaceStyle(this.code, this.label, this.description);
 

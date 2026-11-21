@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/icons/app_icons.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/ui/glass/app_glass.dart';
 import '../../data/local/settings_store.dart';
 import '../../data/models/account_session.dart';
 import '../../data/repositories/favorites_repository.dart';
@@ -28,6 +29,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final FocusNode _passwordFocus = FocusNode();
   bool _busy = false;
   bool _syncing = false;
+  bool _showPassword = false;
   bool? _remember;
   String? _error;
 
@@ -108,50 +110,45 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     return '$error';
   }
 
-  Future<void> _showFailureDialog(String message) {
+  Future<void> _showFailureDialog(String message) async {
     final hint = message.contains('密码') || message.contains('用户名')
         ? '检查一下用户名大小写，密码不要带全角字符。'
         : message.contains('频繁')
             ? '连续失败会触发限流，等 1-2 分钟再试。'
             : '可以在「我的 - 网络」里换一条线路后重试。';
-    return showDialog<void>(
+    final retry = await AppDialog.show<bool>(
       context: context,
-      builder: (dialogContext) {
+      title: '登录失败',
+      iconBuilder: (dialogContext) => SvgIcon(
+        AppIcons.alert,
+        color: Theme.of(dialogContext).colorScheme.error,
+        size: 28,
+      ),
+      contentBuilder: (dialogContext) {
         final scheme = Theme.of(dialogContext).colorScheme;
-        return AlertDialog(
-          icon: IconTheme(
-            data: IconThemeData(color: scheme.error),
-            child: const SvgIcon(AppIcons.alert, size: 28),
-          ),
-          title: const Text('登录失败'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(message, style: AppTypography.body.copyWith(color: scheme.onSurface)),
-              const SizedBox(height: 8),
-              Text(
-                hint,
-                style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
-              ),
-            ],
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('知道了'),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              message,
+              style: AppTypography.body.copyWith(color: scheme.onSurface),
             ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                unawaited(_submit());
-              },
-              child: const Text('重试'),
+            const SizedBox(height: 8),
+            Text(
+              hint,
+              style:
+                  AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
             ),
           ],
         );
       },
+      actions: const <AppDialogAction<bool>>[
+        AppDialogAction(label: '知道了'),
+        AppDialogAction(label: '重试', result: true, primary: true),
+      ],
     );
+    if (retry == true && mounted) unawaited(_submit());
   }
 
   Future<void> _showSuccessDialog(
@@ -159,71 +156,109 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     FavoriteSyncReport? report,
   ) {
     final syncError = ref.read(favoritesSyncProvider).lastError;
-    return showDialog<void>(
+    return AppDialog.show<void>(
       context: context,
-      builder: (dialogContext) {
+      title: '已登录：${session.username}',
+      iconBuilder: (dialogContext) => SvgIcon(
+        AppIcons.check,
+        color: Theme.of(dialogContext).colorScheme.primary,
+        size: 28,
+      ),
+      contentBuilder: (dialogContext) {
         final scheme = Theme.of(dialogContext).colorScheme;
-        return AlertDialog(
-          icon: IconTheme(
-            data: IconThemeData(color: scheme.primary),
-            child: const SvgIcon(AppIcons.check, size: 28),
-          ),
-          title: Text('已登录：${session.username}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              if (report == null)
-                Text(
-                  '登录成功，但收藏同步没有完成${syncError == null ? '' : '：$syncError'}\n'
-                  '可以稍后到「我的收藏」右上角手动同步。',
-                  style: AppTypography.body.copyWith(color: scheme.onSurface),
-                )
-              else ...<Widget>[
-                Text(
-                  '云端 ${report.serverCount} 本 · 拉回 ${report.addedToLocal} 本 · 上传 ${report.pushed} 本',
-                  style: AppTypography.body.copyWith(color: scheme.onSurface),
-                ),
-                if (report.conflicts > 0 || report.failures > 0) ...<Widget>[
-                  const SizedBox(height: 6),
-                  Text(
-                    '${report.conflicts > 0 ? '${report.conflicts} 条冲突已自愈 · ' : ''}'
-                    '${report.failures > 0 ? '${report.failures} 条待下次重试' : ''}',
-                    style: AppTypography.micro
-                        .copyWith(color: scheme.onSurfaceVariant),
-                  ),
-                ],
-              ],
-              const SizedBox(height: 10),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            if (report == null)
               Text(
-                '会话保存在本机 cookie 里；开启「记住密码」时密码在系统密钥库，用于 cookie 失效后自动重登。',
-                style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+                '登录成功，但收藏同步没有完成${syncError == null ? '' : '：$syncError'}\n'
+                '可以稍后到「我的收藏」右上角手动同步。',
+                style: AppTypography.body.copyWith(color: scheme.onSurface),
+              )
+            else ...<Widget>[
+              Text(
+                '云端 ${report.serverCount} 本 · 拉回 ${report.addedToLocal} 本 · 上传 ${report.pushed} 本',
+                style: AppTypography.body.copyWith(color: scheme.onSurface),
               ),
+              if (report.conflicts > 0 || report.failures > 0) ...<Widget>[
+                const SizedBox(height: 6),
+                Text(
+                  '${report.conflicts > 0 ? '${report.conflicts} 条冲突已自愈 · ' : ''}'
+                  '${report.failures > 0 ? '${report.failures} 条待下次重试' : ''}',
+                  style: AppTypography.micro
+                      .copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ],
             ],
-          ),
-          actions: <Widget>[
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('完成'),
+            const SizedBox(height: 10),
+            Text(
+              '会话保存在本机 cookie 里；开启「记住密码」时密码在系统密钥库，用于 cookie 失效后自动重登。',
+              style:
+                  AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
             ),
           ],
         );
       },
+      actions: const <AppDialogAction<void>>[
+        AppDialogAction(label: '完成', primary: true),
+      ],
+    );
+  }
+
+  Future<void> _setRememberPassword(bool value) async {
+    setState(() => _remember = value);
+    final auth = value ? null : ref.read(authRepositoryProvider);
+    await ref.read(settingsProvider.notifier).setRememberPassword(value);
+    await auth?.forgetPassword();
+  }
+
+  Widget _rememberTile(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final value = _rememberPassword;
+    final title = Text(
+      '记住密码（cookie 失效时自动重登）',
+      style: AppTypography.body.copyWith(color: scheme.onSurface),
+    );
+    final subtitle = Text(
+      '账号密码存进系统密钥库（Android Keystore），退出 App 也不会掉登录。',
+      style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+    );
+    final onChanged = _busy ? null : _setRememberPassword;
+    if (!context.isLiquidGlass) {
+      return SwitchListTile.adaptive(
+        contentPadding: EdgeInsets.zero,
+        value: value,
+        onChanged: onChanged,
+        title: title,
+        subtitle: subtitle,
+      );
+    }
+    return AppSurface(
+      kind: AppSurfaceKind.controlGroup,
+      child: AppListTile(
+        title: title,
+        subtitle: subtitle,
+        enabled: !_busy,
+        trailing: AppSwitch.adaptive(value: value, onChanged: onChanged),
+        onTap: onChanged == null ? null : () => onChanged(!value),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
+    return AppGlassPage(
+      appBar: AppGlassAppBar(
+        leading: AppIconButton(
           tooltip: '返回',
           icon: IconTheme(
             data: IconThemeData(color: scheme.onSurface),
             child: const SvgIcon(AppIcons.back, size: 22),
           ),
-          onPressed: () => context.canPop() ? context.pop() : context.go('/mine'),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go('/mine'),
         ),
         title: const Text('登录'),
       ),
@@ -232,10 +267,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         children: <Widget>[
           Text(
             '登录后会自动把本地收藏同步到云端，并把云端收藏拉回来；勾选「记住密码」后，cookie 失效时会用密钥库里的密码自动重登。',
-            style: AppTypography.caption.copyWith(color: scheme.onSurfaceVariant),
+            style:
+                AppTypography.caption.copyWith(color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 20),
-          TextField(
+          AppTextField(
             controller: _username,
             autofocus: true,
             enabled: !_busy,
@@ -247,15 +283,31 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             onTapOutside: (_) => FocusScope.of(context).unfocus(),
           ),
           const SizedBox(height: 14),
-          TextField(
+          AppTextField(
             controller: _password,
             focusNode: _passwordFocus,
             enabled: !_busy,
-            obscureText: true,
+            obscureText: !context.isLiquidGlass || !_showPassword,
             textInputAction: TextInputAction.done,
             inputFormatters: _asciiOnly,
             autofillHints: const <String>[AutofillHints.password],
-            decoration: const InputDecoration(labelText: '密码'),
+            decoration: InputDecoration(
+              labelText: '密码',
+              suffixIcon: context.isLiquidGlass
+                  ? AppIconButton(
+                      glassTransparent: true,
+                      tooltip: _showPassword ? '隐藏密码' : '显示密码',
+                      onPressed: _busy
+                          ? null
+                          : () =>
+                              setState(() => _showPassword = !_showPassword),
+                      icon: SvgIcon(
+                        _showPassword ? AppIcons.eyeOff : AppIcons.eye,
+                        size: 19,
+                      ),
+                    )
+                  : null,
+            ),
             onSubmitted: (_) => _submit(),
           ),
           if (_error != null) ...<Widget>[
@@ -266,47 +318,26 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             ),
           ],
           const SizedBox(height: 8),
-          SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
-            value: _rememberPassword,
-            onChanged: _busy
-                ? null
-                : (value) async {
-                    setState(() => _remember = value);
-                    await ref
-                        .read(settingsProvider.notifier)
-                        .setRememberPassword(value);
-                    if (!value) {
-                      await ref.read(authRepositoryProvider).forgetPassword();
-                    }
-                  },
-            title: Text(
-              '记住密码（cookie 失效时自动重登）',
-              style: AppTypography.body.copyWith(color: scheme.onSurface),
-            ),
-            subtitle: Text(
-              '账号密码存进系统密钥库（Android Keystore），退出 App 也不会掉登录。',
-              style: AppTypography.micro
-                  .copyWith(color: scheme.onSurfaceVariant),
-            ),
-          ),
+          _rememberTile(context),
           const SizedBox(height: 14),
-          FilledButton(
+          AppButton(
             onPressed: _busy ? null : _submit,
-            child: _busy
+            loading: context.isLiquidGlass && _busy,
+            label: _busy ? (_syncing ? '正在同步收藏…' : '登录中…') : '登录',
+            child: _busy && !context.isLiquidGlass
                 ? Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: <Widget>[
                       const SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2.2),
+                        child: AppProgressIndicator.circular(strokeWidth: 2.2),
                       ),
                       const SizedBox(width: 10),
                       Text(_syncing ? '正在同步收藏…' : '登录中…'),
                     ],
                   )
-                : const Text('登录'),
+                : null,
           ),
           const SizedBox(height: 14),
           Text(

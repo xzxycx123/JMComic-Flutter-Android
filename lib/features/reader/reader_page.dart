@@ -13,6 +13,8 @@ import '../../core/icons/app_icons.dart';
 import '../../core/icons/app_images.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/ui/app_toast.dart';
+import '../../core/ui/glass/app_glass.dart';
 import '../../data/local/endpoint_store.dart';
 import '../../data/local/settings_store.dart';
 import '../../data/repositories/album_repository.dart';
@@ -36,24 +38,28 @@ class ReaderPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.readerBg,
-      body: data.when(
-        loading: () => Center(
-          child: Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.darkSurfaceContainer,
+      body: ReaderControlsTheme(
+        child: data.when(
+          loading: () => Center(
+            child: AppSurface(
+              kind: AppSurfaceKind.controlGroup,
+              padding: const EdgeInsets.all(10),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.darkOutline),
+              metalDecoration: BoxDecoration(
+                color: AppColors.darkSurfaceContainer,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.darkOutline),
+              ),
+              child: const MascotLoading(compact: true, size: 72),
             ),
-            child: const MascotLoading(compact: true, size: 72),
           ),
+          error: (error, stackTrace) => _ReaderError(
+            message: '$error',
+            onRetry: () => ref.invalidate(readerDataProvider(args)),
+            onExit: () => _safePop(context),
+          ),
+          data: (value) => _ReaderScaffold(data: value),
         ),
-        error: (error, stackTrace) => _ReaderError(
-          message: '$error',
-          onRetry: () => ref.invalidate(readerDataProvider(args)),
-          onExit: () => _safePop(context),
-        ),
-        data: (value) => _ReaderScaffold(data: value),
       ),
     );
   }
@@ -85,7 +91,7 @@ class _ReaderError extends StatelessWidget {
         children: <Widget>[
           Align(
             alignment: Alignment.centerLeft,
-            child: IconButton(
+            child: AppIconButton(
               onPressed: onExit,
               icon: const IconTheme(
                 data: IconThemeData(color: AppColors.readerInk),
@@ -119,7 +125,7 @@ class _ReaderError extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 18),
-                    FilledButton(onPressed: onRetry, child: const Text('重试')),
+                    AppButton(onPressed: onRetry, child: const Text('重试')),
                   ],
                 ),
               ),
@@ -393,13 +399,13 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
       });
     if (hosts.isEmpty) return;
 
-    final selected = await showModalBottomSheet<String>(
+    final selected = await AppSheet.show<String>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.darkSurfaceContainer,
       showDragHandle: true,
       builder: (sheetContext) {
-        return SafeArea(
+        final content = SafeArea(
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxHeight: MediaQuery.of(sheetContext).size.height * 0.62,
@@ -445,29 +451,31 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
             ),
           ),
         );
+        return ReaderControlsTheme(child: content);
       },
     );
 
     if (selected == null || selected == current || !mounted) return;
 
     setState(() => _switchingLine = true);
-    final messenger = ScaffoldMessenger.of(context);
     final ok = await api.switchApiHost(selected);
     if (!mounted) return;
     setState(() => _switchingLine = false);
     if (!ok) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('${JmConstants.lineLabelOf(selected)} 不可用，已保留原线路'),
-        ),
+      AppToast.show(
+        context,
+        '${JmConstants.lineLabelOf(selected)} 不可用，已保留原线路',
+        duration: const Duration(seconds: 4),
       );
       return;
     }
     // 换线后旧线路的图片作废：清缓存 + 按当前页重新预取。
     _loader.clear();
     _loader.setFocus(_page);
-    messenger.showSnackBar(
-      SnackBar(content: Text('已切到 ${JmConstants.lineLabelOf(selected)}')),
+    AppToast.show(
+      context,
+      '已切到 ${JmConstants.lineLabelOf(selected)}',
+      duration: const Duration(seconds: 4),
     );
   }
 
@@ -627,7 +635,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
               style: AppTypography.caption.copyWith(color: AppColors.readerInk),
             ),
             const SizedBox(height: 10),
-            TextButton(
+            AppButton.text(
               onPressed: () {
                 _loader.request(page);
               },
@@ -641,7 +649,8 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
       child: SizedBox(
         width: 24,
         height: 24,
-        child: CircularProgressIndicator(
+        child: AppProgressIndicator.circular(
+          size: 24,
           strokeWidth: 2.4,
           color: AppColors.readerInk,
         ),
@@ -765,7 +774,12 @@ class _LineTile extends StatelessWidget {
     final detail = health == null
         ? '未测'
         : (ok == true ? '${health!.latencyMs} ms' : '不可用');
-    return ListTile(
+    final currentLabel = Text(
+      '当前',
+      style:
+          AppTypography.micro.copyWith(color: AppColors.darkOnPrimaryContainer),
+    );
+    return AppListTile(
       onTap: onTap,
       title: Row(
         children: <Widget>[
@@ -775,16 +789,19 @@ class _LineTile extends StatelessWidget {
           ),
           if (current) ...<Widget>[
             const SizedBox(width: 8),
-            Container(
+            AppChip(
+              kind: AppChipKind.staticLabel,
+              color: AppColors.darkPrimaryContainer,
+              foregroundColor: AppColors.darkOnPrimaryContainer,
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                color: AppColors.darkPrimaryContainer,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                '当前',
-                style: AppTypography.micro
-                    .copyWith(color: AppColors.darkOnPrimaryContainer),
+              label: currentLabel,
+              metalChild: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: AppColors.darkPrimaryContainer,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: currentLabel,
               ),
             ),
           ],

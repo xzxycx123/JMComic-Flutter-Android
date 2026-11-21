@@ -8,8 +8,9 @@ import 'package:go_router/go_router.dart';
 import '../../../core/di/providers.dart';
 import '../../../core/icons/app_icons.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/ui/app_toast.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/ui/app_toast.dart';
+import '../../../core/ui/glass/app_glass.dart';
 import '../../../data/models/jm_comment.dart';
 import '../../../data/sources/jm_api_client.dart';
 import '../../collect/collect_providers.dart';
@@ -57,7 +58,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
               child: SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2.2),
+                child: AppProgressIndicator.circular(strokeWidth: 2.2),
               ),
             ),
           )
@@ -80,7 +81,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                         .copyWith(color: scheme.onSurfaceVariant),
                   ),
                 ),
-                TextButton(
+                AppButton.text(
                   onPressed: () => ref
                       .read(albumCommentsProvider(widget.albumId).notifier)
                       .refresh(),
@@ -94,7 +95,8 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
             child: Text(
               '还没有评论，来说两句',
-              style: AppTypography.caption.copyWith(color: scheme.onSurfaceVariant),
+              style: AppTypography.caption
+                  .copyWith(color: scheme.onSurfaceVariant),
             ),
           )
         else ...<Widget>[
@@ -106,34 +108,30 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                 comment: comment,
                 resolveAvatar: (path) => _resolveAvatar(api, path),
                 imageHeaders: api.imageHeaders,
-                onReply: () => _openComposer(context, ref, parentId: comment.id),
+                onReply: () =>
+                    _openComposer(context, ref, parentId: comment.id),
               ),
             );
           }(),
           if (!_expanded && state.items.length > 5)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
-              child: OutlinedButton(
+              child: AppButton.secondary(
                 onPressed: () => setState(() => _expanded = true),
-                child: Text('查看全部 ${state.total > 0 ? state.total : state.items.length} 条评论'),
+                child: Text(
+                  '查看全部 ${state.total > 0 ? state.total : state.items.length} 条评论',
+                ),
               ),
             ),
           if (_expanded && state.hasMore)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
-              child: OutlinedButton(
-                onPressed: state.loadingMore
-                    ? null
-                    : () => ref
-                        .read(albumCommentsProvider(widget.albumId).notifier)
-                        .loadMore(),
-                child: state.loadingMore
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('加载更多评论'),
+              child: AppButton.secondary(
+                onPressed: () => ref
+                    .read(albumCommentsProvider(widget.albumId).notifier)
+                    .loadMore(),
+                loading: state.loadingMore,
+                label: '加载更多评论',
               ),
             ),
         ],
@@ -209,27 +207,19 @@ void sendCommentOptimistically(
 
 /// 登录门槛：没登录就弹「去登录」，不静默失败。
 Future<void> askForLogin(BuildContext context) async {
-  final go = await showDialog<bool>(
+  final go = await AppDialog.show<bool>(
     context: context,
-    builder: (context) => AlertDialog(
-      icon: SvgIcon(
-        AppIcons.user,
-        size: 26,
-        color: Theme.of(context).colorScheme.primary,
-      ),
-      title: const Text('登录后才能操作'),
-      content: const Text('点赞和评论都挂在账号上。登录只保存会话 cookie，不保存密码。'),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('先不登录'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('去登录'),
-        ),
-      ],
+    iconBuilder: (context) => SvgIcon(
+      AppIcons.user,
+      size: 26,
+      color: Theme.of(context).colorScheme.primary,
     ),
+    title: '登录后才能操作',
+    message: '点赞和评论都挂在账号上。登录只保存会话 cookie，不保存密码。',
+    actions: const <AppDialogAction<bool>>[
+      AppDialogAction(label: '先不登录', result: false),
+      AppDialogAction(label: '去登录', result: true, primary: true),
+    ],
   );
   if (go == true && context.mounted) unawaited(context.push('/login'));
 }
@@ -244,50 +234,44 @@ class _ComposerEntry extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: scheme.surfaceContainer,
-      borderRadius: BorderRadius.circular(AppColors.radiusPill),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppColors.radiusPill),
-        onTap: () async {
-          if (!(ref.read(accountSessionProvider).valueOrNull?.isLoggedIn ?? false)) {
-            await askForLogin(context);
-            return;
-          }
-          final draft = await showCommentComposer(context, albumId: albumId);
-          if (draft == null || !context.mounted) return;
-          onDone();
-          sendCommentOptimistically(
-            context,
-            ref,
-            albumId: albumId,
-            draft: draft,
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-          child: Row(
-            children: <Widget>[
-              IconTheme(
-                data: IconThemeData(color: scheme.onSurfaceVariant),
-                child: const SvgIcon(AppIcons.comment, size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  '说点什么…',
-                  style: AppTypography.caption
-                      .copyWith(color: scheme.onSurfaceVariant),
-                ),
-              ),
-              IconTheme(
-                data: IconThemeData(color: scheme.primary),
-                child: const SvgIcon(AppIcons.send, size: 18),
-              ),
-            ],
+    Future<void> open() async {
+      if (!(ref.read(accountSessionProvider).valueOrNull?.isLoggedIn ??
+          false)) {
+        await askForLogin(context);
+        return;
+      }
+      final draft = await showCommentComposer(context, albumId: albumId);
+      if (draft == null || !context.mounted) return;
+      onDone();
+      sendCommentOptimistically(context, ref, albumId: albumId, draft: draft);
+    }
+
+    final radius = BorderRadius.circular(AppColors.radiusPill);
+    const padding = EdgeInsets.symmetric(horizontal: 16, vertical: 11);
+    final content = Row(
+      children: <Widget>[
+        SvgIcon(AppIcons.comment, size: 18, color: scheme.onSurfaceVariant),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            '说点什么…',
+            style:
+                AppTypography.caption.copyWith(color: scheme.onSurfaceVariant),
           ),
         ),
+        SvgIcon(AppIcons.send, size: 18, color: scheme.primary),
+      ],
+    );
+    return AppSurface(
+      kind: AppSurfaceKind.controlGroup,
+      borderRadius: radius,
+      onTap: open,
+      padding: padding,
+      metalDecoration: BoxDecoration(
+        color: scheme.surfaceContainer,
+        borderRadius: radius,
       ),
+      child: content,
     );
   }
 }
@@ -375,13 +359,21 @@ class CommentTile extends StatelessWidget {
                     ),
                     if (onReply != null) ...<Widget>[
                       const SizedBox(width: 12),
-                      InkWell(
-                        onTap: onReply,
-                        child: Text(
-                          '回复',
-                          style: AppTypography.micro.copyWith(color: scheme.primary),
+                      if (context.isLiquidGlass)
+                        AppButton.text(
+                          onPressed: onReply,
+                          foregroundColor: scheme.primary,
+                          child: const Text('回复', style: AppTypography.micro),
+                        )
+                      else
+                        InkWell(
+                          onTap: onReply,
+                          child: Text(
+                            '回复',
+                            style: AppTypography.micro
+                                .copyWith(color: scheme.primary),
+                          ),
                         ),
-                      ),
                     ],
                   ],
                 ),
@@ -405,7 +397,11 @@ class CommentTile extends StatelessWidget {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.url, required this.headers, required this.initial});
+  const _Avatar({
+    required this.url,
+    required this.headers,
+    required this.initial,
+  });
 
   final String url;
   final Map<String, String> headers;
@@ -453,13 +449,17 @@ class _Tag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(4),
+    final label = Text(text, style: AppTypography.micro.copyWith(color: color));
+    return AppBadge(
+      label: label,
+      metalChild: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: label,
       ),
-      child: Text(text, style: AppTypography.micro.copyWith(color: color)),
     );
   }
 }
@@ -478,10 +478,11 @@ Future<CommentDraft?> showCommentComposer(
   required String albumId,
   String? parentId,
 }) {
-  return showModalBottomSheet<CommentDraft>(
+  return AppSheet.show<CommentDraft>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
+    keyboardInsetHandledByBuilder: true,
     builder: (sheetContext) => _ComposerSheet(
       albumId: albumId,
       parentId: parentId,
@@ -502,6 +503,13 @@ class _ComposerSheet extends ConsumerStatefulWidget {
 class _ComposerSheetState extends ConsumerState<_ComposerSheet> {
   final TextEditingController _controller = TextEditingController();
   bool _spoiler = false;
+  bool _closing = false;
+
+  void _close([CommentDraft? draft]) {
+    if (_closing || ModalRoute.of(context)?.isCurrent != true) return;
+    _closing = true;
+    Navigator.of(context).pop(draft);
+  }
 
   @override
   void initState() {
@@ -522,18 +530,20 @@ class _ComposerSheetState extends ConsumerState<_ComposerSheet> {
   void _submit() {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
-    Navigator.of(context).pop(CommentDraft(text, spoiler: _spoiler));
+    _close(CommentDraft(text, spoiler: _spoiler));
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Padding(
+    return SingleChildScrollView(
       padding: EdgeInsets.only(
         left: 16,
         right: 16,
         top: 4,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        bottom: MediaQuery.viewInsetsOf(context).bottom +
+            MediaQuery.paddingOf(context).bottom +
+            16,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -544,7 +554,7 @@ class _ComposerSheetState extends ConsumerState<_ComposerSheet> {
             style: AppTypography.sectionTitle.copyWith(color: scheme.onSurface),
           ),
           const SizedBox(height: 10),
-          TextField(
+          AppTextField(
             controller: _controller,
             autofocus: true,
             maxLines: 4,
@@ -558,7 +568,7 @@ class _ComposerSheetState extends ConsumerState<_ComposerSheet> {
               Expanded(
                 child: Row(
                   children: <Widget>[
-                    Switch.adaptive(
+                    AppSwitch.adaptive(
                       value: _spoiler,
                       onChanged: (value) => setState(() => _spoiler = value),
                     ),
@@ -571,14 +581,14 @@ class _ComposerSheetState extends ConsumerState<_ComposerSheet> {
                   ],
                 ),
               ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
+              AppButton.text(
+                onPressed: _close,
                 child: const Text('取消'),
               ),
               const SizedBox(width: 6),
-              FilledButton(
+              AppButton(
                 onPressed: _controller.text.trim().isEmpty ? null : _submit,
-                child: const Text('发送'),
+                label: '发送',
               ),
             ],
           ),

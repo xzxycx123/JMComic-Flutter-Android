@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/icons/app_icons.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/ui/glass/app_glass.dart';
 import '../../../data/models/jm_album_summary.dart';
 import '../../home/widgets/album_card.dart';
 
@@ -27,7 +28,8 @@ class ResultGrid extends StatelessWidget {
 
   bool _onScroll(ScrollNotification notification) {
     if (notification.metrics.axis != Axis.vertical) return false;
-    final remaining = notification.metrics.maxScrollExtent - notification.metrics.pixels;
+    final remaining =
+        notification.metrics.maxScrollExtent - notification.metrics.pixels;
     if (remaining < AppConfig.loadMoreThreshold) {
       onLoadMore?.call();
     }
@@ -67,16 +69,17 @@ class ResultGrid extends StatelessWidget {
                     ? const SizedBox(
                         width: 22,
                         height: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2.4),
+                        child: AppProgressIndicator.circular(strokeWidth: 2.4),
                       )
                     : error != null
-                        ? TextButton.icon(
+                        ? AppButton.text(
                             onPressed: onRetry,
-                            icon: IconTheme(
-                              data: IconThemeData(color: scheme.primary),
-                              child: const SvgIcon(AppIcons.refresh, size: 16),
+                            leadingIcon: SvgIcon(
+                              AppIcons.refresh,
+                              size: 16,
+                              color: scheme.primary,
                             ),
-                            label: const Text('加载失败，点此重试'),
+                            label: '加载失败，点此重试',
                           )
                         : const SizedBox(height: 8),
               ),
@@ -110,12 +113,31 @@ class ResultHeader extends StatelessWidget {
       child: Row(
         children: <Widget>[
           Expanded(
-            child: Text(
-              '共 $total 条 · “$keyword”',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.caption.copyWith(color: scheme.onSurfaceVariant),
-            ),
+            child: context.isLiquidGlass
+                ? Row(
+                    children: <Widget>[
+                      AppBadge(
+                        label: Text('共 $total 条', style: AppTypography.caption),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          '“$keyword”',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.caption
+                              .copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                      ),
+                    ],
+                  )
+                : Text(
+                    '共 $total 条 · “$keyword”',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption
+                        .copyWith(color: scheme.onSurfaceVariant),
+                  ),
           ),
           if (trailing != null) trailing!,
         ],

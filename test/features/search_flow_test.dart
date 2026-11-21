@@ -20,7 +20,12 @@ void main() {
 
   group('resolveSearchQuery（本地判定）', () {
     test('纯车号 / JM 前缀 / 链接 → album', () {
-      for (final input in <String>['350234', 'JM350234', '/album/350234/', '?id=350234']) {
+      for (final input in <String>[
+        '350234',
+        'JM350234',
+        '/album/350234/',
+        '?id=350234',
+      ]) {
         final decision = resolveSearchQuery(input);
         expect(decision.isAlbum, isTrue, reason: input);
         expect(decision.albumId, '350234', reason: input);
@@ -64,6 +69,16 @@ void main() {
       expect(repository.history, <String>['中文', '同人']);
       await repository.clearHistory();
       expect(repository.history, isEmpty);
+    });
+
+    test('逐条移除历史只删除指定条目并保持顺序', () async {
+      final box = Hive.box<dynamic>(HiveBoxes.searchHistory);
+      final store = SearchHistoryStore(box);
+      await store.push('第一条');
+      await store.push('第二条');
+      await store.push('第三条');
+      await store.remove('第二条');
+      expect(SearchHistoryStore(box).read(), ['第三条', '第一条']);
     });
 
     test('纯车号不请求搜索也能拿到 redirect', () async {

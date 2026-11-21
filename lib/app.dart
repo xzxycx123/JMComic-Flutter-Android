@@ -4,7 +4,9 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import 'core/config/app_config.dart';
 import 'core/router/app_router.dart';
+import 'core/theme/app_glass_theme.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/interface_style_scope.dart';
 import 'data/local/settings_store.dart';
 import 'features/collect/collect_providers.dart';
 
@@ -16,13 +18,14 @@ class JmComicApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(goRouterProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final interfaceStyle = ref.watch(interfaceStyleProvider);
 
     // 启动即恢复会话：cookie 失效时顺带用保存的密码自动重登，
     // 别等用户点进「我的」才去校验（那时点赞/评论已经因为未登录被拦了）。
     ref.read(accountSessionProvider);
 
     return LiquidGlassWidgets.wrap(
-      theme: const GlassThemeData.ios27(),
+      theme: AppGlassTheme.preset,
       brightnessResolver: Theme.maybeBrightnessOf,
       child: MaterialApp.router(
         title: AppConfig.appName,
@@ -31,6 +34,10 @@ class JmComicApp extends ConsumerWidget {
         darkTheme: AppTheme.dark(),
         themeMode: themeMode,
         routerConfig: router,
+        builder: (context, child) => InterfaceStyleScope(
+          style: interfaceStyle,
+          child: child ?? const SizedBox.shrink(),
+        ),
       ),
     );
   }

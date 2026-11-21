@@ -10,6 +10,7 @@ import '../../core/di/providers.dart';
 import '../../core/icons/app_icons.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/ui/glass/app_glass.dart';
 import '../../data/local/settings_store.dart';
 import '../../data/sources/pdf_reader_channel.dart';
 import '../reader/reader_mode.dart';
@@ -133,7 +134,9 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
       setState(() => _info = info);
       await _ensure(0);
       _prefetchAround(1);
-      unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky));
+      unawaited(
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky),
+      );
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = '$error');
@@ -240,49 +243,52 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
   }
 
   /// HUD 里的「阅读模式」入口：显式给两个选项，而不是一个图标来回猜。
-  Future<void> _pickMode() async {
+  Future<void> _pickMode(BuildContext controlsContext) async {
     _hudTimer?.cancel();
-    final selected = await showModalBottomSheet<ReaderMode>(
-      context: context,
+    final selected = await AppSheet.show<ReaderMode>(
+      context: controlsContext,
       showDragHandle: true,
       backgroundColor: AppColors.darkSurfaceContainer,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
-              child: Text(
-                '阅读模式',
-                style: AppTypography.sectionTitle
-                    .copyWith(color: AppColors.readerInk),
-              ),
-            ),
-            for (final mode in ReaderMode.values)
-              ListTile(
-                leading: IconTheme(
-                  data: const IconThemeData(color: AppColors.readerInk),
-                  child: SvgIcon(mode.icon, size: 20),
-                ),
-                title: Text(
-                  mode.label,
-                  style: AppTypography.body
+      builder: (sheetContext) => ReaderControlsTheme(
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+                child: Text(
+                  '阅读模式',
+                  style: AppTypography.sectionTitle
                       .copyWith(color: AppColors.readerInk),
                 ),
-                trailing: mode == _mode
-                    ? const IconTheme(
-                        data: IconThemeData(color: AppColors.darkPrimary),
-                        child: SvgIcon(AppIcons.check, size: 20),
-                      )
-                    : null,
-                onTap: () => Navigator.of(sheetContext).pop(mode),
               ),
-            const SizedBox(height: 8),
-          ],
+              for (final mode in ReaderMode.values)
+                AppListTile(
+                  leading: IconTheme(
+                    data: const IconThemeData(color: AppColors.readerInk),
+                    child: SvgIcon(mode.icon, size: 20),
+                  ),
+                  title: Text(
+                    mode.label,
+                    style:
+                        AppTypography.body.copyWith(color: AppColors.readerInk),
+                  ),
+                  trailing: mode == _mode
+                      ? const IconTheme(
+                          data: IconThemeData(color: AppColors.darkPrimary),
+                          child: SvgIcon(AppIcons.check, size: 20),
+                        )
+                      : null,
+                  onTap: () => Navigator.of(sheetContext).pop(mode),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
+    if (!mounted) return;
     if (selected == null || selected == _mode) {
       _restartHudTimer();
       return;
@@ -337,7 +343,11 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
 
   // ---------------------------------------------------------------- UI
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ReaderControlsTheme(
+        child: Builder(builder: _buildViewer),
+      );
+
+  Widget _buildViewer(BuildContext context) {
     final error = _error;
     if (error != null) return _buildError(error);
     final info = _info;
@@ -345,7 +355,7 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
       return const Scaffold(
         backgroundColor: AppColors.readerBg,
         body: Center(
-          child: CircularProgressIndicator(color: AppColors.readerInk),
+          child: AppProgressIndicator.circular(color: AppColors.readerInk),
         ),
       );
     }
@@ -369,9 +379,9 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
               visible: _hudVisible,
               // HUD 右侧的模式按钮：显示当前模式名，点开就是模式选择面板。
               lineLabel: _mode.label,
-              onSwitchLine: _pickMode,
+              onSwitchLine: () => _pickMode(context),
               onExit: _exit,
-              onToggleMode: _pickMode,
+              onToggleMode: () => _pickMode(context),
               onJump: (page) {
                 setState(() => _dragPage = null);
                 _goToPage(page);
@@ -470,7 +480,7 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
               style: AppTypography.caption.copyWith(color: AppColors.readerInk),
             ),
             const SizedBox(height: 8),
-            TextButton(
+            AppButton.text(
               onPressed: () {
                 _failed.remove(index);
                 unawaited(_ensure(index));
@@ -489,7 +499,8 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
       child: SizedBox(
         width: 24,
         height: 24,
-        child: CircularProgressIndicator(
+        child: AppProgressIndicator.circular(
+          size: 24,
           strokeWidth: 2.4,
           color: AppColors.readerInk,
         ),
@@ -505,7 +516,8 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
           children: <Widget>[
             Align(
               alignment: Alignment.centerLeft,
-              child: IconButton(
+              child: AppIconButton(
+                tooltip: '返回',
                 onPressed: _exit,
                 icon: const IconTheme(
                   data: IconThemeData(color: AppColors.readerInk),
@@ -539,12 +551,12 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
                         ),
                       ),
                       const SizedBox(height: 18),
-                      FilledButton(
+                      AppButton(
                         onPressed: () => unawaited(_open()),
                         child: const Text('重试'),
                       ),
                       const SizedBox(height: 10),
-                      TextButton(
+                      AppButton.text(
                         onPressed: () async {
                           await ref.read(downloadRepositoryProvider).openFile(
                                 uri: widget.args.uri,

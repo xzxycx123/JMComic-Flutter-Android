@@ -9,6 +9,8 @@ import '../../core/icons/app_images.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/interface_style_selector.dart';
+import '../../core/ui/app_toast.dart';
+import '../../core/ui/glass/app_glass.dart';
 import '../../data/local/settings_store.dart';
 import '../../data/models/account_session.dart';
 import '../../data/models/user_session.dart';
@@ -37,10 +39,8 @@ class MinePage extends ConsumerWidget {
     final session = ref.watch(sessionProvider).valueOrNull;
     final syncState = ref.watch(favoritesSyncProvider);
 
-    return Scaffold(
-      backgroundColor: settings.interfaceStyle == AppInterfaceStyle.liquidGlass
-          ? Colors.transparent
-          : null,
+    return AppGlassPage(
+      showBackground: false,
       body: SafeArea(
         bottom: false,
         child: ListView(
@@ -115,7 +115,7 @@ class MinePage extends ConsumerWidget {
             _SettingTile(
               icon: AppIcons.pageMode,
               title: '翻页动画',
-              trailing: Switch.adaptive(
+              trailing: AppSwitch.adaptive(
                 value: settings.pageTurnAnimation,
                 onChanged: (value) => ref
                     .read(settingsProvider.notifier)
@@ -144,7 +144,7 @@ class MinePage extends ConsumerWidget {
             _SettingTile(
               icon: AppIcons.settings,
               title: '自动切换线路',
-              trailing: Switch.adaptive(
+              trailing: AppSwitch.adaptive(
                 value: settings.autoSwitchHost,
                 onChanged: (value) => ref
                     .read(settingsProvider.notifier)
@@ -183,48 +183,46 @@ class MinePage extends ConsumerWidget {
   }
 
   Future<void> _syncFavorites(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
     final report = await ref.read(favoritesSyncProvider.notifier).syncNow();
     if (!context.mounted) return;
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          report == null
-              ? '同步失败：${ref.read(favoritesSyncProvider).lastError ?? '未知错误'}'
-              : '同步完成：云端 ${report.serverCount} 本 · 拉回 ${report.addedToLocal} 本'
-                  ' · 上传 ${report.pushed} 本',
-        ),
-      ),
+    AppToast.show(
+      context,
+      report == null
+          ? '同步失败：${ref.read(favoritesSyncProvider).lastError ?? '未知错误'}'
+          : '同步完成：云端 ${report.serverCount} 本 · 拉回 ${report.addedToLocal} 本'
+              ' · 上传 ${report.pushed} 本',
+      duration: const Duration(seconds: 4),
     );
   }
 
   Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await AppDialog.show<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('退出登录'),
-        content: const Text('退出后收藏仍保留在本机，但不会再同步到账号。'),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('退出'),
-          ),
-        ],
-      ),
+      title: '退出登录',
+      message: '退出后收藏仍保留在本机，但不会再同步到账号。',
+      actions: const <AppDialogAction<bool>>[
+        AppDialogAction(label: '取消', result: false),
+        AppDialogAction(
+          label: '退出',
+          result: true,
+          primary: true,
+          destructive: true,
+        ),
+      ],
     );
-    if (confirmed != true) return;
+    if (confirmed != true || !context.mounted) return;
     await ref.read(accountSessionProvider.notifier).logout();
   }
 
   Future<void> _copyPath(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
     final location =
         await ref.read(downloadRepositoryProvider).describeLocation();
-    messenger.showSnackBar(SnackBar(content: Text('目录：$location')));
+    if (!context.mounted) return;
+    AppToast.show(
+      context,
+      '目录：$location',
+      duration: const Duration(seconds: 4),
+    );
   }
 
   Future<void> _pickTheme(
@@ -232,7 +230,7 @@ class MinePage extends ConsumerWidget {
     WidgetRef ref,
     AppThemeMode current,
   ) async {
-    final selected = await showModalBottomSheet<AppThemeMode>(
+    final selected = await AppSheet.show<AppThemeMode>(
       context: context,
       showDragHandle: true,
       builder: (context) => _OptionSheet<AppThemeMode>(
@@ -242,7 +240,7 @@ class MinePage extends ConsumerWidget {
         labelOf: (mode) => mode.label,
       ),
     );
-    if (selected != null) {
+    if (selected != null && context.mounted) {
       await ref.read(settingsProvider.notifier).setThemeMode(selected);
     }
   }
@@ -253,7 +251,7 @@ class MinePage extends ConsumerWidget {
     String current,
   ) async {
     final options = <String>['paged', 'vertical'];
-    final selected = await showModalBottomSheet<String>(
+    final selected = await AppSheet.show<String>(
       context: context,
       showDragHandle: true,
       builder: (context) => _OptionSheet<String>(
@@ -263,7 +261,7 @@ class MinePage extends ConsumerWidget {
         labelOf: (value) => value == 'vertical' ? '上下滚动' : '左右翻页',
       ),
     );
-    if (selected != null) {
+    if (selected != null && context.mounted) {
       await ref.read(settingsProvider.notifier).setDefaultReaderMode(selected);
     }
   }
@@ -293,11 +291,14 @@ class _AccountCard extends StatelessWidget {
       SessionState.local => '未登录 · 本地收藏（登录后可同步）',
     };
 
-    return Container(
+    final radius = BorderRadius.circular(AppColors.radiusCard);
+    return AppSurface(
+      kind: AppSurfaceKind.controlGroup,
+      borderRadius: radius,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
+      metalDecoration: BoxDecoration(
         color: scheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(AppColors.radiusCard),
+        borderRadius: radius,
         border: Border.all(color: scheme.outlineVariant),
       ),
       child: Row(
@@ -340,7 +341,7 @@ class _AccountCard extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           if (loggedIn)
-            TextButton(
+            AppButton.text(
               onPressed: onLogout,
               style: TextButton.styleFrom(
                 foregroundColor: scheme.onSurfaceVariant,
@@ -350,7 +351,7 @@ class _AccountCard extends StatelessWidget {
               child: const Text('退出'),
             )
           else
-            TextButton(
+            AppButton.text(
               onPressed: onLogin,
               style: TextButton.styleFrom(
                 foregroundColor: scheme.primary,
@@ -387,9 +388,11 @@ class _ProfileCard extends StatelessWidget {
         : account?.needsLogin == true
             ? '登录已失效 · 本地模式'
             : '未登录 · 本地模式';
-    return Container(
+    final radius = BorderRadius.circular(AppColors.radiusPanel);
+    return AppSurface(
+      borderRadius: radius,
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
+      metalDecoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -398,7 +401,7 @@ class _ProfileCard extends StatelessWidget {
             scheme.surfaceContainer,
           ],
         ),
-        borderRadius: BorderRadius.circular(AppColors.radiusPanel),
+        borderRadius: radius,
         border: Border.all(color: scheme.outlineVariant),
       ),
       child: Row(
@@ -442,11 +445,13 @@ class _StatsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
+    final radius = BorderRadius.circular(AppColors.radiusCard);
+    return AppSurface(
+      borderRadius: radius,
       padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
+      metalDecoration: BoxDecoration(
         color: scheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(AppColors.radiusCard),
+        borderRadius: radius,
         border: Border.all(color: scheme.outlineVariant),
       ),
       child: Row(
@@ -493,6 +498,25 @@ class _SettingTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    if (context.isLiquidGlass) {
+      return AppSurface(
+        kind: AppSurfaceKind.controlGroup,
+        borderRadius: BorderRadius.circular(AppColors.radiusCard),
+        margin: const EdgeInsets.only(bottom: 8),
+        child: AppListTile(
+          leading: SvgIcon(icon, size: 20, color: scheme.onSurfaceVariant),
+          title: Text(title, style: AppTypography.body),
+          subtitle: value == null
+              ? null
+              : Text(value!, maxLines: 1, overflow: TextOverflow.ellipsis),
+          trailing: trailing ??
+              (onTap == null
+                  ? null
+                  : const SvgIcon(AppIcons.forward, size: 18)),
+          onTap: onTap,
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
@@ -576,7 +600,7 @@ class _OptionSheet<T> extends StatelessWidget {
             ),
           ),
           for (final option in options)
-            ListTile(
+            AppListTile(
               title: Text(
                 labelOf(option),
                 style: AppTypography.body.copyWith(color: scheme.onSurface),

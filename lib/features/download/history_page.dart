@@ -6,6 +6,7 @@ import '../../core/di/providers.dart';
 import '../../core/icons/app_icons.dart';
 import '../../core/icons/app_images.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/ui/glass/app_glass.dart';
 import '../../data/models/download_record.dart';
 import '../home/widgets/feed_skeleton.dart';
 import '../pdf/pdf_viewer_page.dart';
@@ -46,24 +47,27 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     final scheme = Theme.of(context).colorScheme;
     final repository = ref.watch(downloadRepositoryProvider);
     final all = ref.watch(downloadRecordsProvider);
-    final finished = all.where((record) => record.isFinished).toList(growable: false);
+    final finished =
+        all.where((record) => record.isFinished).toList(growable: false);
     final records = finished.where(_filter.matches).toList(growable: false);
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
+    return AppGlassPage(
+      appBar: AppGlassAppBar(
+        leading: AppIconButton(
           tooltip: '返回',
           icon: IconTheme(
             data: IconThemeData(color: scheme.onSurface),
             child: const SvgIcon(AppIcons.back, size: 22),
           ),
-          onPressed: () => context.canPop() ? context.pop() : context.go('/mine'),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go('/mine'),
         ),
         title: const Text('历史记录'),
         actions: <Widget>[
           if (finished.isNotEmpty)
-            TextButton(
+            AppButton.text(
               onPressed: _confirmClear,
+              foregroundColor: scheme.onSurfaceVariant,
               style: TextButton.styleFrom(
                 foregroundColor: scheme.onSurfaceVariant,
                 textStyle: AppTypography.caption,
@@ -80,10 +84,10 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
             child: Row(
               children: <Widget>[
                 Expanded(
-                  child: SegmentedButton<HistoryFilter>(
-                    segments: <ButtonSegment<HistoryFilter>>[
+                  child: AppSegmentedControl<HistoryFilter>(
+                    segments: <AppSegment<HistoryFilter>>[
                       for (final filter in HistoryFilter.values)
-                        ButtonSegment<HistoryFilter>(
+                        AppSegment<HistoryFilter>(
                           value: filter,
                           label: Text(
                             filter == HistoryFilter.all
@@ -92,12 +96,10 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                           ),
                         ),
                     ],
-                    selected: <HistoryFilter>{_filter},
-                    showSelectedIcon: false,
-                    onSelectionChanged: (selection) {
-                      setState(() => _filter = selection.first);
-                    },
-                    style: SegmentedButton.styleFrom(
+                    selected: _filter,
+                    scrollable: true,
+                    onChanged: (filter) => setState(() => _filter = filter),
+                    metalStyle: SegmentedButton.styleFrom(
                       textStyle: AppTypography.caption,
                       side: BorderSide(color: scheme.outline),
                       selectedBackgroundColor: scheme.primaryContainer,
@@ -112,7 +114,8 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
             child: records.isEmpty
                 ? EmptyState(
                     imageAsset: AppImages.rocket,
-                    title: _filter == HistoryFilter.all ? '还没有下载记录' : '这个筛选下没有记录',
+                    title:
+                        _filter == HistoryFilter.all ? '还没有下载记录' : '这个筛选下没有记录',
                     description: '输入车号，完成的本子会归档到 Documents/JMComics/',
                   )
                 : ListView.builder(
@@ -145,35 +148,31 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
   }
 
   Future<void> _confirmClear() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await AppDialog.show<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('清空已完成'),
-        content: const Text('只清理记录，已导出的 PDF 不受影响。'),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('清空'),
-          ),
-        ],
-      ),
+      title: '清空已完成',
+      message: '只清理记录，已导出的 PDF 不受影响。',
+      actions: const <AppDialogAction<bool>>[
+        AppDialogAction<bool>(label: '取消', result: false),
+        AppDialogAction<bool>(
+          label: '清空',
+          result: true,
+          primary: true,
+          destructive: true,
+        ),
+      ],
     );
-    if (confirmed != true) return;
+    if (confirmed != true || !mounted) return;
     await ref.read(downloadRepositoryProvider).clearFinished();
   }
 }
 
 /// 供「我的」页展示的历史摘要。
 String historySummary(List<DownloadRecord> records) {
-  final succeeded = records
-      .where((record) => record.state == DownloadState.succeeded)
-      .length;
-  final failed = records.where((record) => record.state == DownloadState.failed).length;
+  final succeeded =
+      records.where((record) => record.state == DownloadState.succeeded).length;
+  final failed =
+      records.where((record) => record.state == DownloadState.failed).length;
   if (records.isEmpty) return '';
   return '完成 $succeeded · 失败 $failed';
 }
-

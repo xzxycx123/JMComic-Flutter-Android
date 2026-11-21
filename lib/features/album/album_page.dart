@@ -10,8 +10,9 @@ import '../../core/di/providers.dart';
 import '../../core/icons/app_icons.dart';
 import '../../core/icons/app_images.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/ui/app_toast.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/ui/app_toast.dart';
+import '../../core/ui/glass/app_glass.dart';
 import '../../data/models/jm_album_detail.dart';
 import '../../data/models/jm_album_summary.dart';
 import '../../data/models/jm_chapter.dart';
@@ -68,16 +69,20 @@ class _AlbumScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
+    return AppGlassPage(
+      appBar: AppGlassAppBar(
+        leading: AppIconButton(
+          tooltip: '返回',
           icon: IconTheme(
             data: IconThemeData(color: scheme.onSurface),
             child: const SvgIcon(AppIcons.back, size: 22),
           ),
           onPressed: () => context.pop(),
         ),
-        title: Text('JM$albumId', style: AppTypography.title.copyWith(color: scheme.onSurface)),
+        title: Text(
+          'JM$albumId',
+          style: AppTypography.title.copyWith(color: scheme.onSurface),
+        ),
       ),
       body: body,
     );
@@ -102,7 +107,8 @@ class _AlbumContent extends ConsumerWidget {
 
   Future<void> _download(BuildContext context, WidgetRef ref) async {
     try {
-      final record = await ref.read(downloadRepositoryProvider).enqueue(album.id);
+      final record =
+          await ref.read(downloadRepositoryProvider).enqueue(album.id);
       if (context.mounted) {
         AppToast.show(context, '已加入队列：${record.displayTitle}');
         context.go('/download');
@@ -143,7 +149,9 @@ class _AlbumContent extends ConsumerWidget {
   }
 
   Future<void> _share(BuildContext context) async {
-    await Clipboard.setData(ClipboardData(text: 'https://18comic.vip/album/${album.id}/'));
+    await Clipboard.setData(
+      ClipboardData(text: 'https://18comic.vip/album/${album.id}/'),
+    );
     if (!context.mounted) return;
     AppToast.show(context, '链接已复制');
   }
@@ -153,15 +161,18 @@ class _AlbumContent extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
     final primaryChapter = album.primaryChapter;
     final progress = ref.watch(
-      chapterProgressProvider((albumId: album.id, chapterId: primaryChapter.id)),
+      chapterProgressProvider(
+        (albumId: album.id, chapterId: primaryChapter.id),
+      ),
     );
     final isFavorite = ref.watch(favoriteIdsProvider).contains(album.id);
-    final resumePage = progress == null || progress.page <= 1 ? 1 : progress.page;
+    final resumePage =
+        progress == null || progress.page <= 1 ? 1 : progress.page;
     final ctaLabel = progress == null || progress.page <= 1
         ? '开始阅读'
         : '继续阅读 · 第 $resumePage 页';
 
-    return Scaffold(
+    return AppGlassPage(
       body: Stack(
         children: <Widget>[
           CustomScrollView(
@@ -169,7 +180,12 @@ class _AlbumContent extends ConsumerWidget {
               SliverAppBar(
                 pinned: true,
                 expandedHeight: 260,
-                leading: IconButton(
+                backgroundColor:
+                    context.isLiquidGlass ? Colors.transparent : null,
+                surfaceTintColor:
+                    context.isLiquidGlass ? Colors.transparent : null,
+                leading: AppIconButton(
+                  tooltip: '返回',
                   icon: IconTheme(
                     data: IconThemeData(color: scheme.onSurface),
                     child: const SvgIcon(AppIcons.back, size: 22),
@@ -177,38 +193,43 @@ class _AlbumContent extends ConsumerWidget {
                   onPressed: () => context.pop(),
                 ),
                 actions: <Widget>[
-                  IconButton(
+                  AppIconButton(
                     tooltip: isFavorite ? '取消收藏' : '收藏',
-                    icon: IconTheme(
-                      data: IconThemeData(
-                        color: isFavorite ? scheme.primary : scheme.onSurface,
-                      ),
-                      // 收藏图标是五角星：描边未收藏 / 实心已收藏。
-                      child: SvgIcon(
-                        isFavorite ? AppIcons.starFilled : AppIcons.star,
-                        size: 22,
-                      ),
+                    selected: isFavorite,
+                    color: isFavorite ? scheme.primary : scheme.onSurface,
+                    icon: SvgIcon(
+                      isFavorite ? AppIcons.starFilled : AppIcons.star,
+                      size: 22,
                     ),
                     onPressed: () => _toggleFavorite(context, ref, album),
                   ),
-                  IconButton(
+                  AppIconButton(
                     tooltip: '分享',
-                    icon: IconTheme(
-                      data: IconThemeData(color: scheme.onSurface),
-                      child: const SvgIcon(AppIcons.share, size: 20),
-                    ),
+                    color: scheme.onSurface,
+                    icon: const SvgIcon(AppIcons.share, size: 20),
                     onPressed: () => _share(context),
                   ),
                   const SizedBox(width: 4),
                 ],
-                flexibleSpace: FlexibleSpaceBar(
-                  background: _CoverHeader(album: album),
+                flexibleSpace: Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    FlexibleSpaceBar(background: _CoverHeader(album: album)),
+                    if (context.isLiquidGlass)
+                      const Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: _CollapsedChrome(),
+                      ),
+                  ],
                 ),
               ),
               SliverToBoxAdapter(child: _InfoSection(album: album)),
               SliverToBoxAdapter(child: _InteractionBar(album: album)),
               SliverToBoxAdapter(
-                child: SectionHeader(title: album.isSingleChapter ? '单行本' : '章节'),
+                child:
+                    SectionHeader(title: album.isSingleChapter ? '单行本' : '章节'),
               ),
               SliverList(
                 delegate: SliverChildBuilderDelegate(
@@ -242,10 +263,12 @@ class _AlbumContent extends ConsumerWidget {
                 ),
               ),
               if (album.related.isNotEmpty) ...<Widget>[
-                const SliverToBoxAdapter(child: SectionHeader(title: '相关推荐')),                SliverPadding(
+                const SliverToBoxAdapter(child: SectionHeader(title: '相关推荐')),
+                SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   sliver: SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       childAspectRatio: 0.52,
                       crossAxisSpacing: 12,
@@ -269,55 +292,70 @@ class _AlbumContent extends ConsumerWidget {
           ),
         ],
       ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: FilledButton(
-                  onPressed: () => _openReader(context, primaryChapter, page: resumePage),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      IconTheme(
-                        data: IconThemeData(color: scheme.onPrimary),
-                        child: const SvgIcon(AppIcons.play, size: 18),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          ctaLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+      bottomNavigationBar: AppGlassChrome(
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: AppButton(
+                    height: 48,
+                    onPressed: () =>
+                        _openReader(context, primaryChapter, page: resumePage),
+                    leadingIcon: const SvgIcon(AppIcons.play, size: 18),
+                    label: ctaLabel,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 108,
+                  child: AppButton.secondary(
+                    height: 48,
+                    onPressed: () => _download(context, ref),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        SvgIcon(
+                          AppIcons.download,
+                          size: 18,
+                          color: scheme.onSurface,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 6),
+                        const Text('下载'),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 108,
-                child: OutlinedButton(
-                  onPressed: () => _download(context, ref),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      IconTheme(
-                        data: IconThemeData(color: scheme.onSurface),
-                        child: const SvgIcon(AppIcons.download, size: 18),
-                      ),
-                      const SizedBox(width: 6),
-                      const Text('下载'),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The expanded cover stays unfiltered; chrome appears as the toolbar pins.
+class _CollapsedChrome extends StatelessWidget {
+  const _CollapsedChrome();
+
+  @override
+  Widget build(BuildContext context) {
+    final settings =
+        context.dependOnInheritedWidgetOfExactType<FlexibleSpaceBarSettings>();
+    final height = settings?.minExtent ?? kToolbarHeight;
+    final opacity = settings == null
+        ? 1.0
+        : (1 - (settings.currentExtent - height) / 48)
+            .clamp(0.0, 1.0)
+            .toDouble();
+    if (opacity == 0) return const SizedBox.shrink();
+    return IgnorePointer(
+      child: Opacity(
+        opacity: opacity,
+        child: AppGlassChrome(child: SizedBox(height: height)),
       ),
     );
   }
@@ -408,27 +446,28 @@ class _Pill extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final foreground =
         active ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
-    return Material(
-      color: active ? scheme.primaryContainer : scheme.surfaceContainer,
-      borderRadius: BorderRadius.circular(AppColors.radiusPill),
-      child: InkWell(
+    final text =
+        Text(label, style: AppTypography.caption.copyWith(color: foreground));
+    final glyph = SvgIcon(icon, size: 16, color: foreground);
+    return AppChip(
+      label: text,
+      leading: glyph,
+      onTap: onTap,
+      selected: active,
+      kind: AppChipKind.action,
+      foregroundColor: foreground,
+      metalChild: Material(
+        color: active ? scheme.primaryContainer : scheme.surfaceContainer,
         borderRadius: BorderRadius.circular(AppColors.radiusPill),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              IconTheme(
-                data: IconThemeData(color: foreground),
-                child: SvgIcon(icon, size: 16),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: AppTypography.caption.copyWith(color: foreground),
-              ),
-            ],
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppColors.radiusPill),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[glyph, const SizedBox(width: 6), text],
+            ),
           ),
         ),
       ),
@@ -489,7 +528,8 @@ class _CoverHeader extends StatelessWidget {
                       album.displayAuthor,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTypography.caption.copyWith(color: Colors.white70),
+                      style:
+                          AppTypography.caption.copyWith(color: Colors.white70),
                     ),
                   ],
                 ),
@@ -527,16 +567,26 @@ class _InfoSection extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: album.tags.take(12).map((tag) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: scheme.surfaceContainer,
-                    borderRadius: BorderRadius.circular(AppColors.radiusPill),
-                    border: Border.all(color: scheme.outlineVariant),
-                  ),
-                  child: Text(
-                    tag,
-                    style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+                const padding =
+                    EdgeInsets.symmetric(horizontal: 10, vertical: 4);
+                final label = Text(
+                  tag,
+                  style: AppTypography.micro
+                      .copyWith(color: scheme.onSurfaceVariant),
+                );
+                return AppChip(
+                  label: label,
+                  padding: padding,
+                  kind: AppChipKind.staticLabel,
+                  foregroundColor: scheme.onSurfaceVariant,
+                  metalChild: Container(
+                    padding: padding,
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainer,
+                      borderRadius: BorderRadius.circular(AppColors.radiusPill),
+                      border: Border.all(color: scheme.outlineVariant),
+                    ),
+                    child: label,
                   ),
                 );
               }).toList(growable: false),
@@ -549,7 +599,8 @@ class _InfoSection extends StatelessWidget {
               album.description.trim(),
               maxLines: 4,
               overflow: TextOverflow.ellipsis,
-              style: AppTypography.body.copyWith(color: scheme.onSurfaceVariant),
+              style:
+                  AppTypography.body.copyWith(color: scheme.onSurfaceVariant),
             ),
           ],
         ],

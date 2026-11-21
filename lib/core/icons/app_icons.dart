@@ -10,6 +10,8 @@ abstract final class AppIcons {
   static const String back = 'assets/icons/back.svg';
   static const String forward = 'assets/icons/forward.svg';
   static const String close = 'assets/icons/close.svg';
+  static const String eye = 'assets/icons/eye.svg';
+  static const String eyeOff = 'assets/icons/eye-off.svg';
   static const String theme = 'assets/icons/theme.svg';
   static const String bookmark = 'assets/icons/bookmark.svg';
   static const String play = 'assets/icons/play.svg';
@@ -64,7 +66,9 @@ class SvgIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolved = color ?? IconTheme.of(context).color ?? Theme.of(context).colorScheme.onSurface;
+    final resolved = color ??
+        IconTheme.of(context).color ??
+        Theme.of(context).colorScheme.onSurface;
     return SvgPicture.asset(
       asset,
       width: size,

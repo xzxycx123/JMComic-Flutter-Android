@@ -4,9 +4,70 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/ui/glass/app_glass.dart';
 import '../../../data/models/home_feed.dart';
 import '../../../data/models/jm_album_summary.dart';
 import 'cover_image.dart';
+
+class _ModuleBadge extends StatelessWidget {
+  const _ModuleBadge({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final label = Text(
+      title,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: AppTypography.micro.copyWith(color: scheme.onPrimary),
+    );
+    return AppBadge(
+      label: label,
+      color: scheme.primary,
+      metalChild: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: scheme.primary.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(AppColors.radiusPill),
+        ),
+        child: label,
+      ),
+    );
+  }
+}
+
+class _PageDots extends StatelessWidget {
+  const _PageDots({required this.count, required this.current});
+
+  final int count;
+  final int current;
+
+  @override
+  Widget build(BuildContext context) {
+    final glass = context.isLiquidGlass;
+    final ink = glass ? Theme.of(context).colorScheme.onSurface : Colors.white;
+    final reducedMotion = glass && MediaQuery.disableAnimationsOf(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List<Widget>.generate(count, (index) {
+        final active = index == current;
+        return AnimatedContainer(
+          duration:
+              reducedMotion ? Duration.zero : const Duration(milliseconds: 220),
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          width: active ? 18 : 6,
+          height: 6,
+          decoration: BoxDecoration(
+            color: active ? ink : ink.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(AppColors.radiusPill),
+          ),
+        );
+      }),
+    );
+  }
+}
 
 /// 首页轮播：高 180、圆角 20、5s 自动翻页，底部渐变 scrim + 2 行标题。
 class HeroBanner extends StatefulWidget {
@@ -68,7 +129,6 @@ class _HeroBannerState extends State<HeroBanner> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     if (widget.banners.isEmpty) return const SizedBox.shrink();
 
     return SizedBox(
@@ -118,25 +178,10 @@ class _HeroBannerState extends State<HeroBanner> {
                             mainAxisSize: MainAxisSize.min,
                             children: <Widget>[
                               if (banner.moduleTitle.isNotEmpty)
-                                Container(
-                                  margin: const EdgeInsets.only(bottom: 8),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: scheme.primary.withValues(alpha: 0.92),
-                                    borderRadius:
-                                        BorderRadius.circular(AppColors.radiusPill),
-                                  ),
-                                  child: Text(
-                                    banner.moduleTitle,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppTypography.micro.copyWith(
-                                      color: scheme.onPrimary,
-                                    ),
-                                  ),
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child:
+                                      _ModuleBadge(title: banner.moduleTitle),
                                 ),
                               Text(
                                 banner.album.displayTitle,
@@ -160,21 +205,17 @@ class _HeroBannerState extends State<HeroBanner> {
             bottom: 6,
             left: 0,
             right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List<Widget>.generate(widget.banners.length, (index) {
-                final active = index == _index;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  width: active ? 18 : 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: active ? Colors.white : Colors.white.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                );
-              }),
+            child: Center(
+              child: IgnorePointer(
+                child: AppSurface(
+                  kind: AppSurfaceKind.controlGroup,
+                  borderRadius: BorderRadius.circular(AppColors.radiusPill),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                  child:
+                      _PageDots(count: widget.banners.length, current: _index),
+                ),
+              ),
             ),
           ),
         ],

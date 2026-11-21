@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/icons/app_icons.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/ui/app_toast.dart';
+import '../../core/ui/glass/app_glass.dart';
 import '../../data/models/favorite_item.dart';
 import '../home/widgets/album_card.dart';
 import '../home/widgets/feed_skeleton.dart';
@@ -36,27 +38,28 @@ class _CollectPageState extends ConsumerState<CollectPage> {
     final visible = _filtered(items);
     final activeCount = items.where((item) => item.hasUpdate).length;
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
+    return AppGlassPage(
+      appBar: AppGlassAppBar(
+        leading: AppIconButton(
           tooltip: '返回',
           icon: IconTheme(
             data: IconThemeData(color: scheme.onSurface),
             child: const SvgIcon(AppIcons.back, size: 22),
           ),
-          onPressed: () => context.canPop() ? context.pop() : context.go('/mine'),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go('/mine'),
         ),
         title: const Text('我的收藏'),
         actions: <Widget>[
           if (loggedIn)
-            IconButton(
+            AppIconButton(
               tooltip: '同步收藏',
               onPressed: syncing ? null : _sync,
               icon: syncing
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: AppProgressIndicator.circular(strokeWidth: 2),
                     )
                   : IconTheme(
                       data: IconThemeData(color: scheme.onSurface),
@@ -96,7 +99,9 @@ class _CollectPageState extends ConsumerState<CollectPage> {
                   label: folder.name,
                   selected: _folderId == folder.id,
                   onTap: () => setState(() => _folderId = folder.id),
-                  onLongPress: folder.id == 'default' ? null : () => _deleteFolder(folder),
+                  onLongPress: folder.id == 'default'
+                      ? null
+                      : () => _deleteFolder(folder),
                 );
               },
             ),
@@ -105,22 +110,30 @@ class _CollectPageState extends ConsumerState<CollectPage> {
             padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
             child: Row(
               children: <Widget>[
-                ChoiceChip(
+                AppChip(
+                  kind: AppChipKind.choice,
                   label: const Text('收藏时间'),
                   selected: !_sortByUpdate,
-                  onSelected: (_) => setState(() => _sortByUpdate = false),
+                  onTap: () => setState(() => _sortByUpdate = false),
                 ),
                 const SizedBox(width: 8),
-                ChoiceChip(
+                AppChip(
+                  kind: AppChipKind.choice,
                   label: const Text('更新时间'),
                   selected: _sortByUpdate,
-                  onSelected: (_) => setState(() => _sortByUpdate = true),
+                  onTap: () => setState(() => _sortByUpdate = true),
                 ),
-                const Spacer(),
                 if (activeCount > 0)
-                  Text(
-                    '$activeCount 本有更新',
-                    style: AppTypography.micro.copyWith(color: scheme.primary),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Text(
+                        '$activeCount 本有更新',
+                        textAlign: TextAlign.end,
+                        style:
+                            AppTypography.micro.copyWith(color: scheme.primary),
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -134,7 +147,8 @@ class _CollectPageState extends ConsumerState<CollectPage> {
                   )
                 : GridView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       childAspectRatio: 0.52,
                       crossAxisSpacing: 12,
@@ -154,19 +168,25 @@ class _CollectPageState extends ConsumerState<CollectPage> {
                             Positioned(
                               right: 6,
                               bottom: 62,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
+                              child: IgnorePointer(
+                                child: AppBadge(
+                                  label: const Text('更新',
+                                      style: AppTypography.micro,),
                                   color: scheme.primary,
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Text(
-                                  '更新',
-                                  style: AppTypography.micro.copyWith(
-                                    color: scheme.onPrimary,
+                                  metalChild: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: scheme.primary,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      '更新',
+                                      style: AppTypography.micro
+                                          .copyWith(color: scheme.onPrimary),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -212,74 +232,67 @@ class _CollectPageState extends ConsumerState<CollectPage> {
   }
 
   Future<void> _sync() async {
-    final messenger = ScaffoldMessenger.of(context);
     final report = await ref.read(favoritesSyncProvider.notifier).syncNow();
     if (!mounted) return;
     if (report == null) {
       final error = ref.read(favoritesSyncProvider).lastError ?? '未知错误';
-      messenger.showSnackBar(SnackBar(content: Text('同步失败：$error')));
+      AppToast.show(
+        context,
+        '同步失败：$error',
+        duration: const Duration(seconds: 4),
+      );
       return;
     }
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          '同步完成：云端 ${report.serverCount} 本 · 拉回 ${report.addedToLocal} 本'
-          ' · 上传 ${report.pushed} 本'
-          '${report.conflicts > 0 ? '，${report.conflicts} 条冲突已自愈' : ''}',
-        ),
-      ),
+    AppToast.show(
+      context,
+      '同步完成：云端 ${report.serverCount} 本 · 拉回 ${report.addedToLocal} 本'
+      ' · 上传 ${report.pushed} 本'
+      '${report.conflicts > 0 ? '，${report.conflicts} 条冲突已自愈' : ''}',
+      duration: const Duration(seconds: 4),
     );
   }
 
   Future<void> _createFolder() async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
+    var folderName = '';
+    final name = await AppDialog.show<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('新建文件夹'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: '文件夹名'),
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('创建'),
-          ),
-        ],
+      title: '新建文件夹',
+      contentBuilder: (_) => AppTextField(
+        autofocus: true,
+        decoration: const InputDecoration(hintText: '文件夹名'),
+        onChanged: (value) => folderName = value,
       ),
+      actions: <AppDialogAction<String>>[
+        const AppDialogAction(label: '取消'),
+        AppDialogAction(
+          label: '创建',
+          primary: true,
+          resultBuilder: () => folderName,
+        ),
+      ],
     );
-    controller.dispose();
-    if (name == null || name.trim().isEmpty) return;
+    if (!mounted || name == null || name.trim().isEmpty) return;
     await ref.read(favoritesRepositoryProvider).createFolder(name);
     if (!mounted) return;
     setState(() {});
   }
 
   Future<void> _deleteFolder(FavoriteFolder folder) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await AppDialog.show<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('删除「${folder.name}」'),
-        content: const Text('文件夹里的收藏不会被删除，只会回到「默认」。'),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      title: '删除「${folder.name}」',
+      message: '文件夹里的收藏不会被删除，只会回到「默认」。',
+      actions: const <AppDialogAction<bool>>[
+        AppDialogAction(label: '取消', result: false),
+        AppDialogAction(
+          label: '删除',
+          result: true,
+          primary: true,
+          destructive: true,
+        ),
+      ],
     );
-    if (confirmed != true) return;
+    if (confirmed != true || !mounted) return;
     await ref.read(favoritesRepositoryProvider).deleteFolder(folder.id);
     if (!mounted) return;
     setState(() => _folderId = 'all');
@@ -287,53 +300,62 @@ class _CollectPageState extends ConsumerState<CollectPage> {
 
   Future<void> _showItemMenu(FavoriteItem item) async {
     final folders = ref.read(favoritesFoldersProvider);
-    final action = await showModalBottomSheet<String>(
+    final action = await AppSheet.show<String>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            ListTile(
-              title: Text(item.displayTitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text(item.sync.label),
-            ),
-            const Divider(height: 1),
-            for (final folder in folders)
-              ListTile(
-                leading: const IconTheme(
-                  data: IconThemeData(),
-                  child: SvgIcon(AppIcons.folder, size: 20),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              AppListTile(
+                title: Text(
+                  item.displayTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                title: Text('移到「${folder.name}」'),
-                enabled: !item.folderIds.contains(folder.id),
-                onTap: () => Navigator.of(context).pop('folder:${folder.id}'),
+                subtitle: Text(item.sync.label),
               ),
-            ListTile(
-              leading: IconTheme(
-                data: IconThemeData(color: Theme.of(context).colorScheme.error),
-                child: const SvgIcon(AppIcons.trash, size: 20),
+              const Divider(height: 1),
+              for (final folder in folders)
+                AppListTile(
+                  leading: const IconTheme(
+                    data: IconThemeData(),
+                    child: SvgIcon(AppIcons.folder, size: 20),
+                  ),
+                  title: Text('移到「${folder.name}」'),
+                  enabled: !item.folderIds.contains(folder.id),
+                  onTap: () => Navigator.of(context).pop('folder:${folder.id}'),
+                ),
+              AppListTile(
+                leading: IconTheme(
+                  data:
+                      IconThemeData(color: Theme.of(context).colorScheme.error),
+                  child: const SvgIcon(AppIcons.trash, size: 20),
+                ),
+                title: Text(
+                  '取消收藏',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                onTap: () => Navigator.of(context).pop('remove'),
               ),
-              title: Text(
-                '取消收藏',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-              onTap: () => Navigator.of(context).pop('remove'),
-            ),
-            const SizedBox(height: 8),
-          ],
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
-    if (action == null) return;
+    if (action == null || !mounted) return;
 
     final repository = ref.read(favoritesRepositoryProvider);
+    final items = ref.read(favoritesItemsProvider.notifier);
     if (action == 'remove') {
       await repository.remove(item.albumId);
     } else if (action.startsWith('folder:')) {
       await repository.moveToFolder(item.albumId, action.substring(7));
     }
-    ref.read(favoritesItemsProvider.notifier).reload();
+    items.reload();
     if (mounted) setState(() {});
   }
 }
@@ -354,22 +376,32 @@ class _FolderChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final glass = context.isLiquidGlass;
     return GestureDetector(
-      onTap: onTap,
+      onTap: glass ? null : onTap,
       onLongPress: onLongPress,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? scheme.primary : scheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(AppColors.radiusPill),
-          border: Border.all(color: selected ? Colors.transparent : scheme.outline),
-        ),
-        child: Text(
-          label,
-          style: AppTypography.caption.copyWith(
-            color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+      child: AppChip(
+        kind: AppChipKind.choice,
+        label: Text(label),
+        selected: selected,
+        onTap: onTap,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        metalChild: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? scheme.primary : scheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(AppColors.radiusPill),
+            border: Border.all(
+              color: selected ? Colors.transparent : scheme.outline,
+            ),
+          ),
+          child: Text(
+            label,
+            style: AppTypography.caption.copyWith(
+              color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
           ),
         ),
       ),
@@ -385,22 +417,27 @@ class _SyncBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
+    final radius = BorderRadius.circular(AppColors.radiusCard);
+    return AppSurface(
+      kind: AppSurfaceKind.controlGroup,
+      borderRadius: radius,
+      color: scheme.primaryContainer,
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
+      metalDecoration: BoxDecoration(
         color: scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(AppColors.radiusCard),
+        borderRadius: radius,
       ),
       child: Row(
         children: <Widget>[
           Expanded(
             child: Text(
               '本地收藏 · 登录后可同步',
-              style: AppTypography.micro.copyWith(color: scheme.onPrimaryContainer),
+              style: AppTypography.micro
+                  .copyWith(color: scheme.onPrimaryContainer),
             ),
           ),
-          TextButton(
+          AppButton.text(
             onPressed: onLogin,
             style: TextButton.styleFrom(
               foregroundColor: scheme.onPrimaryContainer,

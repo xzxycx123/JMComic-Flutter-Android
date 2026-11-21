@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jm_comic/core/theme/interface_style_scope.dart';
+import 'package:jm_comic/data/local/settings_store.dart';
 import 'package:jm_comic/features/reader/reader_mode.dart';
 import 'package:jm_comic/features/reader/widgets/reader_hud.dart';
 import 'package:jm_comic/features/reader/widgets/reader_tap_zones.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 void main() {
   group('ReaderMode / ReaderArgs', () {
@@ -142,6 +145,94 @@ void main() {
       await tester.drag(find.byType(Slider), const Offset(120, 0));
       await tester.pumpAndSettle();
       expect(jumped, greaterThan(12));
+    });
+
+    testWidgets('玻璃进度条预览、松手跳页、点击跳页及隐藏', (tester) async {
+      final previews = <double>[];
+      final jumps = <int>[];
+      var page = 12;
+      var visible = true;
+      var underlyingTaps = 0;
+      late StateSetter rebuild;
+
+      await tester.pumpWidget(
+        LiquidGlassWidgets.wrap(
+          theme: const GlassThemeData.ios27(),
+          brightnessResolver: Theme.maybeBrightnessOf,
+          child: MaterialApp(
+            theme: ThemeData.light(),
+            home: InterfaceStyleScope(
+              style: AppInterfaceStyle.liquidGlass,
+              child: Scaffold(
+                body: StatefulBuilder(
+                  builder: (context, setState) {
+                    rebuild = setState;
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => underlyingTaps++,
+                        ),
+                        ReaderHud(
+                          title: '玻璃阅读器',
+                          page: page,
+                          total: 20,
+                          mode: ReaderMode.paged,
+                          visible: visible,
+                          onExit: () {},
+                          onToggleMode: () {},
+                          onSliderChanged: (value) {
+                            previews.add(value);
+                            setState(() => page = value.round());
+                          },
+                          onJump: jumps.add,
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final slider = find.byType(GlassSlider);
+      expect(slider, findsOneWidget);
+      expect(Theme.of(tester.element(slider)).brightness, Brightness.dark);
+      final track = tester.getRect(slider);
+      final gesture = await tester.startGesture(track.center);
+      await gesture.moveBy(const Offset(40, 0));
+      await gesture.moveBy(const Offset(40, 0));
+      await tester.pump();
+      expect(previews, isNotEmpty);
+      expect(jumps, isEmpty);
+      expect(find.text('已读 $page/20'), findsOneWidget);
+
+      // Release without pumping the last preview into GlassSlider.value.
+      final builtValue = tester.widget<GlassSlider>(slider).value;
+      await gesture.moveBy(const Offset(85, 0));
+      final endPage = previews.last.round();
+      expect(endPage, greaterThan(builtValue));
+      expect(jumps, isEmpty);
+      await gesture.up();
+      expect(jumps, [endPage]);
+
+      final endOfTrack = Offset(track.right - 1, track.center.dy);
+      await tester.tapAt(endOfTrack);
+      expect(previews.last.round(), 20);
+      expect(jumps, [endPage, 20]);
+      expect(underlyingTaps, 0);
+
+      rebuild(() => visible = false);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(slider, findsNothing);
+      expect(find.textContaining('玻璃阅读器'), findsNothing);
+      await tester.tapAt(endOfTrack);
+      expect(underlyingTaps, 1);
+      expect(jumps, [endPage, 20]);
     });
 
     testWidgets('顶栏显示当前分流并可点击切换', (tester) async {
