@@ -17,6 +17,14 @@ enum AlbumCardLayout {
   rail,
 }
 
+/// 双列网格卡片的宽高比：正文是「2 行标题 + 作者 + 标签行」，字号越大正文越高，
+/// 卡片按比例放宽（scale = 1 时仍是 0.52），避免正文把封面挤出溢出。
+double albumGridAspectRatio(BuildContext context) {
+  final scale = MediaQuery.textScalerOf(context).scale(1.0);
+  final extra = (scale - 1).clamp(0.0, 1.0);
+  return 0.52 / (1 + 0.3 * extra);
+}
+
 /// 本子卡片：封面 + 2 行标题 + 作者/分类。
 class AlbumCard extends StatelessWidget {
   const AlbumCard({
@@ -37,30 +45,10 @@ class AlbumCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isRail = layout == AlbumCardLayout.rail;
-    // 标签来自模型的 displayTags（已过滤空值 / N/A / 超长 / 重复，最多 2 个）。
-    //
-    // 调用方自带 caption（搜索结果卡在自己那行渲染标签 chips）时，封面不再重复
-    // 渲染同一批标签，避免同一张卡上出现两份相同文案。
-    final tags = caption == null ? album.displayTags : const <String>[];
     final cover = Stack(
       fit: StackFit.expand,
       children: <Widget>[
         CoverImage(albumId: album.id),
-        if (tags.isNotEmpty)
-          Positioned(
-            left: 8,
-            top: 8,
-            right: album.isNew ? 40 : 8,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                for (var index = 0; index < tags.length; index++) ...<Widget>[
-                  if (index > 0) const SizedBox(width: 4),
-                  Flexible(child: _CoverTag(text: tags[index])),
-                ],
-              ],
-            ),
-          ),
         Positioned(
           left: 8,
           bottom: 8,
@@ -135,6 +123,9 @@ class _CardCaption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    // 标签来自模型的 displayTags（已过滤空值 / N/A / 超长 / 重复，最多 2 个），
+    // 和搜索结果卡的标签行同款：封面下方一行小药丸。
+    final tags = album.displayTags;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -152,35 +143,31 @@ class _CardCaption extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
         ),
+        if (tags.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 4),
+          Row(
+            children: <Widget>[
+              for (var index = 0; index < tags.length; index++) ...<Widget>[
+                if (index > 0) const SizedBox(width: 4),
+                Flexible(
+                  child: AppChip(
+                    label: Text(
+                      tags[index],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.micro
+                          .copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                    cornerRadius: 5,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
       ],
-    );
-  }
-}
-
-/// 封面左上角标签：实色药丸（列表内容不用玻璃），最多 2 个、单行省略。
-class _CoverTag extends StatelessWidget {
-  const _CoverTag({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: scheme.surface.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(AppColors.radiusPill),
-      ),
-      child: Text(
-        text,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: AppTypography.micro.copyWith(
-          color: scheme.onSurfaceVariant,
-          height: 1.1,
-        ),
-      ),
     );
   }
 }

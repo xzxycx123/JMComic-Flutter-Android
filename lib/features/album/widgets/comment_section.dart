@@ -391,39 +391,26 @@ class CommentTile extends StatelessWidget {
                   comment.content,
                   style: AppTypography.body.copyWith(color: scheme.onSurface),
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  children: <Widget>[
-                    IconTheme(
-                      data: IconThemeData(color: scheme.onSurfaceVariant),
-                      child: const SvgIcon(AppIcons.heart, size: 13),
+                // 评论点赞已下线：`/forum.likes` 对游客恒为 "0"，站点自己的评论点赞入口
+                // 也已注释停用（见研究结论），所以这里不再渲染爱心/计数。
+                if (onReply != null) ...<Widget>[
+                  const SizedBox(height: 4),
+                  if (context.isLiquidGlass)
+                    AppButton.text(
+                      onPressed: onReply,
+                      foregroundColor: scheme.primary,
+                      child: const Text('回复', style: AppTypography.micro),
+                    )
+                  else
+                    InkWell(
+                      onTap: onReply,
+                      child: Text(
+                        '回复',
+                        style:
+                            AppTypography.micro.copyWith(color: scheme.primary),
+                      ),
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${comment.likes}',
-                      style: AppTypography.micro
-                          .copyWith(color: scheme.onSurfaceVariant),
-                    ),
-                    if (onReply != null) ...<Widget>[
-                      const SizedBox(width: 12),
-                      if (context.isLiquidGlass)
-                        AppButton.text(
-                          onPressed: onReply,
-                          foregroundColor: scheme.primary,
-                          child: const Text('回复', style: AppTypography.micro),
-                        )
-                      else
-                        InkWell(
-                          onTap: onReply,
-                          child: Text(
-                            '回复',
-                            style: AppTypography.micro
-                                .copyWith(color: scheme.primary),
-                          ),
-                        ),
-                    ],
-                  ],
-                ),
+                ],
                 for (final reply in filter.repliesOf(comment).take(3))
                   Padding(
                     padding: const EdgeInsets.only(top: 8),

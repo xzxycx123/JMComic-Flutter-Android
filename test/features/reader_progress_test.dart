@@ -17,6 +17,7 @@ import 'package:jm_comic/features/reader/reader_mode.dart';
 import 'package:jm_comic/features/reader/reader_page.dart';
 import 'package:jm_comic/features/reader/reader_providers.dart';
 import 'package:jm_comic/features/reader/widgets/reader_tap_zones.dart';
+import 'package:jm_comic/features/reader/widgets/scroll_reader_view.dart';
 
 import '../helpers/fixtures.dart';
 import '../helpers/test_env.dart';
@@ -28,16 +29,16 @@ const ReaderArgs _readerArgs = ReaderArgs(
   albumTitle: '测试本',
 );
 
-ReaderData _readerData() => const ReaderData(
+ReaderData _readerData({ReaderMode mode = ReaderMode.paged}) => ReaderData(
       args: _readerArgs,
-      chapter: JmChapter(
+      chapter: const JmChapter(
         id: '7999',
         title: '第 1 话',
         images: <String>['001.webp', '002.webp', '003.webp'],
       ),
       scrambleId: 220980,
       initialPage: 1,
-      mode: ReaderMode.paged,
+      mode: mode,
     );
 
 /// 阅读器数据直接用桩，不碰网络 / 仓储。
@@ -128,7 +129,10 @@ class _Harness {
       store.read('7000', chapterId);
 }
 
-Future<_Harness> _pumpReader(WidgetTester tester) async {
+Future<_Harness> _pumpReader(
+  WidgetTester tester, {
+  ReaderMode mode = ReaderMode.paged,
+}) async {
   final store =
       _MemoryProgressStore(Hive.box<dynamic>(HiveBoxes.readerProgress));
   final container = ProviderContainer(
@@ -138,7 +142,7 @@ Future<_Harness> _pumpReader(WidgetTester tester) async {
       albumRepositoryProvider
           .overrideWith((ref) async => _StubAlbumRepository(store)),
       readerDataProvider
-          .overrideWith(() => _StubReaderController(_readerData())),
+          .overrideWith(() => _StubReaderController(_readerData(mode: mode))),
     ],
   );
   late final GoRouter router;
@@ -511,6 +515,75 @@ void main() {
       expect(progress, isNotNull);
       expect(progress!.page, 2);
       expect(progress.total, 3);
+    });
+  });
+
+  group('竖读整屏缩放', () {
+    double zoomOf(WidgetTester tester) {
+      final transform = tester.widget<Transform>(
+        find
+            .ancestor(
+              of: find.byType(ScrollReaderView),
+              matching: find.byType(Transform),
+            )
+            .first,
+      );
+      return transform.transform.getMaxScaleOnAxis();
+    }
+
+    Future<void> doubleTapReader(WidgetTester tester) async {
+      final center = tester.getRect(find.byType(ScrollReaderView)).center;
+      await tester.tapAt(center);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tapAt(center);
+      await tester.pump(const Duration(milliseconds: 320));
+    }
+
+    testWidgets('双指放大的是整屏漫画，而不是单张页', (tester) async {
+      await _pumpReader(tester, mode: ReaderMode.vertical);
+      expect(
+        find.byType(InteractiveViewer),
+        findsNothing,
+        reason: '竖读不再逐页缩放',
+      );
+      expect(zoomOf(tester), 1.0);
+
+      final center = tester.getRect(find.byType(ScrollReaderView)).center;
+      final first = await tester.startGesture(center - const Offset(40, 0));
+      final second = await tester.startGesture(center + const Offset(40, 0));
+      await tester.pump();
+      await first.moveBy(const Offset(-80, 0));
+      await second.moveBy(const Offset(80, 0));
+      await tester.pump();
+      await first.up();
+      await second.up();
+      await tester.pump();
+
+      expect(zoomOf(tester), greaterThan(2.0), reason: '整块阅读区被放大');
+      expect(find.byType(ScrollReaderView), findsOneWidget);
+      expect(find.byType(InteractiveViewer), findsNothing);
+
+      // 收回 1.0 再退出，避免残留缩放与 HUD 定时器。
+      await doubleTapReader(tester); // 放大 → 双击收起（此时已放大，双击回 1.0）
+      await tester.pumpAndSettle();
+      final pop = tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await pop;
+    });
+
+    testWidgets('竖读双击切换整屏放大 1.0 ↔ 2.2', (tester) async {
+      await _pumpReader(tester, mode: ReaderMode.vertical);
+      expect(zoomOf(tester), 1.0);
+
+      await doubleTapReader(tester);
+      expect(zoomOf(tester), closeTo(2.2, 0.01));
+
+      await doubleTapReader(tester);
+      expect(zoomOf(tester), 1.0);
+
+      final pop = tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await pop;
     });
   });
 }

@@ -6,9 +6,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jm_comic/core/di/providers.dart';
 import 'package:jm_comic/core/icons/app_icons.dart';
 import 'package:jm_comic/core/theme/app_theme.dart';
+import 'package:jm_comic/core/ui/glass/app_chip.dart';
 import 'package:jm_comic/core/ui/glass/app_surface.dart';
 import 'package:jm_comic/data/models/jm_album_summary.dart';
 import 'package:jm_comic/features/home/widgets/album_card.dart';
+import 'package:jm_comic/features/home/widgets/cover_image.dart';
 
 import '../../helpers/fixtures.dart';
 
@@ -97,7 +99,34 @@ void main() {
     expect(find.byType(AppSurface), findsNothing);
   });
 
-  testWidgets('调用方自带 caption 时封面不重复渲染标签', (tester) async {
+  testWidgets('标签渲染在卡片正文（标题下方），和搜索页一致', (tester) async {
+    const album = JmAlbumSummary(
+      id: '350234',
+      title: '測試本子',
+      author: '測試作者',
+      tags: <String>['同人'],
+      likes: 12,
+    );
+    await tester.pumpWidget(_host(const AlbumCard(album: album)));
+    await tester.pump();
+
+    // 标签是正文里的 chip（AppChip），不是封面上的角标。
+    final tagChip = find.ancestor(
+      of: find.text('同人'),
+      matching: find.byType(AppChip),
+    );
+    expect(tagChip, findsOneWidget);
+    final cover = tester.getRect(find.byType(CoverImage));
+    final tag = tester.getRect(find.text('同人'));
+    expect(tag.top, greaterThanOrEqualTo(cover.bottom));
+    // 标题在标签上方。
+    expect(
+      tester.getRect(find.text('測試本子')).bottom,
+      lessThanOrEqualTo(tag.top),
+    );
+  });
+
+  testWidgets('调用方自带 caption 时不重复渲染标签', (tester) async {
     const album = JmAlbumSummary(
       id: '4',
       title: '搜索结果',

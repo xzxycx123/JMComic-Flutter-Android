@@ -9,7 +9,10 @@ import 'package:jm_comic/data/local/check_in_store.dart';
 import 'package:jm_comic/data/local/download_store.dart';
 import 'package:jm_comic/data/local/hive_init.dart';
 import 'package:jm_comic/data/local/settings_store.dart';
+import 'package:jm_comic/data/models/account_session.dart';
+import 'package:jm_comic/data/models/jm_daily.dart';
 import 'package:jm_comic/data/repositories/home_repository.dart';
+import 'package:jm_comic/features/collect/collect_providers.dart';
 import 'package:jm_comic/features/mine/check_in_calendar.dart';
 import 'package:jm_comic/features/mine/check_in_providers.dart';
 import 'package:jm_comic/features/mine/daily_check_in_page.dart';
@@ -31,8 +34,17 @@ class _MemorySettingsStore extends Fake implements SettingsStore {
   }
 }
 
-/// 内存版 Box：widget 测试里 Hive 的真实文件写入跑在 fake async 下会挂住，
-/// 所以签到页用内存 box，只验证 provider -> UI 的联动。
+/// 固定登录态的账号 notifier（头像栏 JCoin 展示测试用）。
+class _FakeAccountNotifier extends AccountSessionNotifier {
+  _FakeAccountNotifier(this.session);
+
+  final AccountSession session;
+
+  @override
+  Future<AccountSession> build() async => session;
+}
+
+/// 内存版 Box：widget 测试里 Hive 的真实文件写入跑在 fake async 下会挂住。
 class _MemoryBox extends Fake implements Box<dynamic> {
   final Map<dynamic, dynamic> _data = <dynamic, dynamic>{};
 
@@ -52,6 +64,11 @@ class _MemoryBox extends Fake implements Box<dynamic> {
   }
 
   @override
+  Future<void> delete(dynamic key) async {
+    _data.remove(key);
+  }
+
+  @override
   bool get isEmpty => _data.isEmpty;
 
   @override
@@ -61,7 +78,21 @@ class _MemoryBox extends Fake implements Box<dynamic> {
   int get length => _data.length;
 }
 
-/// 工单四：每日签到与月历。
+/// 固定「今天」= 2026-11-21。
+DateTime get _today => DateTime(2026, 11, 21, 10);
+
+const AccountSession _loggedIn = AccountSession(
+  uid: 4242,
+  username: 'tester',
+  state: SessionState.valid,
+  coin: 120,
+);
+
+/// 服务端 `/daily` 的样子（2026-11-21 实测结构，30 天，20、21 已签）。
+JmDailyState _serverDaily({Set<int> signed = const <int>{20, 21}}) =>
+    buildFakeDaily(signed: signed, bonus: const <int>{21}, coin: 150);
+
+/// 工单四（重做）：每日签到 = 服务端行为（GET /daily + POST /daily_chk）。
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -76,177 +107,296 @@ void main() {
     box = Hive.box<dynamic>(HiveBoxes.checkIns);
   });
 
-  CheckInStore storeAt(DateTime today) => CheckInStore(box, clock: () => today);
+  ProviderContainer containerFor({
+    FakeJmApi? api,
+    AccountSession? account = _loggedIn,
+    CheckInStore? store,
+    DateTime Function()? clock,
+    List<int>? coinSink,
+  }) {
+    final fake = api ?? FakeJmApi(loggedIn: true);
+    final sink = coinSink ?? <int>[];
+    return ProviderContainer(
+      overrides: <Override>[
+        checkInAccountProvider.overrideWithValue(account),
+        jmBootstrapProvider.overrideWith((ref) async => fake),
+        checkInClockProvider.overrideWithValue(clock ?? () => _today),
+        checkInCoinSinkProvider.overrideWithValue((coin) async {
+          sink.add(coin);
+        }),
+        if (store != null) checkInStoreProvider.overrideWithValue(store),
+      ],
+    );
+  }
 
-  group('CheckInStore 持久化', () {
-    test('同一天重复签到幂等：只落一条 yyyy-MM-dd 记录', () async {
-      final store = storeAt(DateTime(2026, 2, 1, 9, 30));
+  group('服务端协议', () {
+    test('/daily 的 record 解析：signed=null 按未签处理、daily_id 保留', () {
+      final state = JmDailyState.fromJson(<String, dynamic>{
+        'daily_id': 74,
+        'three_days_coin': '30',
+        'seven_days_coin': '500',
+        'event_name': '11月-兔兔萬歲',
+        'currentProgress': '0%',
+        'makeup_used': 0,
+        'makeup_limit': 5,
+        'makeup_available': true,
+        'record': <dynamic>[
+          <dynamic>[
+            <String, dynamic>{'date': '01', 'signed': false, 'bonus': true},
+            <String, dynamic>{'date': '02', 'signed': true, 'bonus': false},
+          ],
+          <dynamic>[
+            <String, dynamic>{'date': '21', 'signed': null, 'bonus': true},
+          ],
+        ],
+      });
 
-      expect(await store.checkIn(DateTime(2026, 2, 1)), isTrue);
-      expect(await store.checkIn(DateTime(2026, 2, 1, 23, 59)), isFalse);
-      expect(await store.checkIn(DateTime(2026, 2, 1, 0, 1)), isFalse);
-
-      expect(box.length, 1);
-      expect(box.containsKey('2026-02-01'), isTrue);
-      expect(store.totalCount(), 1);
-      expect(store.isSigned(DateTime(2026, 2, 1)), isTrue);
+      expect(state.dailyId, 74);
+      expect(state.eventName, '11月-兔兔萬歲');
+      expect(state.threeDaysCoin, 30);
+      expect(state.sevenDaysCoin, 500);
+      expect(state.makeupLimit, 5);
+      expect(state.makeupAvailable, isTrue);
+      expect(state.signedDays, <int>{2});
+      expect(state.isSigned(21), isFalse, reason: 'signed=null 是未来日期');
+      expect(state.bonusDays, <int>{1, 21});
     });
 
-    test('未来日期拒绝签到，且不写盘', () async {
-      final store = storeAt(DateTime(2026, 2, 1, 10));
-
-      expect(await store.checkIn(DateTime(2026, 2, 2)), isFalse);
-      expect(await store.checkIn(DateTime(2026, 3, 1)), isFalse);
-      expect(box.isEmpty, isTrue);
-
-      // 昨天 / 今天都可以写（历史只读由 UI 保证，存储层保留补录能力）。
-      expect(await store.checkIn(DateTime(2026, 1, 31)), isTrue);
-      expect(await store.checkIn(DateTime(2026, 2, 1)), isTrue);
-      expect(box.length, 2);
+    test('缓存的 toJson / fromJson 往返一致', () {
+      final source = _serverDaily();
+      final restored = JmDailyState.fromJson(source.toJson());
+      expect(restored.dailyId, source.dailyId);
+      expect(restored.signedDays, source.signedDays);
+      expect(restored.bonusDays, source.bonusDays);
+      expect(restored.coin, source.coin);
+      expect(restored.makeupLimit, source.makeupLimit);
     });
 
-    test('日期键格式为 yyyy-MM-dd，脏键不参与统计', () async {
-      final store = storeAt(DateTime(2026, 11, 21));
-      await store.checkIn(DateTime(2026, 9, 5));
-      expect(store.signedKeys(), <String>{'2026-09-05'});
-      expect(CheckInStore.dayKey(DateTime(2026, 1, 2)), '2026-01-02');
-
-      await box.put('not-a-date', true);
-      await box.put('2026-13-01', true);
-      expect(store.totalCount(), 1);
-      expect(store.signedDays(), <DateTime>[DateTime(2026, 9, 5)]);
-    });
-  });
-
-  group('连续天数', () {
-    test('今天已签：从今天向前算，覆盖跨月', () async {
-      final store = storeAt(DateTime(2026, 2, 1, 10));
-      await store.checkIn(DateTime(2026, 1, 30));
-      await store.checkIn(DateTime(2026, 1, 31));
-      await store.checkIn(DateTime(2026, 2, 1));
-
-      final state =
-          CheckInState(signedKeys: store.signedKeys(), today: store.today);
-      expect(state.todayChecked, isTrue);
-      expect(state.streak, 3);
-      expect(state.monthCount, 1);
-      expect(state.totalCount, 3);
-    });
-
-    test('今天未签：从昨天向前算，覆盖跨年', () async {
-      final store = storeAt(DateTime(2027, 1, 1, 8));
-      await store.checkIn(DateTime(2026, 12, 30));
-      await store.checkIn(DateTime(2026, 12, 31));
-
-      final state =
-          CheckInState(signedKeys: store.signedKeys(), today: store.today);
-      expect(state.todayChecked, isFalse);
-      expect(state.streak, 2);
-      expect(state.monthCount, 0);
-    });
-
-    test('断签归零：昨天与前天都不连续时连续天数为 0', () async {
-      final store = storeAt(DateTime(2026, 2, 10));
-      await store.checkIn(DateTime(2026, 2, 5));
-      await store.checkIn(DateTime(2026, 2, 6));
-
-      final state =
-          CheckInState(signedKeys: store.signedKeys(), today: store.today);
-      expect(state.streak, 0);
-      expect(state.totalCount, 2);
+    test('登录响应的 coin 落到账号快照（头像栏 JCoin 来源）', () {
+      final session = AccountSession.fromLoginJson(
+        <String, dynamic>{
+          'uid': 42,
+          'username': 'tester',
+          'coin': 320,
+          'album_favorites': 3,
+          'album_favorites_max': 500,
+        },
+        loggedAt: 1,
+      );
+      expect(session.coin, 320);
+      expect(AccountSession.fromJson(session.toJson()).coin, 320);
     });
   });
 
   group('月历生成', () {
-    test('周一起始、按周分组、只统计本月天数、今天标记', () {
-      final today = DateTime(2026, 11, 21);
-      const signedDay = '2026-11-20';
+    test('周一起始、只统计本月、今天标记、服务端已签映射到位', () {
+      final daily = _serverDaily();
       final weeks = buildCheckInWeeks(
-        month: DateTime(2026, 11),
-        today: today,
-        isSigned: (day) => CheckInStore.dayKey(day) == signedDay,
+        month: _today,
+        today: _today,
+        daily: daily,
       );
       final cells = weeks.expand((week) => week).toList();
 
-      expect(weeks, isNotEmpty);
       expect(weeks.every((week) => week.length == 7), isTrue);
-      // 首格一定是周一（2026-11-01 是周日，所以要补 6 天到 10-26 周一）。
+      // 2026-11-01 是周日 -> 首格补到 10-26（周一）。
       expect(weeks.first.first.date.weekday, DateTime.monday);
       expect(weeks.first.first.date, DateTime(2026, 10, 26));
       expect(cells.where((cell) => cell.inMonth).length, 30);
-      expect(cells.length, weeks.length * 7);
-      expect(cells.where((cell) => cell.isToday).single.date, today);
-      expect(cells.where((cell) => cell.isToday).single.inMonth, isTrue);
+      final todayCell = cells.where((cell) => cell.isToday).single;
+      expect(todayCell.date, DateTime(2026, 11, 21));
+      expect(todayCell.signed, isTrue);
+      expect(todayCell.bonus, isTrue);
       expect(
-        cells.where((cell) => cell.signed).single.date,
-        DateTime(2026, 11, 20),
+        cells.where((cell) => cell.signed).map((cell) => cell.date.day),
+        <int>[20, 21],
       );
-    });
-
-    test('2 月与闰年 2 月的天数正确', () {
-      final feb2026 = buildCheckInWeeks(
-        month: DateTime(2026, 2),
-        today: DateTime(2026, 2, 1),
-        isSigned: (_) => false,
-      ).expand((week) => week).toList();
-      expect(feb2026.where((cell) => cell.inMonth).length, 28);
-
-      final feb2028 = buildCheckInWeeks(
-        month: DateTime(2028, 2),
-        today: DateTime(2028, 2, 1),
-        isSigned: (_) => false,
-      ).expand((week) => week).toList();
-      expect(feb2028.where((cell) => cell.inMonth).length, 29);
+      // 未来日期标记（不可签）。
+      expect(cells.firstWhere((cell) => cell.date.day == 22).future, isTrue);
     });
   });
 
-  group('provider 刷新', () {
-    test('签到后状态立即更新（我的摘要与签到页共用同一状态）', () async {
-      final store = storeAt(DateTime(2026, 11, 21, 10));
-      await store.checkIn(DateTime(2026, 11, 20));
-      final container = ProviderContainer(
-        overrides: <Override>[checkInStoreProvider.overrideWithValue(store)],
-      );
+  group('provider（服务端签到）', () {
+    test('未登录：不请求 /daily，签到直接被拦', () async {
+      final api = FakeJmApi();
+      final container =
+          containerFor(api: api, account: null, store: CheckInStore(box));
       addTearDown(container.dispose);
 
+      final state = container.read(checkInProvider);
+      expect(state.loggedIn, isFalse);
+      expect(state.hasData, isFalse);
+
+      final outcome = await container.read(checkInProvider.notifier).checkIn();
+      expect(outcome.success, isFalse);
+      expect(outcome.message, contains('登录'));
+      expect(api.dailyCalls, 0);
+      expect(api.dailyCheckInCalls, 0);
+    });
+
+    test('登录后拉取当月记录：本月已签 / 连续天数来自服务端', () async {
+      final api = FakeJmApi(loggedIn: true)..dailyToday = 21;
+      api.dailyState = _serverDaily(signed: const <int>{20});
+      final store = CheckInStore(_MemoryBox());
+      final container = containerFor(api: api, store: store);
+      addTearDown(container.dispose);
+
+      // 先 read 触发 build（它才会排微任务去拉 /daily），再等异步完成。
+      expect(container.read(checkInProvider).loggedIn, isTrue);
+      await pumpEventQueue(times: 4);
+      final state = container.read(checkInProvider);
+      expect(api.dailyCalls, 1);
+      expect(state.loggedIn, isTrue);
+      expect(state.hasData, isTrue);
+      expect(state.todayChecked, isFalse);
+      expect(state.monthCount, 1);
+      expect(state.streak, 1, reason: '今天未签 -> 从昨天(20)往前数 1 天');
+      expect(state.coin, 150, reason: '/daily 下发的 JCoin 优先');
+      expect(state.host, 'www.cdnbtd.cc', reason: '记录实际打通的接口线路');
+
+      // 快照落到缓存（离线可回显）。
+      expect(store.read(4242)?.signedDays, <int>{20});
+    });
+
+    test('签到：POST /daily_chk 带 user_id + daily_id，随后以 /daily 核对', () async {
+      final api = FakeJmApi(loggedIn: true)..dailyToday = 21;
+      api.dailyState = _serverDaily(signed: const <int>{});
+      final container =
+          containerFor(api: api, store: CheckInStore(_MemoryBox()));
+      addTearDown(container.dispose);
+      expect(container.read(checkInProvider).loggedIn, isTrue);
+      await pumpEventQueue(times: 4);
+
       expect(container.read(checkInProvider).todayChecked, isFalse);
-      expect(container.read(checkInProvider).streak, 1);
+      final outcome = await container.read(checkInProvider.notifier).checkIn();
 
-      // 「我的」与签到页都 watch 同一个 provider：签到必须触发一次通知（重建）。
-      var notifications = 0;
-      container.listen<CheckInState>(checkInProvider, (previous, next) {
-        if (previous?.todayChecked != next.todayChecked) notifications++;
-      });
-
-      expect(
-        await container.read(checkInProvider.notifier).checkInToday(),
-        isTrue,
-      );
+      expect(outcome.success, isTrue);
+      expect(outcome.message, '簽到成功');
+      expect(api.dailyCheckInCalls, 1);
+      expect(api.dailyCheckInPayloads.single, 'user_id=4242&daily_id=74');
       final state = container.read(checkInProvider);
       expect(state.todayChecked, isTrue);
-      expect(state.streak, 2);
-      expect(state.totalCount, 2);
-      expect(state.monthCount, 2);
-      expect(notifications, 1);
+      expect(state.streak, 1);
+      expect(state.monthCount, 1);
+    });
 
-      // 重复签到：不再新增，状态不变。
-      expect(
-        await container.read(checkInProvider.notifier).checkInToday(),
-        isFalse,
+    test('签到响应带 JCoin 余额时立即落到状态里（/daily 不回 coin 也认）', () async {
+      final api = FakeJmApi(loggedIn: true)
+        ..dailyToday = 21
+        ..dailyCheckInCoin = 175;
+      // 故意用不带 coin 的 /daily，验证余额来自签到响应本身。
+      api.dailyState = buildFakeDaily();
+      final coinSink = <int>[];
+      final container = containerFor(
+        api: api,
+        store: CheckInStore(_MemoryBox()),
+        coinSink: coinSink,
       );
-      expect(container.read(checkInProvider).totalCount, 2);
-      expect(notifications, 1);
+      addTearDown(container.dispose);
+      expect(container.read(checkInProvider).loggedIn, isTrue);
+      await pumpEventQueue(times: 4);
+
+      final outcome = await container.read(checkInProvider.notifier).checkIn();
+      expect(outcome.success, isTrue);
+      expect(container.read(checkInProvider).coin, 175);
+      expect(container.read(checkInProvider).todayChecked, isTrue);
+      expect(coinSink, contains(175), reason: '余额要回写到账号快照（头像栏）');
+    });
+
+    test('服务端说「已經簽到過了」且没生效：不谎报成功', () async {
+      final api = FakeJmApi(loggedIn: true)
+        ..dailyToday = 21
+        ..dailyCheckInApplies = false
+        ..dailyCheckInMessage = '今天已經簽到過了';
+      api.dailyState = _serverDaily(signed: const <int>{});
+      final container =
+          containerFor(api: api, store: CheckInStore(_MemoryBox()));
+      addTearDown(container.dispose);
+      expect(container.read(checkInProvider).loggedIn, isTrue);
+      await pumpEventQueue(times: 4);
+
+      final outcome = await container.read(checkInProvider.notifier).checkIn();
+      expect(outcome.success, isFalse);
+      expect(outcome.alreadySigned, isTrue);
+      expect(outcome.message, contains('已經簽到過了'));
+      expect(container.read(checkInProvider).todayChecked, isFalse);
+    });
+
+    test('签到接口报错：抛出文案进 outcome 与 error', () async {
+      final api = FakeJmApi(loggedIn: true)
+        ..dailyToday = 21
+        ..dailyCheckInError = '请求太频繁，请稍后再试';
+      api.dailyState = _serverDaily(signed: const <int>{});
+      final container =
+          containerFor(api: api, store: CheckInStore(_MemoryBox()));
+      addTearDown(container.dispose);
+      expect(container.read(checkInProvider).loggedIn, isTrue);
+      await pumpEventQueue(times: 4);
+
+      final outcome = await container.read(checkInProvider.notifier).checkIn();
+      expect(outcome.success, isFalse);
+      expect(outcome.message, contains('请求太频繁'));
+      expect(container.read(checkInProvider).error, contains('请求太频繁'));
+    });
+
+    test('今天已签时再点：直接提示已签，不再发请求', () async {
+      final api = FakeJmApi(loggedIn: true)..dailyToday = 21;
+      api.dailyState = _serverDaily(signed: const <int>{21});
+      final container =
+          containerFor(api: api, store: CheckInStore(_MemoryBox()));
+      addTearDown(container.dispose);
+      expect(container.read(checkInProvider).loggedIn, isTrue);
+      await pumpEventQueue(times: 4);
+
+      final outcome = await container.read(checkInProvider.notifier).checkIn();
+      expect(outcome.success, isFalse);
+      expect(outcome.alreadySigned, isTrue);
+      expect(api.dailyCheckInCalls, 0);
+    });
+  });
+
+  group('CheckInStore（快照缓存）', () {
+    test('写读往返，未知 uid 返回 null', () async {
+      final store = CheckInStore(box);
+      expect(store.read(4242), isNull);
+      await store.save(4242, _serverDaily());
+      final cached = store.read(4242);
+      expect(cached?.signedDays, <int>{20, 21});
+      expect(cached?.dailyId, 74);
+      await store.clear(4242);
+      expect(store.read(4242), isNull);
+      expect(CheckInStore.keyOf(7), 'daily_7');
+    });
+
+    test('脏数据不抛异常', () async {
+      final store = CheckInStore(box);
+      await box.put(CheckInStore.keyOf(9), 'not-json');
+      expect(store.read(9), isNull);
     });
   });
 
   group('签到页', () {
-    testWidgets('展示月历与统计，点击后按钮与打勾更新，未来/历史格子不可签', (tester) async {
-      final memory = _MemoryBox();
-      final store =
-          CheckInStore(memory, clock: () => DateTime(2026, 11, 21, 10));
+    Future<void> pumpPage(
+      WidgetTester tester, {
+      required FakeJmApi api,
+      AccountSession? account = _loggedIn,
+      CheckInStore? store,
+      Size size = const Size(800, 600),
+    }) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       await tester.pumpWidget(
         ProviderScope(
-          overrides: <Override>[checkInStoreProvider.overrideWithValue(store)],
+          overrides: <Override>[
+            checkInAccountProvider.overrideWithValue(account),
+            jmBootstrapProvider.overrideWith((ref) async => api),
+            checkInClockProvider.overrideWithValue(() => _today),
+            // 回写余额走内存 sink：不碰真实账号 notifier（否则会触发真实网络）。
+            checkInCoinSinkProvider.overrideWithValue((coin) async {}),
+            checkInStoreProvider
+                .overrideWithValue(store ?? CheckInStore(_MemoryBox())),
+          ],
           child: MaterialApp(
             theme: AppTheme.light(),
             home: const DailyCheckInPage(),
@@ -254,112 +404,95 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+    }
+
+    testWidgets('未登录显示登录门槛，不请求服务端', (tester) async {
+      final api = FakeJmApi();
+      await pumpPage(tester, api: api, account: null);
+
+      expect(find.text('登录后才能签到'), findsOneWidget);
+      expect(find.text('去登录'), findsOneWidget);
+      expect(find.text('立即签到'), findsNothing);
+      expect(api.dailyCalls, 0);
+    });
+
+    testWidgets('登录后渲染月历与统计，点「立即签到」后变为已签并显示 JCoin', (tester) async {
+      final api = FakeJmApi(loggedIn: true)..dailyToday = 21;
+      api.dailyState = _serverDaily(signed: const <int>{});
+      await pumpPage(tester, api: api);
 
       expect(find.text('2026 年 11 月'), findsOneWidget);
       expect(find.text('今日可签到'), findsOneWidget);
+      expect(find.text('本月已签'), findsOneWidget);
+      expect(find.text('连续天数'), findsOneWidget);
+      expect(find.text('JCoin'), findsOneWidget);
+      expect(find.text('150'), findsOneWidget);
       for (final label in kCheckInWeekdayLabels) {
         expect(find.text(label), findsWidgets, reason: label);
       }
-      expect(find.text('连续天数'), findsOneWidget);
 
-      // 历史日期格不可点击：点过去不留记录。
-      await tester.tap(find.text('15'));
-      await tester.pump();
-      expect(memory.isEmpty, isTrue);
-
-      // 主按钮在 800x600 下需滚动到可见区域再点。
-      await tester.ensureVisible(find.text('今日签到'));
+      await tester.ensureVisible(find.text('立即签到'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('今日签到'));
+      await tester.tap(find.text('立即签到'));
       await tester.pumpAndSettle();
 
-      expect(memory.containsKey('2026-11-21'), isTrue);
+      expect(api.dailyCheckInPayloads.single, 'user_id=4242&daily_id=74');
       expect(find.text('今日已签到'), findsWidgets);
+      expect(find.text('立即签到'), findsNothing);
       expect(find.text('今日可签到'), findsNothing);
-      // 今天格子打勾（SvgIcon 复用 AppIcons.check）。
-      expect(find.text('21'), findsOneWidget);
 
-      // 再来一次仍幂等（按钮已置灰，点不动）。
-      await tester.tap(find.text('今日已签到').last, warnIfMissed: false);
+      // 让 toast 的自动消失计时器跑完，避免残留 pending timer。
+      await tester.pump(const Duration(seconds: 6));
       await tester.pumpAndSettle();
-      expect(memory.length, 1);
     });
 
-    testWidgets('上月 / 下月切换', (tester) async {
-      final memory = _MemoryBox();
-      final store =
-          CheckInStore(memory, clock: () => DateTime(2026, 11, 21, 10));
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: <Override>[checkInStoreProvider.overrideWithValue(store)],
-          child: MaterialApp(
-            theme: AppTheme.light(),
-            home: const DailyCheckInPage(),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
+    testWidgets('读取失败可重试', (tester) async {
+      final api = FakeJmApi(loggedIn: true)..dailyError = '网络开小差了';
+      await pumpPage(tester, api: api);
 
-      await tester.tap(find.byTooltip('上个月'));
-      await tester.pumpAndSettle();
-      expect(find.text('2026 年 10 月'), findsOneWidget);
-      expect(find.text('今日签到'), findsOneWidget);
+      expect(find.textContaining('读取签到记录失败'), findsOneWidget);
+      expect(find.textContaining('网络开小差了'), findsOneWidget);
+      expect(find.text('线路设置'), findsOneWidget, reason: '失败态要能去换线路');
 
-      await tester.tap(find.byTooltip('下个月'));
+      api
+        ..dailyError = null
+        ..dailyState = _serverDaily(signed: const <int>{})
+        ..dailyToday = 21;
+      await tester.tap(find.text('重试'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('下个月'));
-      await tester.pumpAndSettle();
-      expect(find.text('2026 年 12 月'), findsOneWidget);
-      expect(memory.isEmpty, isTrue);
+      expect(find.text('今日可签到'), findsOneWidget);
+      expect(api.dailyCalls, greaterThanOrEqualTo(2));
     });
 
-    testWidgets('窄屏 320x640 不溢出（今天 + 已签到同格）', (tester) async {
-      tester.view.physicalSize = const Size(320, 640);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-
-      final memory = _MemoryBox();
-      final store =
-          CheckInStore(memory, clock: () => DateTime(2026, 11, 21, 10));
-      await store.checkIn(DateTime(2026, 11, 21));
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: <Override>[checkInStoreProvider.overrideWithValue(store)],
-          child: MaterialApp(
-            theme: AppTheme.light(),
-            home: const DailyCheckInPage(),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
+    testWidgets('窄屏 320x640 不溢出', (tester) async {
+      final api = FakeJmApi(loggedIn: true)..dailyToday = 21;
+      api.dailyState = _serverDaily(signed: const <int>{21});
+      await pumpPage(tester, api: api, size: const Size(320, 640));
 
       expect(tester.takeException(), isNull);
       expect(find.text('2026 年 11 月'), findsOneWidget);
-      expect(find.text('今日已签到'), findsWidgets);
       await tester.ensureVisible(find.text('今日已签到').last);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     });
   });
 
-  group('端到端（我的 -> 签到页 -> 我的）', () {
-    testWidgets('入口摘要显示状态，签到后返回「我的」立即更新', (tester) async {
+  group('入口与路由', () {
+    testWidgets('「我的」入口显示登录提示，点击进入签到页（/mine/check-in）', (tester) async {
       final prefs = await testPreferences();
-      final memory = _MemoryBox();
-      final store =
-          CheckInStore(memory, clock: () => DateTime(2026, 11, 21, 10));
+      final api = FakeJmApi();
       await tester.pumpWidget(
         ProviderScope(
           overrides: <Override>[
             sharedPreferencesProvider.overrideWithValue(prefs),
             settingsStoreProvider.overrideWith((_) => _MemorySettingsStore()),
             downloadHistoryProvider.overrideWithValue(MemoryDownloadHistory()),
-            jmApiProvider.overrideWithValue(FakeJmApi()),
-            jmBootstrapProvider.overrideWith((ref) async => FakeJmApi()),
+            jmApiProvider.overrideWithValue(api),
+            jmBootstrapProvider.overrideWith((ref) async => api),
             homeRepositoryProvider.overrideWith(
-              (ref) async => HomeRepository(api: FakeJmApi()),
+              (ref) async => HomeRepository(api: api),
             ),
-            checkInStoreProvider.overrideWithValue(store),
+            checkInStoreProvider.overrideWithValue(CheckInStore(_MemoryBox())),
           ],
           child: const JmComicApp(),
         ),
@@ -368,7 +501,6 @@ void main() {
         await tester.pump(const Duration(milliseconds: 60));
       }
 
-      // 切到「我的」。
       final barRect = tester.getRect(find.byType(GlassNavBar));
       await tester.tapAt(
         Offset(barRect.left + barRect.width * 0.75, barRect.center.dy),
@@ -376,31 +508,62 @@ void main() {
       for (var index = 0; index < 12; index++) {
         await tester.pump(const Duration(milliseconds: 60));
       }
-      expect(find.text('今日可签到 · 连续 0 天'), findsOneWidget);
+      expect(find.text('登录后可签到领 JCoin'), findsOneWidget);
 
-      // 进签到页。
       await tester.tap(find.text('每日签到').first);
       for (var index = 0; index < 12; index++) {
         await tester.pump(const Duration(milliseconds: 60));
       }
       expect(find.byType(DailyCheckInPage), findsOneWidget);
-      expect(find.text('连续天数'), findsOneWidget);
+      expect(find.text('登录后才能签到'), findsOneWidget);
+      expect(api.dailyCalls, 0);
+    });
 
-      // 签到。
-      await tester.ensureVisible(find.text('今日签到'));
-      await tester.pump(const Duration(milliseconds: 60));
-      await tester.tap(find.text('今日签到'));
+    testWidgets('登录后头像那一栏显示 JCoin 余额', (tester) async {
+      final prefs = await testPreferences();
+      final api = FakeJmApi(loggedIn: true)..dailyToday = 21;
+      api.dailyState = buildFakeDaily(signed: const <int>{20});
+      const session = AccountSession(
+        uid: 42,
+        username: 'tester',
+        state: SessionState.valid,
+        coin: 320,
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: <Override>[
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            settingsStoreProvider.overrideWith((_) => _MemorySettingsStore()),
+            downloadHistoryProvider.overrideWithValue(MemoryDownloadHistory()),
+            jmApiProvider.overrideWithValue(api),
+            jmBootstrapProvider.overrideWith((ref) async => api),
+            homeRepositoryProvider.overrideWith(
+              (ref) async => HomeRepository(api: api),
+            ),
+            checkInStoreProvider.overrideWithValue(CheckInStore(_MemoryBox())),
+            checkInCoinSinkProvider.overrideWithValue((coin) async {}),
+            accountSessionProvider
+                .overrideWith(() => _FakeAccountNotifier(session)),
+          ],
+          child: const JmComicApp(),
+        ),
+      );
       for (var index = 0; index < 8; index++) {
         await tester.pump(const Duration(milliseconds: 60));
       }
-      expect(memory.containsKey('2026-11-21'), isTrue);
 
-      // 返回「我的」：摘要立即更新（同一个 provider，无需重新进入 tab）。
-      await tester.tap(find.byTooltip('返回'));
+      final barRect = tester.getRect(find.byType(GlassNavBar));
+      await tester.tapAt(
+        Offset(barRect.left + barRect.width * 0.75, barRect.center.dy),
+      );
       for (var index = 0; index < 12; index++) {
         await tester.pump(const Duration(milliseconds: 60));
       }
-      expect(find.text('今日已签到 · 连续 1 天'), findsOneWidget);
+
+      // 头像那一栏的 JCoin 胶囊 + 入口摘要里的余额。
+      expect(find.text('JCoin'), findsWidgets);
+      expect(find.text('320'), findsOneWidget);
+      expect(find.text('tester'), findsWidgets);
     });
   });
 }

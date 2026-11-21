@@ -12,17 +12,20 @@ import '../../data/models/home_feed.dart';
 import '../../data/repositories/home_repository.dart';
 
 /// 当前选中的分类（chip）。
-final StateProvider<String> selectedCategoryProvider = StateProvider<String>((ref) => '0');
+final StateProvider<String> selectedCategoryProvider =
+    StateProvider<String>((ref) => '0');
 
 /// 当前排序。
 final StateProvider<AlbumOrder> albumOrderProvider =
     StateProvider<AlbumOrder>((ref) => AlbumOrder.latestUpdate);
 
 /// 下一页加载失败的原因（UI 底部给"重试"条，不弹全屏错误）。
-final StateProvider<String?> loadMoreErrorProvider = StateProvider<String?>((ref) => null);
+final StateProvider<String?> loadMoreErrorProvider =
+    StateProvider<String?>((ref) => null);
 
 /// 是否正在加载下一页。
-final StateProvider<bool> loadingMoreProvider = StateProvider<bool>((ref) => false);
+final StateProvider<bool> loadingMoreProvider =
+    StateProvider<bool>((ref) => false);
 
 /// 标签页（分类 + 排序）组合键：首页内存缓存按它分桶。
 typedef FeedKey = ({String category, AlbumOrder order});
@@ -202,8 +205,10 @@ class HomeFeedNotifier extends AsyncNotifier<HomeFeed> {
   /// 下拉刷新：回到第 1 页（真的打网络，不用缓存）。
   Future<void> refresh() async {
     final key = _current ??
-        (category: ref.read(selectedCategoryProvider),
-            order: ref.read(albumOrderProvider),);
+        (
+          category: ref.read(selectedCategoryProvider),
+          order: ref.read(albumOrderProvider),
+        );
     ref.read(loadMoreErrorProvider.notifier).state = null;
     _feeds.remove(key);
     _stamps.remove(key);

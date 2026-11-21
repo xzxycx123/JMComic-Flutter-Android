@@ -622,13 +622,13 @@ class _AuthorLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = Text(
-      album.displayAuthor,
+    final label = Text(
+      '作者：${album.displayAuthor}',
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: AppTypography.caption.copyWith(color: Colors.white70),
     );
-    if (!canSearch(album)) return text;
+    if (!canSearch(album)) return label;
     return Semantics(
       label: '搜索作者 ${album.displayAuthor}',
       button: true,
@@ -639,8 +639,9 @@ class _AuthorLine extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Flexible(child: text),
+            Flexible(child: label),
             const SizedBox(width: 4),
+            // 可点的视觉提示（「作者：名字 >」里的那个箭头）。
             const SvgIcon(AppIcons.forward, size: 12, color: Colors.white70),
           ],
         ),

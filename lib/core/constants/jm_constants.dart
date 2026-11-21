@@ -159,6 +159,13 @@ abstract final class JmConstants {
   /// `var scramble_id = 220980;` 提取正则。
   static const String scrambleIdPattern = r'var\s+scramble_id\s*=\s*(\d+)\s*;';
 
+  // ---------------------------------------------------------------- 签到（实测 2026-11-21）
+  /// `GET /daily?user_id=<uid>`：当月签到记录（`daily_id` + `record`）。
+  static const String dailyPath = '/daily';
+
+  /// `POST /daily_chk`（form `user_id` + `daily_id`）：服务端签到，发 JCoin。
+  static const String dailyCheckInPath = '/daily_chk';
+
   // ---------------------------------------------------------------- 目录
   /// 公共 Documents 下的导出目录。
   static const String exportDirName = 'JMComics';

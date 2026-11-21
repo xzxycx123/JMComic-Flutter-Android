@@ -181,6 +181,16 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   final Map<int, TransformationController> _pageZoom =
       <int, TransformationController>{};
 
+  /// 竖读整屏缩放（条漫模式）：缩放整块阅读区，而不是单张图。
+  static const double _verticalMaxScale = 4;
+  double _verticalScale = 1;
+  Offset _verticalOffset = Offset.zero;
+  final Map<int, Offset> _verticalPointers = <int, Offset>{};
+  double _pinchBaseScale = 1;
+  double _pinchBaseDistance = 0;
+  Offset _pinchBaseOffset = Offset.zero;
+  Offset _pinchBaseFocal = Offset.zero;
+
   int get _total => widget.data.total;
 
   @override
@@ -381,6 +391,9 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
     setState(() {
       _mode = next;
       _hudVisible = true;
+      // 换模式时把竖读整屏缩放归位，避免残留的放大/平移带到另一种模式。
+      _verticalScale = 1;
+      _verticalOffset = Offset.zero;
     });
     unawaited(
       ref
@@ -632,31 +645,121 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
       );
     }
 
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onTap: _toggleHud,
-      onDoubleTap: _toggleZoomCurrent,
-      child: ScrollReaderView(
-        controller: _scrollController,
-        total: _total,
-        // 条漫模式同样支持双指缩放 / 双击放大；缩放时锁住纵向滚动。
-        physics: _locked ? const NeverScrollableScrollPhysics() : null,
-        onPageChanged: (page) {
-          if (page == _page) return;
-          setState(() {
-            _page = page;
-            _dragPage = null;
-          });
-          _loader.setFocus(page);
-          unawaited(_persistProgress(throttle: true));
-        },
-        itemBuilder: (context, index) => _ZoomablePage(
-          controller: _zoomControllerOf(index + 1),
-          onInteractionChanged: _setLocked,
-          child: _pageContent(index + 1),
+    return Listener(
+      onPointerDown: _onVerticalPointerDown,
+      onPointerMove: _onVerticalPointerMove,
+      onPointerUp: _onVerticalPointerEnd,
+      onPointerCancel: _onVerticalPointerEnd,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _toggleHud,
+        onDoubleTap: _toggleVerticalZoom,
+        // 放大后横向拖动用来左右看边缘；纵向仍交给列表滚动。
+        onHorizontalDragUpdate: _verticalZoomed ? _panVerticalZoom : null,
+        child: Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.identity()
+            ..translate(_verticalOffset.dx, _verticalOffset.dy)
+            ..scale(_verticalScale),
+          child: ScrollReaderView(
+            controller: _scrollController,
+            total: _total,
+            // 双指按下 / 放大中锁住纵向滚动；单指仍是正常滚动。
+            physics: _locked ? const NeverScrollableScrollPhysics() : null,
+            onPageChanged: (page) {
+              if (page == _page) return;
+              setState(() {
+                _page = page;
+                _dragPage = null;
+              });
+              _loader.setFocus(page);
+              unawaited(_persistProgress(throttle: true));
+            },
+            // 条漫模式不再逐页缩放：双指放大的是整屏漫画。
+            itemBuilder: (context, index) => _pageContent(index + 1),
+          ),
         ),
       ),
     );
+  }
+
+  /// 竖读整屏是否处于放大状态。
+  bool get _verticalZoomed => _verticalScale > 1.01;
+
+  /// 竖读双击：整屏在 1.0 与 2.2 之间切换（居中放大）。
+  void _toggleVerticalZoom() {
+    setState(() {
+      if (_verticalZoomed) {
+        _verticalScale = 1;
+      } else {
+        _verticalScale = _ZoomablePage.doubleTapScale;
+      }
+      _verticalOffset = Offset.zero;
+    });
+    _restartHudTimer();
+  }
+
+  void _onVerticalPointerDown(PointerDownEvent event) {
+    _verticalPointers[event.pointer] = event.position;
+    if (_verticalPointers.length >= 2) {
+      final points = _verticalPointers.values.toList(growable: false);
+      _pinchBaseDistance = (points.first - points.last).distance;
+      _pinchBaseScale = _verticalScale;
+      _pinchBaseOffset = _verticalOffset;
+      _pinchBaseFocal = (points.first + points.last) / 2;
+      _setLocked(true);
+    }
+  }
+
+  void _onVerticalPointerMove(PointerMoveEvent event) {
+    if (!_verticalPointers.containsKey(event.pointer)) return;
+    _verticalPointers[event.pointer] = event.position;
+    if (_verticalPointers.length < 2 || _pinchBaseDistance <= 0) return;
+    final points = _verticalPointers.values.toList(growable: false);
+    final distance = (points.first - points.last).distance;
+    final scale = (_pinchBaseScale * distance / _pinchBaseDistance)
+        .clamp(1.0, _verticalMaxScale)
+        .toDouble();
+    final size = MediaQuery.sizeOf(context);
+    final center = size.center(Offset.zero);
+    final focal = (points.first + points.last) / 2;
+    // 双指中点下面那一点在缩放前后保持不动（两指一起移动时也跟着平移）。
+    final ratio = scale / _pinchBaseScale;
+    final raw =
+        focal - center - (_pinchBaseFocal - center - _pinchBaseOffset) * ratio;
+    final limitX = size.width * (scale - 1) / 2;
+    final limitY = size.height * (scale - 1) / 2;
+    final offset = Offset(
+      raw.dx.clamp(-limitX, limitX),
+      raw.dy.clamp(-limitY, limitY),
+    );
+    if ((scale - _verticalScale).abs() < 0.001 && offset == _verticalOffset) {
+      return;
+    }
+    setState(() {
+      _verticalScale = scale <= 1.01 ? 1 : scale;
+      _verticalOffset = _verticalScale == 1 ? Offset.zero : offset;
+    });
+  }
+
+  void _onVerticalPointerEnd(PointerEvent event) {
+    _verticalPointers.remove(event.pointer);
+    if (_verticalPointers.length < 2) {
+      _pinchBaseDistance = 0;
+      _setLocked(false);
+    }
+  }
+
+  /// 放大后左右平移（纵向靠列表滚动，不在这里做）。
+  void _panVerticalZoom(DragUpdateDetails details) {
+    final width = MediaQuery.sizeOf(context).width;
+    final limit = width * (_verticalScale - 1) / 2;
+    setState(() {
+      _verticalOffset = Offset(
+        (_verticalOffset.dx + details.delta.dx).clamp(-limit, limit),
+        _verticalOffset.dy,
+      );
+    });
   }
 
   /// 单指未缩放时允许翻页；双指按下或已放大就锁住翻页/滚动，把拖动让给图片。

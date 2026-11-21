@@ -16,7 +16,8 @@ import '../../core/utils/logger.dart';
 export '../../core/di/providers.dart' show sessionStoreProvider;
 
 /// 收藏 box 的存储层（per-album 账本 + 文件夹 + outbox）。
-final Provider<FavoritesStore> favoritesStoreProvider = Provider<FavoritesStore>(
+final Provider<FavoritesStore> favoritesStoreProvider =
+    Provider<FavoritesStore>(
   (ref) => FavoritesStore(
     favorites: Hive.box<dynamic>(HiveBoxes.favorites),
     folders: Hive.box<dynamic>(HiveBoxes.favoriteFolders),
@@ -24,7 +25,8 @@ final Provider<FavoritesStore> favoritesStoreProvider = Provider<FavoritesStore>
   ),
 );
 
-final Provider<AuthRepository> authRepositoryProvider = Provider<AuthRepository>(
+final Provider<AuthRepository> authRepositoryProvider =
+    Provider<AuthRepository>(
   (ref) => AuthRepository(
     api: ref.watch(jmApiProvider),
     session: ref.watch(sessionStoreProvider),
@@ -35,7 +37,8 @@ final Provider<AuthRepository> authRepositoryProvider = Provider<AuthRepository>
   ),
 );
 
-final AsyncNotifierProvider<AccountSessionNotifier, AccountSession> accountSessionProvider =
+final AsyncNotifierProvider<AccountSessionNotifier, AccountSession>
+    accountSessionProvider =
     AsyncNotifierProvider<AccountSessionNotifier, AccountSession>(
   AccountSessionNotifier.new,
 );
@@ -99,13 +102,24 @@ class AccountSessionNotifier extends AsyncNotifier<AccountSession> {
     state = AsyncValue<AccountSession>.data(next);
   }
 
+  /// 回写 JCoin 余额（签到 / 服务端下发后调用，供「我的」头像栏展示）。
+  Future<void> updateCoin(int coin) async {
+    final store = ref.read(sessionStoreProvider);
+    final current = store.readSession();
+    if (current.coin == coin) return;
+    final next = current.copyWith(coin: coin);
+    await store.writeSession(next);
+    state = AsyncValue<AccountSession>.data(next);
+  }
+
   Future<void> markNeedsLogin() async {
     final next = await ref.read(authRepositoryProvider).markNeedsLogin();
     state = AsyncValue<AccountSession>.data(next);
   }
 }
 
-final Provider<FavoritesRepository> favoritesRepositoryProvider = Provider<FavoritesRepository>(
+final Provider<FavoritesRepository> favoritesRepositoryProvider =
+    Provider<FavoritesRepository>(
   (ref) => FavoritesRepository(
     api: ref.watch(jmApiProvider),
     store: ref.watch(favoritesStoreProvider),
@@ -114,8 +128,11 @@ final Provider<FavoritesRepository> favoritesRepositoryProvider = Provider<Favor
 );
 
 /// 收藏条目（本地账本快照；每次写操作后调用 [reload]）。
-final NotifierProvider<FavoritesItemsNotifier, List<FavoriteItem>> favoritesItemsProvider =
-    NotifierProvider<FavoritesItemsNotifier, List<FavoriteItem>>(FavoritesItemsNotifier.new);
+final NotifierProvider<FavoritesItemsNotifier, List<FavoriteItem>>
+    favoritesItemsProvider =
+    NotifierProvider<FavoritesItemsNotifier, List<FavoriteItem>>(
+  FavoritesItemsNotifier.new,
+);
 
 class FavoritesItemsNotifier extends Notifier<List<FavoriteItem>> {
   @override
@@ -124,13 +141,15 @@ class FavoritesItemsNotifier extends Notifier<List<FavoriteItem>> {
   void reload() => state = ref.read(favoritesStoreProvider).items;
 }
 
-final Provider<List<FavoriteFolder>> favoritesFoldersProvider = Provider<List<FavoriteFolder>>(
+final Provider<List<FavoriteFolder>> favoritesFoldersProvider =
+    Provider<List<FavoriteFolder>>(
   (ref) => ref.watch(favoritesStoreProvider).folders,
 );
 
 /// 收藏 id 集合（详情页书签状态用）。
 final Provider<Set<String>> favoriteIdsProvider = Provider<Set<String>>(
-  (ref) => ref.watch(favoritesItemsProvider).map((item) => item.albumId).toSet(),
+  (ref) =>
+      ref.watch(favoritesItemsProvider).map((item) => item.albumId).toSet(),
 );
 
 final Provider<int> favoriteCountProvider = Provider<int>(

@@ -13,6 +13,7 @@ import '../../data/local/settings_store.dart';
 import '../../data/models/home_feed.dart';
 import '../../data/models/jm_category.dart';
 import '../../data/models/jm_promote_module.dart';
+import 'home_likes.dart';
 import 'home_providers.dart';
 import 'widgets/album_card.dart';
 import 'widgets/category_chips.dart';
@@ -159,9 +160,17 @@ class _HomePageState extends ConsumerState<HomePage> {
   List<Widget> _buildContent(BuildContext context, HomeFeed feed) {
     final categories = _categoriesOf(feed);
     final selectedCategory = ref.watch(selectedCategoryProvider);
+    final order = ref.watch(albumOrderProvider);
     final scheme = Theme.of(context).colorScheme;
     final loadingMore = ref.watch(loadingMoreProvider);
     final loadMoreError = ref.watch(loadMoreErrorProvider);
+    final likes = ref.watch(albumLikesProvider).likes;
+    // 列表接口没有喜欢数：按当前排序抓一次官方网页（同一页只抓一次，异步补齐）。
+    ref.read(albumLikesProvider.notifier).ensurePage(
+          page: feed.gridPage,
+          order: order.code,
+          category: selectedCategory,
+        );
 
     return <Widget>[
       if (feed.fromCache && feed.updatedAt != null)
@@ -218,7 +227,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             ),
           ),
         ),
-      ..._buildModules(feed.modules),
+      ..._buildModules(feed.modules, likes),
       SliverToBoxAdapter(
         child: SortChips(
           selected: ref.watch(albumOrderProvider),
@@ -239,15 +248,17 @@ class _HomePageState extends ConsumerState<HomePage> {
       SliverPadding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         sliver: SliverGrid(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            childAspectRatio: 0.52,
+            // 卡片正文是「2 行标题 + 作者 + 标签行」，字号放大时按比例放宽卡片
+            // 高度（scale=1 时仍是 0.52，不影响首屏卡片数量）。
+            childAspectRatio: albumGridAspectRatio(context),
             crossAxisSpacing: 12,
             mainAxisSpacing: 16,
           ),
           delegate: SliverChildBuilderDelegate(
             (context, index) {
-              final album = feed.grid[index];
+              final album = withScrapedLikes(feed.grid[index], likes);
               return AlbumCard(
                 album: album,
                 onTap: () => _openAlbum(album.id),
@@ -268,7 +279,10 @@ class _HomePageState extends ConsumerState<HomePage> {
     ];
   }
 
-  List<Widget> _buildModules(List<JmPromoteModule> modules) {
+  List<Widget> _buildModules(
+    List<JmPromoteModule> modules,
+    Map<String, int> likes,
+  ) {
     if (modules.isEmpty) return const <Widget>[];
     final result = <Widget>[];
     for (final module in modules) {
@@ -287,7 +301,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   separatorBuilder: (context, index) =>
                       const SizedBox(width: 12),
                   itemBuilder: (context, index) {
-                    final album = module.items[index];
+                    final album = withScrapedLikes(module.items[index], likes);
                     return AlbumCard(
                       album: album,
                       layout: AlbumCardLayout.rail,

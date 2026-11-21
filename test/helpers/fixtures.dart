@@ -11,6 +11,7 @@ import 'package:jm_comic/data/models/jm_album_summary.dart';
 import 'package:jm_comic/data/models/jm_category.dart';
 import 'package:jm_comic/data/models/jm_chapter.dart';
 import 'package:jm_comic/data/models/jm_comment.dart';
+import 'package:jm_comic/data/models/jm_daily.dart';
 import 'package:jm_comic/data/models/jm_favorite_list.dart';
 import 'package:jm_comic/data/models/jm_promote_module.dart';
 import 'package:jm_comic/data/models/jm_search_page.dart';
@@ -45,6 +46,41 @@ abstract final class Fixtures {
   static Map<String, dynamic> chapter() => map('chapter.json');
 }
 
+/// 造一份 `/daily` 风格的当月记录：1..[daysInMonth] 按 7 天切块。
+JmDailyState buildFakeDaily({
+  Set<int> signed = const <int>{},
+  Set<int> bonus = const <int>{},
+  int dailyId = 74,
+  int daysInMonth = 30,
+  int? coin,
+  String eventName = '11月-签到礼',
+}) {
+  final rows = <List<JmDailyDay>>[];
+  var row = <JmDailyDay>[];
+  for (var day = 1; day <= daysInMonth; day++) {
+    row.add(
+      JmDailyDay(
+        day: day,
+        signed: signed.contains(day),
+        bonus: bonus.contains(day),
+      ),
+    );
+    if (row.length == 7) {
+      rows.add(row);
+      row = <JmDailyDay>[];
+    }
+  }
+  if (row.isNotEmpty) rows.add(row);
+  return JmDailyState(
+    dailyId: dailyId,
+    rows: rows,
+    eventName: eventName,
+    makeupLimit: 5,
+    makeupAvailable: true,
+    coin: coin,
+  );
+}
+
 /// 用 `image` 包合成一张小 PNG（下载流水线测试用）。
 Uint8List syntheticPng({
   int width = 24,
@@ -54,8 +90,13 @@ Uint8List syntheticPng({
   final image = img.Image(width: width, height: height);
   for (var y = 0; y < height; y++) {
     for (var x = 0; x < width; x++) {
-      image.setPixelRgb(x, y, (x * 7 + seed) % 256, (y * 5 + seed) % 256,
-          (x + y + seed) % 256,);
+      image.setPixelRgb(
+        x,
+        y,
+        (x * 7 + seed) % 256,
+        (y * 5 + seed) % 256,
+        (x + y + seed) % 256,
+      );
     }
   }
   return Uint8List.fromList(img.encodePng(image));
@@ -138,6 +179,36 @@ class FakeJmApi implements JmApi {
   /// 服务端收藏集合（toggle 会真实增删）。
   final Set<String> serverFavorites;
 
+  /// `/daily` 返回的当月记录；为空时按「全部未签」造一份。
+  JmDailyState? dailyState;
+
+  /// 「今天」是几号（与测试注入的时钟一致；签到成功后标记这天已签）。
+  int? dailyToday;
+
+  /// `/daily_chk` 的服务端文案。
+  String dailyCheckInMessage = '簽到成功';
+
+  /// `/daily_chk` 是否真的把今天标记为已签（false = 服务端没生效）。
+  bool dailyCheckInApplies = true;
+
+  /// `/daily_chk` 是否抛业务错误（验证错误提示）。
+  String? dailyCheckInError;
+
+  /// `/daily` 是否抛业务错误（验证加载失败 / 重试）。
+  String? dailyError;
+
+  /// 服务端下发的 JCoin 余额（`/daily` 里可选字段）。
+  int? dailyCoin;
+
+  /// 服务端下发的最新 JCoin 余额（`/daily_chk` 响应里可选字段）。
+  int? dailyCheckInCoin;
+
+  int dailyCalls = 0;
+  int dailyCheckInCalls = 0;
+
+  /// 每次 `/daily_chk` 的 form 快照（`user_id=..&daily_id=..`），供断言参数。
+  final List<String> dailyCheckInPayloads = <String>[];
+
   final Map<String, String> _cookies = <String, String>{};
 
   int downloadCalls = 0;
@@ -198,6 +269,7 @@ class FakeJmApi implements JmApi {
       'album_favorites_max': 500,
       'level': 3,
       'level_name': 'LV3',
+      'coin': 320,
       's': 'fake-avs',
     };
   }
@@ -241,6 +313,43 @@ class FakeJmApi implements JmApi {
 
   @override
   Future<bool> pingFavorite() async => loggedIn;
+
+  @override
+  Future<JmDailyState> fetchDaily({required int userId}) async {
+    _throwIfFailing();
+    if (!loggedIn) {
+      throw const JmContentException('JM 接口错误：请先登录');
+    }
+    dailyCalls++;
+    final failure = dailyError;
+    if (failure != null) throw JmContentException(failure);
+    final state = dailyState ??= buildFakeDaily();
+    return dailyCoin == null ? state : state.copyWith(coin: dailyCoin);
+  }
+
+  @override
+  Future<JmCheckInResult> checkInDaily({
+    required int userId,
+    required int dailyId,
+  }) async {
+    _throwIfFailing();
+    if (!loggedIn) {
+      throw const JmContentException('JM 接口错误：请先登录');
+    }
+    dailyCheckInCalls++;
+    dailyCheckInPayloads.add('user_id=$userId&daily_id=$dailyId');
+    final failure = dailyCheckInError;
+    if (failure != null) throw JmContentException(failure);
+    if (dailyCheckInApplies) {
+      final current = dailyState ??= buildFakeDaily();
+      dailyState = current.withSignedDay(dailyToday ?? 1);
+    }
+    return JmCheckInResult(
+      message: dailyCheckInMessage,
+      alreadySigned: dailyCheckInMessage.contains('已經簽到過了'),
+      coin: dailyCheckInCoin,
+    );
+  }
 
   // ---------------------------------------------------------------- 互动
   /// 点赞记录（测试断言用）。
@@ -300,7 +409,11 @@ class FakeJmApi implements JmApi {
       throw const JmContentException('登录状态已失效，请重新登录');
     }
     postedComments.add(
-      JmComment(id: '${postedComments.length + 1}', albumId: albumId, content: content),
+      JmComment(
+        id: '${postedComments.length + 1}',
+        albumId: albumId,
+        content: content,
+      ),
     );
     return '評論成功!';
   }
@@ -311,7 +424,8 @@ class FakeJmApi implements JmApi {
   }
 
   @override
-  Map<String, String> get cookieSnapshot => Map<String, String>.unmodifiable(_cookies);
+  Map<String, String> get cookieSnapshot =>
+      Map<String, String>.unmodifiable(_cookies);
 
   @override
   void restoreCookies(Map<String, String> cookies) {
@@ -319,6 +433,7 @@ class FakeJmApi implements JmApi {
       ..clear()
       ..addAll(cookies);
   }
+
   @override
   Future<void> prepare() async {}
 
@@ -327,7 +442,10 @@ class FakeJmApi implements JmApi {
     final chapters = List<JmChapterRef>.generate(
       chapterCount,
       (index) => JmChapterRef(
-          id: '${albumId}0$index', sort: index + 1, title: '第 ${index + 1} 话',),
+        id: '${albumId}0$index',
+        sort: index + 1,
+        title: '第 ${index + 1} 话',
+      ),
     );
     return JmAlbumDetail(
       id: albumId,
@@ -420,8 +538,11 @@ class FakeJmApi implements JmApi {
     AlbumOrder order = AlbumOrder.latestUpdate,
   }) async {
     _throwIfFailing();
-    return JmResponseParser.searchPage(Fixtures.filter(),
-        page: page, query: query,);
+    return JmResponseParser.searchPage(
+      Fixtures.filter(),
+      page: page,
+      query: query,
+    );
   }
 }
 

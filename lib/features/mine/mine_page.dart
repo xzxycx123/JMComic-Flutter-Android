@@ -58,12 +58,11 @@ class MinePage extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 12),
-            // 签到摘要：与签到页共用 checkInProvider，签到返回后立即刷新。
+            // 签到摘要：与签到页共用 checkInProvider，签到成功后立即刷新。
             _SettingTile(
               icon: AppIcons.check,
               title: '每日签到',
-              value: '${checkIn.todayChecked ? '今日已签到' : '今日可签到'}'
-                  ' · 连续 ${checkIn.streak} 天',
+              value: _checkInValue(checkIn),
               onTap: () => context.push('/mine/check-in'),
             ),
             const SizedBox(height: 18),
@@ -192,6 +191,16 @@ class MinePage extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// 签到入口的摘要文案（服务端状态；未登录时引导登录）。
+  static String _checkInValue(CheckInState checkIn) {
+    if (!checkIn.loggedIn) return '登录后可签到领 JCoin';
+    if (!checkIn.hasData) {
+      return checkIn.loading ? '读取签到记录…' : '签到记录读取失败';
+    }
+    final status = checkIn.todayChecked ? '今日已签到' : '今日可签到';
+    return '$status · 连续 ${checkIn.streak} 天 · JCoin ${checkIn.coin}';
   }
 
   Future<void> _syncFavorites(BuildContext context, WidgetRef ref) async {
@@ -443,7 +452,58 @@ class _ProfileCard extends StatelessWidget {
               ],
             ),
           ),
+          if (loggedIn) ...<Widget>[
+            const SizedBox(width: 10),
+            _CoinBadge(coin: account!.coin),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+/// 头像那一栏的 JCoin 余额胶囊（来源：`/login` 的 `coin`，签到后用服务端下发值刷新）。
+class _CoinBadge extends StatelessWidget {
+  const _CoinBadge({required this.coin});
+
+  final int coin;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      label: 'JCoin 余额 $coin',
+      excludeSemantics: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: scheme.primaryContainer,
+          borderRadius: BorderRadius.circular(AppColors.radiusPill),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            IconTheme(
+              data: IconThemeData(color: scheme.primary),
+              child: const SvgIcon(AppIcons.star, size: 13),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '$coin',
+              maxLines: 1,
+              style: AppTypography.numeric
+                  .copyWith(color: scheme.onPrimaryContainer),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'JCoin',
+              maxLines: 1,
+              style: AppTypography.micro
+                  .copyWith(color: scheme.onPrimaryContainer),
+            ),
+          ],
+        ),
       ),
     );
   }

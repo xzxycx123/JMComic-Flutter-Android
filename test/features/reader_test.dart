@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:jm_comic/core/theme/interface_style_scope.dart';
+import 'package:jm_comic/core/theme/app_colors.dart';
+import 'package:jm_comic/core/ui/glass/app_glass.dart';
 import 'package:jm_comic/data/local/settings_store.dart';
 import 'package:jm_comic/features/reader/reader_mode.dart';
 import 'package:jm_comic/features/reader/widgets/reader_hud.dart';
@@ -207,10 +208,14 @@ void main() {
       expect(confinement, findsOneWidget);
       final paintBounds = tester.getRect(confinement);
       expect(tester.widget<ClipRect>(confinement).clipBehavior, Clip.hardEdge);
-      expect(paintBounds.left,
-          greaterThanOrEqualTo(tester.getRect(find.text('已读 12/20')).right),);
-      expect(paintBounds.right,
-          lessThanOrEqualTo(tester.getRect(find.text('60%')).left),);
+      expect(
+        paintBounds.left,
+        greaterThanOrEqualTo(tester.getRect(find.text('已读 12/20')).right),
+      );
+      expect(
+        paintBounds.right,
+        lessThanOrEqualTo(tester.getRect(find.text('60%')).left),
+      );
       expect(track.left, greaterThan(paintBounds.left));
       final gesture = await tester.startGesture(track.center);
       await gesture.moveBy(Offset(-track.width * .25, 0));
@@ -290,8 +295,11 @@ void main() {
         of: lineLabel,
         matching: find.byType(GlassButton),
       );
-      expect(tester.widget<GlassButton>(trigger).shape,
-          const LiquidRoundedSuperellipse(borderRadius: 9),);
+      expect(
+        tester.widget<GlassButton>(trigger).shape,
+        const LiquidRoundedSuperellipse(borderRadius: AppColors.radiusPill),
+        reason: '分流节点是药丸（全圆角），不是小圆角方块',
+      );
       expect(tester.getSize(trigger).height, lessThan(40));
       for (final icon
           in tester.widgetList<GlassIconButton>(find.byType(GlassIconButton))) {
@@ -342,8 +350,86 @@ void main() {
       );
 
       expect(find.text('线路2'), findsOneWidget);
+      // 分流（节点）与右侧「切换阅读模式」之间留了间距，不许贴在一起。
+      final lineButton = find.byType(TextButton);
+      final modeButton = find.byType(AppIconButton).last;
+      expect(
+        tester.getRect(lineButton).right + 8,
+        lessThanOrEqualTo(tester.getRect(modeButton).left),
+        reason: '节点按钮与模式按钮至少要隔开 8px',
+      );
       await tester.tap(find.text('线路2'));
       expect(switched, 1);
+    });
+
+    /// 顶 / 底两条浮动条的灰底（圆角矩形，两套皮肤一致）。
+    Finder greyBars() => find.byWidgetPredicate(
+          (widget) =>
+              widget is DecoratedBox &&
+              widget.decoration is BoxDecoration &&
+              (widget.decoration as BoxDecoration).color ==
+                  ReaderHud.barColor &&
+              (widget.decoration as BoxDecoration).borderRadius ==
+                  BorderRadius.circular(ReaderHud.barRadius),
+        );
+
+    testWidgets('顶栏 / 底栏是圆角矩形灰底，不再铺玻璃板或模糊遮罩', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 400,
+              child: ReaderHud(
+                title: '测试',
+                page: 1,
+                total: 10,
+                mode: ReaderMode.paged,
+                visible: true,
+                onExit: () {},
+                onToggleMode: () {},
+                onJump: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(greyBars(), findsNWidgets(2), reason: '上、下各一条圆角灰底');
+      expect(
+        find.byType(BackdropFilter),
+        findsNothing,
+        reason: 'Metal 皮肤不做模糊遮罩',
+      );
+      expect(find.byType(AppGlassChrome), findsNothing);
+    });
+
+    testWidgets('玻璃皮肤下顶栏 / 底栏也是圆角矩形灰底', (tester) async {
+      await tester.pumpWidget(
+        LiquidGlassWidgets.wrap(
+          child: MaterialApp(
+            home: InterfaceStyleScope(
+              style: AppInterfaceStyle.liquidGlass,
+              child: Scaffold(
+                body: ReaderHud(
+                  title: '阅读器',
+                  page: 1,
+                  total: 10,
+                  mode: ReaderMode.paged,
+                  visible: true,
+                  lineLabel: '线路2',
+                  onExit: () {},
+                  onToggleMode: () {},
+                  onJump: (_) {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(greyBars(), findsNWidgets(2), reason: '玻璃皮肤同样用圆角灰底');
+      expect(find.byType(AppGlassChrome), findsNothing, reason: 'HUD 条不铺玻璃板');
+      expect(find.text('已读 1/10'), findsOneWidget);
     });
 
     testWidgets('没有回调时不渲染分流按钮', (tester) async {

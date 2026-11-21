@@ -8,6 +8,8 @@ import '../../core/constants/jm_constants.dart';
 import '../../core/icons/app_icons.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/ui/glass/app_glass.dart';
+import '../../data/models/jm_album_summary.dart';
+import '../home/home_likes.dart';
 import '../home/widgets/feed_skeleton.dart';
 import 'search_providers.dart';
 import 'widgets/result_grid.dart';
@@ -85,7 +87,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     }
     _focusNode.unfocus();
     unawaited(
-        ref.read(searchControllerProvider.notifier).search(decision.keyword!),);
+      ref.read(searchControllerProvider.notifier).search(decision.keyword!),
+    );
   }
 
   void _fillHistory(String keyword) {
@@ -176,6 +179,13 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                       },
                     );
                   }
+                  // 喜欢数：列表接口没有计数，按搜索结果抓一次官方网页（一页 80 本）。
+                  ref.read(albumLikesProvider.notifier).ensureSearch(
+                        query: results.keyword,
+                        page: results.page,
+                        order: results.order.code,
+                      );
+                  final likes = ref.watch(albumLikesProvider).likes;
                   return Column(
                     children: <Widget>[
                       ResultHeader(
@@ -190,7 +200,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                       ),
                       Expanded(
                         child: ResultGrid(
-                          items: results.items,
+                          items: <JmAlbumSummary>[
+                            for (final item in results.items)
+                              withScrapedLikes(item, likes),
+                          ],
                           loadingMore: results.loadingMore,
                           error: results.error,
                           onRetry: () => ref

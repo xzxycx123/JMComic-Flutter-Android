@@ -113,42 +113,12 @@ class _DownloadPageState extends ConsumerState<DownloadPage> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    child: AppSegmentedControl<DownloadFilter>(
-                      segments: <AppSegment<DownloadFilter>>[
-                        AppSegment<DownloadFilter>(
-                          value: DownloadFilter.all,
-                          label: Text(DownloadFilter.all.label),
-                        ),
-                        AppSegment<DownloadFilter>(
-                          value: DownloadFilter.active,
-                          label: Text(
-                            activeCount > 0
-                                ? '${DownloadFilter.active.label} $activeCount'
-                                : DownloadFilter.active.label,
-                          ),
-                        ),
-                        AppSegment<DownloadFilter>(
-                          value: DownloadFilter.finished,
-                          label: Text(DownloadFilter.finished.label),
-                        ),
-                      ],
-                      selected: filter,
-                      scrollable: true,
-                      onChanged: (value) {
-                        ref.read(downloadFilterProvider.notifier).state = value;
-                      },
-                      metalStyle: SegmentedButton.styleFrom(
-                        textStyle: AppTypography.caption,
-                        side: BorderSide(color: scheme.outline),
-                        selectedBackgroundColor: scheme.primaryContainer,
-                        selectedForegroundColor: scheme.onPrimaryContainer,
-                      ),
-                    ),
-                  ),
-                ],
+              child: DownloadFilterBar(
+                selected: filter,
+                activeCount: activeCount,
+                onChanged: (value) {
+                  ref.read(downloadFilterProvider.notifier).state = value;
+                },
               ),
             ),
             const SizedBox(height: 10),
@@ -221,3 +191,77 @@ String describeRecord(DownloadRecord record) =>
     record.state == DownloadState.succeeded
         ? '${record.pageCount} 页 · ${record.pdfName ?? '已导出'}'
         : '${record.status} ${record.percent}%';
+
+/// 下载页分段筛选条：全部 / 进行中 / 已完成。
+///
+/// 玻璃壳只包住分段本身（导航与控制层），不改变 LiquidGlass 观感。三个分段等宽、
+/// 文案居中铺满可用宽度；可用宽度不足（窄屏 + 大字号）时整条横向可滑动，
+/// 每个分段至少保留 [minCellWidth]（按字号缩放）。
+class DownloadFilterBar extends StatelessWidget {
+  const DownloadFilterBar({
+    required this.selected,
+    required this.onChanged,
+    super.key,
+    this.activeCount = 0,
+  });
+
+  final DownloadFilter selected;
+  final ValueChanged<DownloadFilter> onChanged;
+
+  /// 「进行中」后面的任务数（>0 才拼进文案）。
+  final int activeCount;
+
+  /// 单个分段的最小宽度（逻辑像素，实际会按 textScaler 放大）。
+  static const double minCellWidth = 96;
+
+  /// 分段文案（数量只在「进行中」且有任务时出现）。
+  static String labelOf(DownloadFilter filter, {int activeCount = 0}) =>
+      filter == DownloadFilter.active && activeCount > 0
+          ? '${filter.label} $activeCount'
+          : filter.label;
+
+  /// 筛选条需要的最小总宽度（按当前字号缩放）。
+  static double minWidthFor(BuildContext context) =>
+      MediaQuery.textScalerOf(context).scale(minCellWidth) *
+      DownloadFilter.values.length;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final segments = <AppSegment<DownloadFilter>>[
+      for (final filter in DownloadFilter.values)
+        AppSegment<DownloadFilter>(
+          value: filter,
+          label: Text(labelOf(filter, activeCount: activeCount)),
+        ),
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth;
+        final needed = minWidthFor(context);
+        // 宽度够就撑满可用宽度（三个等宽分段居中）；不够则锁最小宽度并横向滑动。
+        final width =
+            available.isFinite && available > needed ? available : needed;
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const ClampingScrollPhysics(),
+          child: SizedBox(
+            width: width,
+            child: AppSegmentedControl<DownloadFilter>(
+              segments: segments,
+              selected: selected,
+              // 固定模式（等宽分段）才是「居中」的；滑动由外层承担。
+              onChanged: onChanged,
+              metalStyle: SegmentedButton.styleFrom(
+                textStyle: AppTypography.caption,
+                side: BorderSide(color: scheme.outline),
+                selectedBackgroundColor: scheme.primaryContainer,
+                selectedForegroundColor: scheme.onPrimaryContainer,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

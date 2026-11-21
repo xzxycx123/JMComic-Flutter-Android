@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
@@ -68,8 +66,11 @@ class ReaderHud extends StatelessWidget {
   final double glassPickerHeight;
   final ValueChanged<bool>? onGlassPickerOpenChanged;
 
-  static final Color _barColor = AppColors.readerBg.withAlpha(230);
   static const Color _ink = AppColors.readerInk;
+
+  /// 顶 / 底浮动条的圆角矩形灰底（Metal 与 LiquidGlass 两套皮肤一致）。
+  static const Color barColor = Color(0xE6333335);
+  static const double barRadius = 18;
 
   @override
   Widget build(BuildContext context) => IgnorePointer(
@@ -93,7 +94,6 @@ class ReaderHud extends StatelessWidget {
     return Column(
       children: <Widget>[
         _bar(
-          context,
           top: true,
           child: SizedBox(
             height: 46,
@@ -103,8 +103,11 @@ class ReaderHud extends StatelessWidget {
                   onPressed: onExit,
                   tooltip: glass ? '返回' : null,
                   glassSize: 34,
-                  icon: SvgIcon(AppIcons.back,
-                      size: glass ? 16 : 22, color: _ink,),
+                  icon: SvgIcon(
+                    AppIcons.back,
+                    size: glass ? 16 : 22,
+                    color: _ink,
+                  ),
                 ),
                 Expanded(
                   child: Text(
@@ -116,8 +119,11 @@ class ReaderHud extends StatelessWidget {
                 ),
                 if (lineLabel.isNotEmpty &&
                     (onSwitchLine != null ||
-                        (glass && glassPickerBuilder != null)))
+                        (glass && glassPickerBuilder != null))) ...<Widget>[
                   _lineControl(context),
+                  // 和右侧「切换阅读模式」拉开距离，别挤在一起。
+                  const SizedBox(width: 10),
+                ],
                 AppIconButton(
                   tooltip: mode.toggled.label,
                   onPressed: onToggleMode,
@@ -130,7 +136,6 @@ class ReaderHud extends StatelessWidget {
         ),
         const Spacer(),
         _bar(
-          context,
           child: SafeArea(
             top: false,
             child: SizedBox(
@@ -138,8 +143,12 @@ class ReaderHud extends StatelessWidget {
               child: Row(
                 children: <Widget>[
                   const SizedBox(width: 16),
-                  _progressText(context, '已读 $page/$total', '已读 $total/$total',
-                      AppTypography.micro,),
+                  _progressText(
+                    context,
+                    '已读 $page/$total',
+                    '已读 $total/$total',
+                    AppTypography.micro,
+                  ),
                   Expanded(
                     child: AppSlider(
                       value: page.clamp(1, total <= 0 ? 1 : total).toDouble(),
@@ -158,7 +167,11 @@ class ReaderHud extends StatelessWidget {
                     ),
                   ),
                   _progressText(
-                      context, '$ratio%', '100%', AppTypography.numeric,),
+                    context,
+                    '$ratio%',
+                    '100%',
+                    AppTypography.numeric,
+                  ),
                   const SizedBox(width: 16),
                 ],
               ),
@@ -170,9 +183,15 @@ class ReaderHud extends StatelessWidget {
   }
 
   Widget _progressText(
-      BuildContext context, String value, String widest, TextStyle style,) {
+    BuildContext context,
+    String value,
+    String widest,
+    TextStyle style,
+  ) {
     final ink = style.copyWith(
-        color: _ink, fontFeatures: const [FontFeature.tabularFigures()],);
+      color: _ink,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
     if (!context.isLiquidGlass) return Text(value, style: ink);
     final painter = TextPainter(
       text: TextSpan(text: widest, style: ink),
@@ -192,7 +211,10 @@ class ReaderHud extends StatelessWidget {
   Widget _lineControl(BuildContext context) {
     final content = switchingLine
         ? const AppProgressIndicator.circular(
-            size: 14, strokeWidth: 2, color: _ink,)
+            size: 14,
+            strokeWidth: 2,
+            color: _ink,
+          )
         : Text(lineLabel, style: AppTypography.micro.copyWith(color: _ink));
     if (!context.isLiquidGlass) {
       return AppButton.text(
@@ -200,8 +222,10 @@ class ReaderHud extends StatelessWidget {
         foregroundColor: _ink,
         style: TextButton.styleFrom(
           foregroundColor: _ink,
+          // 药丸形按钮（Metal 皮肤下只是触点/水波形状）。
+          shape: const StadiumBorder(),
           minimumSize: const Size(0, 34),
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
         child: content,
@@ -214,7 +238,9 @@ class ReaderHud extends StatelessWidget {
         onTap: onTap,
         enabled: !switchingLine,
         height: 34,
-        shape: const LiquidRoundedSuperellipse(borderRadius: 9),
+        // 药丸（全圆角）而不是小圆角方块。
+        shape:
+            const LiquidRoundedSuperellipse(borderRadius: AppColors.radiusPill),
         quality: AppGlassTheme.controlQuality,
         settings: theme.control(enabled: !switchingLine),
         interactionScale: theme.reduceMotion ? 1 : .96,
@@ -223,7 +249,7 @@ class ReaderHud extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(minWidth: 48),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Center(widthFactor: 1, child: content),
           ),
         ),
@@ -240,18 +266,21 @@ class ReaderHud extends StatelessWidget {
     );
   }
 
-  /// 顶部背景覆盖状态栏，内容仍通过 SafeArea 避开状态栏。
-  Widget _bar(BuildContext context, {required Widget child, bool top = false}) {
+  /// 顶栏 / 底栏 = 圆角矩形灰底 + 浮动控件。
+  ///
+  /// 两套皮肤都用同一块灰底（不做玻璃折射、不做背景模糊），
+  /// 顶栏仍然套 SafeArea 避开状态栏；底栏的安全区由内容自己处理。
+  Widget _bar({required Widget child, bool top = false}) {
     final content = top ? SafeArea(bottom: false, child: child) : child;
-    if (context.isLiquidGlass) {
-      return AppGlassChrome(
-          reader: true, metalColor: _barColor, child: content,);
-    }
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: DecoratedBox(
-          decoration: BoxDecoration(color: _barColor),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(12, top ? 6 : 0, 12, top ? 0 : 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: barColor,
+          borderRadius: BorderRadius.circular(barRadius),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
           child: content,
         ),
       ),

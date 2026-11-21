@@ -8,6 +8,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/ui/app_toast.dart';
 import '../../core/ui/glass/app_glass.dart';
 import '../../data/models/favorite_item.dart';
+import '../home/home_likes.dart';
 import '../home/widgets/album_card.dart';
 import '../home/widgets/feed_skeleton.dart';
 import 'collect_providers.dart';
@@ -147,10 +148,10 @@ class _CollectPageState extends ConsumerState<CollectPage> {
                   )
                 : GridView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
-                      childAspectRatio: 0.52,
+                      // 卡片正文含标题 2 行 + 作者 + 标签行：按字号放宽，避免溢出。
+                      childAspectRatio: albumGridAspectRatio(context),
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 16,
                     ),
@@ -160,7 +161,10 @@ class _CollectPageState extends ConsumerState<CollectPage> {
                       return Stack(
                         children: <Widget>[
                           AlbumCard(
-                            album: item.toSummary(),
+                            album: withScrapedLikes(
+                              item.toSummary(),
+                              ref.watch(albumLikesProvider).likes,
+                            ),
                             onTap: () => context.push('/album/${item.albumId}'),
                             onLongPress: () => _showItemMenu(item),
                           ),
@@ -170,8 +174,10 @@ class _CollectPageState extends ConsumerState<CollectPage> {
                               bottom: 62,
                               child: IgnorePointer(
                                 child: AppBadge(
-                                  label: const Text('更新',
-                                      style: AppTypography.micro,),
+                                  label: const Text(
+                                    '更新',
+                                    style: AppTypography.micro,
+                                  ),
                                   color: scheme.primary,
                                   metalChild: Container(
                                     padding: const EdgeInsets.symmetric(

@@ -48,19 +48,19 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
                     path: 'settings',
                     builder: (context, state) => const SettingsPage(),
                   ),
-                  GoRoute(
-                    path: 'about',
-                    builder: (context, state) => const AboutPage(),
-                  ),
-                  GoRoute(
-                    path: 'check-in',
-                    builder: (context, state) => const DailyCheckInPage(),
-                  ),
                 ],
               ),
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: '/mine/about',
+        builder: (context, state) => const AboutPage(),
+      ),
+      GoRoute(
+        path: '/mine/check-in',
+        builder: (context, state) => const DailyCheckInPage(),
       ),
       GoRoute(
         path: '/download',

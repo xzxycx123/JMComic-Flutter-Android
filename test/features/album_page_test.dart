@@ -146,10 +146,14 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('点封面作者按关键词搜索该作者', (tester) async {
+  testWidgets('封面作者显示「作者：名字」+ 箭头，点击按关键词搜索', (tester) async {
     await pumpAlbum(tester, album: _album(author: '作者甲'));
 
-    await tester.tap(find.text('作者甲'));
+    // 展示文案是「作者：作者甲」，中括号只出现在需求描述里。
+    expect(find.text('作者：作者甲'), findsOneWidget);
+    expect(find.text('作者甲'), findsNothing);
+
+    await tester.tap(find.text('作者：作者甲'));
     await tester.pumpAndSettle();
 
     expect(_searchUri, isNotNull);
@@ -161,9 +165,9 @@ void main() {
 
   testWidgets('未知作者 / N/A 不触发搜索跳转', (tester) async {
     await pumpAlbum(tester, album: _album(author: 'N/A'));
-    expect(find.text('未知作者'), findsOneWidget);
+    expect(find.text('作者：未知作者'), findsOneWidget);
 
-    await tester.tap(find.text('未知作者'));
+    await tester.tap(find.text('作者：未知作者'));
     await tester.pumpAndSettle();
 
     expect(_searchUri, isNull);
@@ -287,5 +291,35 @@ void main() {
     expect(find.text('父评论正文'), findsOneWidget);
     expect(find.text('回复正常内容'), findsOneWidget);
     expect(find.text('回复广告😀😀😀'), findsNothing);
+  });
+
+  testWidgets('评论点赞入口已下线：不渲染爱心计数，只留「回复」', (tester) async {
+    _commentsState = const AlbumCommentsState(
+      total: 2,
+      items: <JmComment>[
+        JmComment(id: '1', content: '有点赞的评论', likes: 7),
+        JmComment(id: '2', content: '零点赞的评论'),
+      ],
+    );
+    await pumpSection(tester, bottomReached: false);
+
+    expect(find.text('有点赞的评论'), findsOneWidget);
+    expect(find.text('零点赞的评论'), findsOneWidget);
+    expect(find.text('7'), findsNothing);
+    expect(find.text('0'), findsNothing);
+    expect(find.text('回复'), findsWidgets);
+  });
+
+  test('解析保留服务端 likes（顶层与 replies）', () {
+    final comment = JmComment.fromJson(<String, dynamic>{
+      'CID': '1',
+      'content': '顶层',
+      'likes': '9',
+      'replys': <dynamic>[
+        <String, dynamic>{'CID': '1-1', 'content': '回复', 'likes': '3'},
+      ],
+    });
+    expect(comment.likes, 9);
+    expect(comment.replies.single.likes, 3);
   });
 }

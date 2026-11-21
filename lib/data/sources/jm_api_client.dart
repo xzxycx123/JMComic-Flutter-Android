@@ -14,6 +14,7 @@ import '../models/jm_album_summary.dart';
 import '../models/jm_category.dart';
 import '../models/jm_chapter.dart';
 import '../models/jm_comment.dart';
+import '../models/jm_daily.dart';
 import '../models/jm_favorite_list.dart';
 import '../models/jm_host_entry.dart';
 import '../models/jm_promote_module.dart';
@@ -89,6 +90,19 @@ abstract class JmApi {
 
   /// 用收藏列表探一次会话是否还有效（true=有效，false=未登录/失效；网络错误会抛出）。
   Future<bool> pingFavorite();
+
+  // ---------------------------------------------------------------- 签到
+  /// `GET /daily?user_id=<uid>`：当月签到记录（`daily_id` + 每天 `signed`）。
+  Future<JmDailyState> fetchDaily({required int userId});
+
+  /// `POST /daily_chk {user_id, daily_id}`：给服务端签到，奖励是 JCoin。
+  ///
+  /// 成功时服务端只回一句文案（也可能什么都不回），调用方要再拉一次
+  /// [fetchDaily] 用「今天 signed == true」核对。
+  Future<JmCheckInResult> checkInDaily({
+    required int userId,
+    required int dailyId,
+  });
 
   // ---------------------------------------------------------------- 互动（1.0）
   /// `POST /like {id}`：点赞。返回体是明文 `{code,msg,status}`，无计数。
@@ -544,13 +558,67 @@ class JmApiClient implements JmApi {
   }
 
   @override
-  Future<void> setCookie(String name, String value) async => _jar.setCookie(name, value);
+  Future<void> setCookie(String name, String value) async =>
+      _jar.setCookie(name, value);
 
   @override
   Map<String, String> get cookieSnapshot => _jar.snapshot();
 
   @override
   void restoreCookies(Map<String, String> cookies) => _jar.restore(cookies);
+
+  // ---------------------------------------------------------------- 签到（服务端）
+  @override
+  Future<JmDailyState> fetchDaily({required int userId}) async {
+    final decoded = await _requestApi(
+      JmConstants.dailyPath,
+      query: <String, String>{'user_id': '$userId'},
+      strictErrorMsg: true,
+    );
+    final map = asMap(decoded);
+    if (map == null) throw const JmContentException('签到记录结构异常');
+    return JmDailyState.fromJson(map);
+  }
+
+  /// 服务端「已经签过」的几种文案（简繁都要认）。
+  static const List<String> _alreadySignedMarkers = <String>[
+    '已經簽到過了',
+    '已经签到过了',
+    '已簽到',
+    '已签到',
+  ];
+
+  @override
+  Future<JmCheckInResult> checkInDaily({
+    required int userId,
+    required int dailyId,
+  }) async {
+    final decoded = await _requestApi(
+      JmConstants.dailyCheckInPath,
+      method: 'POST',
+      form: <String, String>{
+        'user_id': '$userId',
+        'daily_id': '$dailyId',
+      },
+      // 成功时可能只有一句文案，也可能 data 为空：交给调用方用 /daily 核对。
+      allowEmptyData: true,
+      strictErrorMsg: true,
+    );
+    final map = asMap(decoded);
+    final message = (asString(map?['msg']) ??
+            asString(map?['message']) ??
+            asString(map?['status']) ??
+            '')
+        .trim();
+    final alreadySigned =
+        _alreadySignedMarkers.any((marker) => message.contains(marker));
+    final rawCoin = map?['coin'] ?? map?['jCoin'] ?? map?['jcoin'];
+    return JmCheckInResult(
+      message: message,
+      alreadySigned: alreadySigned,
+      coin: rawCoin == null ? null : asInt(rawCoin),
+    );
+  }
 
   // ---------------------------------------------------------------- 互动（点赞 / 评论）
   @override
@@ -690,6 +758,8 @@ class JmApiClient implements JmApi {
     String tokenSecret = JmConstants.tokenSecret,
     String method = 'GET',
     Map<String, String>? form,
+    bool allowEmptyData = false,
+    bool strictErrorMsg = false,
   }) async {
     final hosts = _preferActive(
       _orderedHosts(_store.apiHosts, JmHostKind.api),
@@ -717,6 +787,8 @@ class JmApiClient implements JmApi {
           tokenSecret: tokenSecret,
           method: method,
           form: form,
+          allowEmptyData: allowEmptyData,
+          strictErrorMsg: strictErrorMsg,
         );
         await _store.markApiHostWorking(host);
         await _store.recordHealth(
@@ -824,6 +896,8 @@ class JmApiClient implements JmApi {
     required String tokenSecret,
     String method = 'GET',
     Map<String, String>? form,
+    bool allowEmptyData = false,
+    bool strictErrorMsg = false,
   }) async {
     final ts = _timestamp();
     final Response<String> response;
@@ -892,8 +966,18 @@ class JmApiClient implements JmApi {
       throw JmContentException('JM 接口错误：$message');
     }
 
-    final data = asString(envelope['data']);
-    if (data == null || data.isEmpty) {
+    // code=200 也可能是「业务失败」：`/daily?user_id=0` 这类只会回 errorMsg + 空 data。
+    final errorMsg = (asString(envelope['errorMsg']) ?? '').trim();
+    if (strictErrorMsg && errorMsg.isNotEmpty) {
+      throw JmContentException('JM 接口错误：$errorMsg');
+    }
+
+    // 加密 payload 一定是字符串；`[]` / `{}` / null 都表示「没有数据」
+    // （例如未登录时的 `POST /daily_chk` 就回 data: []）。
+    final rawData = envelope['data'];
+    final data = rawData is String ? rawData.trim() : '';
+    if (data.isEmpty) {
+      if (allowEmptyData) return null;
       throw const JmContentException('JM 接口没有返回数据');
     }
 

@@ -31,6 +31,7 @@ class AccountSession {
     this.loggedAt = 0,
     this.state = SessionState.local,
     this.lastSyncAt = 0,
+    this.coin = 0,
   });
 
   final int uid;
@@ -44,12 +45,16 @@ class AccountSession {
   final SessionState state;
   final int lastSyncAt;
 
+  /// JCoin 余额（来自 `/login` 的 `coin` 字段；签到时服务端给的就是这个币）。
+  final int coin;
+
   bool get isLoggedIn => uid > 0 && state == SessionState.valid;
 
   bool get needsLogin => state == SessionState.needsLogin;
 
-  double get usageRatio =>
-      favoritesMax <= 0 ? 0 : (favoritesCount / favoritesMax).clamp(0, 1).toDouble();
+  double get usageRatio => favoritesMax <= 0
+      ? 0
+      : (favoritesCount / favoritesMax).clamp(0, 1).toDouble();
 
   bool get nearLimit => favoritesMax > 0 && usageRatio >= 0.9;
 
@@ -68,6 +73,7 @@ class AccountSession {
     int? loggedAt,
     SessionState? state,
     int? lastSyncAt,
+    int? coin,
   }) =>
       AccountSession(
         uid: uid ?? this.uid,
@@ -80,6 +86,7 @@ class AccountSession {
         loggedAt: loggedAt ?? this.loggedAt,
         state: state ?? this.state,
         lastSyncAt: lastSyncAt ?? this.lastSyncAt,
+        coin: coin ?? this.coin,
       );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -93,6 +100,7 @@ class AccountSession {
         'loggedAt': loggedAt,
         'state': state.code,
         'lastSyncAt': lastSyncAt,
+        'coin': coin,
       };
 
   factory AccountSession.fromJson(Map<String, dynamic> json) => AccountSession(
@@ -106,6 +114,7 @@ class AccountSession {
         loggedAt: (json['loggedAt'] as num?)?.toInt() ?? 0,
         state: SessionState.fromCode(json['state'] as String?),
         lastSyncAt: (json['lastSyncAt'] as num?)?.toInt() ?? 0,
+        coin: (json['coin'] as num?)?.toInt() ?? 0,
       );
 
   /// 从 `/login` 的解密结果组装；字段缺省时保持 0/空串。
@@ -128,6 +137,7 @@ class AccountSession {
       levelName: '${json['level_name'] ?? ''}',
       loggedAt: loggedAt,
       state: SessionState.valid,
+      coin: intOf(json['coin']),
     );
   }
 }
