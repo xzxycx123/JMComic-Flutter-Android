@@ -10,6 +10,7 @@ class AppGlassTheme {
   static const preset = GlassThemeData.ios27();
   static const scrollQuality = GlassQuality.standard;
   static const controlQuality = GlassQuality.standard;
+  static const overlayQuality = GlassQuality.premium;
 
   factory AppGlassTheme.of(BuildContext context, {bool reader = false}) =>
       AppGlassTheme._(
@@ -23,6 +24,7 @@ class AppGlassTheme {
   bool get isDark => scheme.brightness == Brightness.dark;
   Color get accent => isDark ? scheme.primary : scheme.onPrimaryContainer;
   Color get selection => scheme.primary.withValues(alpha: isDark ? .24 : .18);
+  Color get selectionInk => AppColors.darkOnPrimary;
   Color get outline => Color.lerp(scheme.outline, scheme.onSurface, .13)!;
 
   Gradient get background => LinearGradient(

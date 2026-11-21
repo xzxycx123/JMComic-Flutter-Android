@@ -6,6 +6,30 @@ import '../../core/constants/jm_constants.dart';
 import '../../core/di/providers.dart';
 import '../../data/models/jm_album_summary.dart';
 import '../../data/repositories/search_repository.dart';
+import '../album/album_providers.dart';
+
+final searchAlbumMetadataProvider =
+    FutureProvider.autoDispose.family<SearchAlbumMetadata?, String>(
+  (ref, albumId) async {
+    final detailProvider = albumDetailProvider(albumId);
+    if (ref.exists(detailProvider)) {
+      final existing = ref.read(detailProvider);
+      if (existing.hasValue) {
+        return SearchAlbumMetadata.fromAlbum(existing.requireValue);
+      }
+      if (existing.isLoading) {
+        try {
+          final album = await ref.read(detailProvider.future);
+          return SearchAlbumMetadata.fromAlbum(album);
+        } on Exception {
+          return null;
+        }
+      }
+    }
+    final repository = await ref.watch(searchRepositoryProvider.future);
+    return repository.enrichAlbum(albumId);
+  },
+);
 
 /// 搜索排序（服务端 `o` 参数，实测各值都会改变结果顺序）：
 /// 时间 = `mr`、阅读数 = `mv`、人气 = `mp`、最新上架 = `md`。
@@ -93,11 +117,12 @@ final AsyncNotifierProvider<SearchController, SearchResults?>
     searchControllerProvider =
     AsyncNotifierProvider<SearchController, SearchResults?>(
   SearchController.new,
+  dependencies: [searchSortProvider],
 );
 
 class SearchController extends AsyncNotifier<SearchResults?> {
   @override
-  Future<SearchResults?> build() async => null;
+  SearchResults? build() => null;
 
   Future<void> search(String keyword, {AlbumOrder? order}) async {
     final value = keyword.trim();
@@ -172,7 +197,8 @@ class SearchController extends AsyncNotifier<SearchResults?> {
 }
 
 /// 搜索输入判定（纯本地，先判再发请求）。
-SearchQuery resolveQuery(String input) => resolveSearchQuery(input);
+SearchQuery resolveQuery(String input, {bool forceKeyword = false}) =>
+    resolveSearchQuery(input, forceKeyword: forceKeyword);
 
 /// 热门词（v1 用固定文案，点击直接搜索）。
 const List<String> kHotKeywords = <String>[

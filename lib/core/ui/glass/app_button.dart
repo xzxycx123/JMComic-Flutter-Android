@@ -23,6 +23,8 @@ class AppButton extends StatelessWidget {
     this.foregroundColor,
     this.height,
     this.padding,
+    this.cornerRadius = 12,
+    this.solid = false,
   }) : assert(label != null || child != null);
 
   const AppButton.text({
@@ -39,6 +41,8 @@ class AppButton extends StatelessWidget {
     Color? foregroundColor,
     double? height,
     EdgeInsetsGeometry? padding,
+    double cornerRadius = 12,
+    bool solid = false,
   }) : this(
           key: key,
           onPressed: onPressed,
@@ -53,6 +57,8 @@ class AppButton extends StatelessWidget {
           foregroundColor: foregroundColor,
           height: height,
           padding: padding,
+          cornerRadius: cornerRadius,
+          solid: solid,
           variant: AppButtonVariant.text,
         );
 
@@ -70,6 +76,8 @@ class AppButton extends StatelessWidget {
     Color? foregroundColor,
     double? height,
     EdgeInsetsGeometry? padding,
+    double cornerRadius = 12,
+    bool solid = false,
   }) : this(
           key: key,
           onPressed: onPressed,
@@ -84,6 +92,8 @@ class AppButton extends StatelessWidget {
           foregroundColor: foregroundColor,
           height: height,
           padding: padding,
+          cornerRadius: cornerRadius,
+          solid: solid,
           variant: AppButtonVariant.secondary,
         );
 
@@ -101,6 +111,8 @@ class AppButton extends StatelessWidget {
     Color? foregroundColor,
     double? height,
     EdgeInsetsGeometry? padding,
+    double cornerRadius = 12,
+    bool solid = false,
   }) : this(
           key: key,
           onPressed: onPressed,
@@ -115,6 +127,8 @@ class AppButton extends StatelessWidget {
           foregroundColor: foregroundColor,
           height: height,
           padding: padding,
+          cornerRadius: cornerRadius,
+          solid: solid,
           variant: AppButtonVariant.destructive,
         );
 
@@ -131,12 +145,15 @@ class AppButton extends StatelessWidget {
   final Color? foregroundColor;
   final double? height;
   final EdgeInsetsGeometry? padding;
+  final double cornerRadius;
+  final bool solid;
 
   @override
   Widget build(BuildContext context) {
     final glass = context.isLiquidGlass;
     final scheme = Theme.of(context).colorScheme;
     final action = loading ? null : onPressed;
+    final shape = LiquidRoundedSuperellipse(borderRadius: cornerRadius);
     final text =
         child ?? Text(label!, maxLines: 1, overflow: TextOverflow.ellipsis);
     final first = loading
@@ -144,7 +161,9 @@ class AppButton extends StatelessWidget {
             dimension: 16,
             child: glass
                 ? const GlassProgressIndicator.circular(
-                    size: 16, strokeWidth: 2,)
+                    size: 16,
+                    strokeWidth: 2,
+                  )
                 : const CircularProgressIndicator(strokeWidth: 2),
           )
         : leadingIcon;
@@ -169,25 +188,16 @@ class AppButton extends StatelessWidget {
           (variant == AppButtonVariant.destructive ? scheme.onError : null);
       final buttonStyle = (variant == AppButtonVariant.destructive
                   ? FilledButton.styleFrom(
-                      backgroundColor: scheme.error,
-                      foregroundColor: color,
-                    ).merge(style)
-                  : style)
-              ?.copyWith(
-            padding: padding == null ? null : WidgetStatePropertyAll(padding),
-            foregroundColor: foregroundColor == null
-                ? null
-                : WidgetStatePropertyAll(foregroundColor),
-          ) ??
-          (padding != null || foregroundColor != null
-              ? ButtonStyle(
-                  padding:
-                      padding == null ? null : WidgetStatePropertyAll(padding),
-                  foregroundColor: foregroundColor == null
-                      ? null
-                      : WidgetStatePropertyAll(foregroundColor),
-                )
-              : null);
+                      backgroundColor: scheme.error, foregroundColor: color,)
+                  : const ButtonStyle())
+              .merge(style)
+          .copyWith(
+        shape: WidgetStatePropertyAll(shape),
+        padding: padding == null ? null : WidgetStatePropertyAll(padding),
+        foregroundColor: foregroundColor == null
+            ? null
+            : WidgetStatePropertyAll(foregroundColor),
+      );
       button = switch (variant) {
         AppButtonVariant.primary ||
         AppButtonVariant.destructive =>
@@ -225,19 +235,29 @@ class AppButton extends StatelessWidget {
           };
       final tint = destructive ? scheme.error : scheme.primary;
       final ink = action == null ? scheme.onSurfaceVariant : foreground;
+      final solidSurface = solid ||
+          InheritedGlassSurfaceStyle.maybeOf(context) ==
+              GlassSurfaceStyle.solid;
       button = GlassButton.custom(
+        shape: shape,
         onTap: action ?? _noop,
         enabled: action != null,
         label: semanticLabel ?? '',
-        settings: tokens.control(
-          tint: prominent ? tint : null,
-          strong: prominent,
-          enabled: action != null,
-        ),
+        settings: solidSurface
+            ? null
+            : tokens.control(
+                tint: prominent ? tint : null,
+                strong: prominent,
+                enabled: action != null,
+              ),
         style:
             textOnly ? GlassButtonStyle.transparent : GlassButtonStyle.filled,
-        surfaceStyle: GlassSurfaceStyle.glass,
-        quality: AppGlassTheme.controlQuality,
+        surfaceStyle:
+            solidSurface ? GlassSurfaceStyle.solid : GlassSurfaceStyle.glass,
+        color: solidSurface && !textOnly && prominent
+            ? (destructive ? scheme.errorContainer : scheme.primaryContainer)
+            : null,
+        quality: solidSurface ? null : AppGlassTheme.controlQuality,
         interactionScale: tokens.reduceMotion ? 1 : .96,
         stretch: tokens.reduceMotion ? 0 : .22,
         anchorStretch: !tokens.reduceMotion,

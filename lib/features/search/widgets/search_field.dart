@@ -1,7 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../../../core/icons/app_icons.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/glass/app_glass.dart';
 
@@ -14,12 +16,14 @@ class SearchField extends StatelessWidget {
     super.key,
     this.focusNode,
     this.onChanged,
+    this.autofocus = true,
   });
 
   final TextEditingController controller;
   final ValueChanged<String> onSubmitted;
   final VoidCallback onCancel;
   final FocusNode? focusNode;
+  final bool autofocus;
   final ValueChanged<String>? onChanged;
 
   @override
@@ -33,7 +37,7 @@ class SearchField extends StatelessWidget {
             child: AppSearchBar(
               controller: controller,
               focusNode: focusNode,
-              autofocus: true,
+              autofocus: autofocus,
               textInputAction: TextInputAction.search,
               onSubmitted: onSubmitted,
               onChanged: onChanged,
@@ -89,6 +93,108 @@ class SearchField extends StatelessWidget {
   }
 }
 
+/// 历史关键词保留普通点击；长按或右键才打开单条操作菜单。
+class _HistoryEntry extends StatefulWidget {
+  const _HistoryEntry(
+      {super.key, required this.keyword, required this.onTap, this.onRemove,});
+
+  final String keyword;
+  final VoidCallback onTap;
+  final VoidCallback? onRemove;
+
+  @override
+  State<_HistoryEntry> createState() => _HistoryEntryState();
+}
+
+class _HistoryEntryState extends State<_HistoryEntry> {
+  bool _menuOpen = false;
+
+  Future<void> _openMenu() async {
+    if (_menuOpen || widget.onRemove == null) return;
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final anchor = context.findRenderObject();
+    final overlay = navigator.overlay?.context.findRenderObject();
+    if (anchor is! RenderBox || overlay is! RenderBox || !anchor.hasSize) {
+      return;
+    }
+    final tokens = AppGlassTheme.of(context);
+    _menuOpen = true;
+    try {
+      if (context.isLiquidGlass) {
+        await showGlassContextMenu<void>(
+          context: context,
+          targetRect: anchor.localToGlobal(Offset.zero) & anchor.size,
+          rowBorderRadius: 10,
+          menuWidth: 180,
+          settings: tokens.overlay,
+          quality: AppGlassTheme.overlayQuality,
+          previewBuilder: (_) => Center(
+            child: Text(
+              widget.keyword,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.caption
+                  .copyWith(color: tokens.scheme.onSurface),
+            ),
+          ),
+          // Open the platter without glide-to-select; release alone never deletes.
+          actions: [
+            GlassContextMenuAction(
+              isDestructive: true,
+              icon: const SvgIcon(AppIcons.trash, size: 18),
+              onPressed: () {
+                if (mounted) widget.onRemove?.call();
+              },
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      } else {
+        final rect =
+            anchor.localToGlobal(Offset.zero, ancestor: overlay) & anchor.size;
+        final selected = await showMenu<bool>(
+          context: context,
+          useRootNavigator: true,
+          position: RelativeRect.fromSize(rect, overlay.size),
+          items: [
+            PopupMenuItem<bool>(
+              value: true,
+              child: Row(
+                children: [
+                  SvgIcon(AppIcons.trash, size: 18, color: tokens.scheme.error),
+                  const SizedBox(width: 10),
+                  Text('删除', style: TextStyle(color: tokens.scheme.error)),
+                ],
+              ),
+            ),
+          ],
+        );
+        if (mounted && selected == true) widget.onRemove?.call();
+      }
+    } finally {
+      _menuOpen = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final openMenu =
+        widget.onRemove == null ? null : () => unawaited(_openMenu());
+    return GestureDetector(
+      onLongPress: openMenu,
+      onSecondaryTap: openMenu,
+      child: AppChip(
+        kind: AppChipKind.action,
+        cornerRadius: 10,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        onTap: widget.onTap,
+        label:
+            Text(widget.keyword, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
+    );
+  }
+}
+
 /// 历史 chip 行（最多 10 条 + 清空）。
 class HistoryChips extends StatelessWidget {
   const HistoryChips({
@@ -133,28 +239,15 @@ class HistoryChips extends StatelessWidget {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: history.map((keyword) {
-            void select() => onSelect(keyword);
-            final label = Text(keyword);
-            final remove = onRemove;
-            return AppChip(
-              label: Text(keyword, style: AppTypography.caption),
-              onTap: select,
-              onDeleted: remove == null ? null : () => remove(keyword),
-              kind: AppChipKind.input,
-              metalChild: ActionChip(
-                label: label,
-                onPressed: select,
-                labelStyle:
-                    AppTypography.caption.copyWith(color: scheme.onSurface),
-                backgroundColor: scheme.surfaceContainer,
-                side: BorderSide(color: scheme.outlineVariant),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppColors.radiusPill),
-                ),
+          children: [
+            for (final keyword in history)
+              _HistoryEntry(
+                key: ValueKey(keyword),
+                keyword: keyword,
+                onTap: () => onSelect(keyword),
+                onRemove: onRemove == null ? null : () => onRemove!(keyword),
               ),
-            );
-          }).toList(growable: false),
+          ],
         ),
       ],
     );

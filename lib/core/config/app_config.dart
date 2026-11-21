@@ -2,7 +2,7 @@
 abstract final class AppConfig {
   /// 应用展示名 / 关于页版本前缀，实际版本号来自 pubspec（package_info 未接入时用此常量）。
   static const String appName = 'JMComic';
-  static const String appVersion = '0.3.3';
+  static const String appVersion = '0.4.0';
 
   /// 版权与许可证（关于页展示；仓库根 LICENSE 为全文，assets/licenses 里是同一份）。
   static const String copyright = 'Copyright (C) 2026 xzxycx';
@@ -72,5 +72,6 @@ abstract final class AppConfig {
   static const int maxDownloadRecords = 200;
 
   /// 是否输出调试日志。
-  static const bool verboseLog = bool.fromEnvironment('JM_VERBOSE', defaultValue: false);
+  static const bool verboseLog =
+      bool.fromEnvironment('JM_VERBOSE', defaultValue: false);
 }

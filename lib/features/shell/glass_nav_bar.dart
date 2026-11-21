@@ -111,9 +111,16 @@ class LiquidGlassNavBar extends StatelessWidget {
       selectedLabelColor: tokens.accent,
       unselectedLabelColor: scheme.onSurfaceVariant,
       selectedLabelStyle: AppTypography.micro.copyWith(
+        inherit: false,
+        color: tokens.accent,
+        decoration: TextDecoration.none,
         fontWeight: FontWeight.w600,
       ),
-      unselectedLabelStyle: AppTypography.micro,
+      unselectedLabelStyle: AppTypography.micro.copyWith(
+        inherit: false,
+        color: scheme.onSurfaceVariant,
+        decoration: TextDecoration.none,
+      ),
       indicatorColor: tokens.selection,
       interactionGlowColor: scheme.primary,
       interactionBehavior: tokens.reduceMotion

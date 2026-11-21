@@ -8,6 +8,7 @@ class JmAlbumSummary {
     required this.id,
     required this.title,
     this.author = 'N/A',
+    this.tags = const <String>[],
     this.categoryId = '0',
     this.categoryTitle = '',
     this.subCategoryTitle = '',
@@ -20,6 +21,13 @@ class JmAlbumSummary {
   final String id;
   final String title;
   final String author;
+  final List<String> tags;
+
+  bool get hasKnownAuthor {
+    final value = author.trim();
+    return value.isNotEmpty && value.toUpperCase() != 'N/A';
+  }
+
   final String categoryId;
   final String categoryTitle;
   final String subCategoryTitle;
@@ -30,13 +38,11 @@ class JmAlbumSummary {
 
   String get displayTitle => title.trim().isEmpty ? 'JM$id' : title.trim();
 
-  String get displayAuthor {
-    final value = author.trim();
-    return (value.isEmpty || value == 'N/A') ? '未知作者' : value;
-  }
+  String get displayAuthor => hasKnownAuthor ? author.trim() : '未知作者';
 
-  DateTime? get updatedTime =>
-      updateAt <= 0 ? null : DateTime.fromMillisecondsSinceEpoch(updateAt * 1000);
+  DateTime? get updatedTime => updateAt <= 0
+      ? null
+      : DateTime.fromMillisecondsSinceEpoch(updateAt * 1000);
 
   /// 7 天内上架（列表接口的 `adddate` 是 `yyyy-MM-dd`），用于卡片的 NEW 角标。
   bool get isNew {
@@ -52,6 +58,7 @@ class JmAlbumSummary {
       id: asStringOr(json['id'], ''),
       title: asStringOr(json['name'], ''),
       author: asStringOr(json['author'], 'N/A'),
+      tags: List.unmodifiable(asTagList(json['tags'] ?? json['tag']).toSet()),
       categoryId: asStringOr(category?['id'], '0'),
       categoryTitle: asStringOr(category?['title'], ''),
       subCategoryTitle: asStringOr(categorySub?['title'], ''),
@@ -66,8 +73,12 @@ class JmAlbumSummary {
         'id': id,
         'name': title,
         'author': author,
+        if (tags.isNotEmpty) 'tags': tags,
         'category': <String, dynamic>{'id': categoryId, 'title': categoryTitle},
-        'category_sub': <String, dynamic>{'id': null, 'title': subCategoryTitle.isEmpty ? null : subCategoryTitle},
+        'category_sub': <String, dynamic>{
+          'id': null,
+          'title': subCategoryTitle.isEmpty ? null : subCategoryTitle,
+        },
         'update_at': updateAt,
         'adddate': addDate,
         'liked': liked,
@@ -78,6 +89,7 @@ class JmAlbumSummary {
         id: id,
         title: title,
         author: author,
+        tags: tags,
         categoryId: categoryId,
         categoryTitle: categoryTitle,
         subCategoryTitle: subCategoryTitle,
@@ -88,8 +100,7 @@ class JmAlbumSummary {
       );
 
   @override
-  bool operator ==(Object other) =>
-      other is JmAlbumSummary && other.id == id;
+  bool operator ==(Object other) => other is JmAlbumSummary && other.id == id;
 
   @override
   int get hashCode => id.hashCode;

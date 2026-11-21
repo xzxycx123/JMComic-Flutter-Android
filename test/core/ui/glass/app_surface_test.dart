@@ -21,8 +21,7 @@ Widget _glassHost(Widget child) => LiquidGlassWidgets.wrap(
     );
 
 void main() {
-  testWidgets('content uses standard glass; control groups do not refract',
-      (tester) async {
+  testWidgets('list content and control groups do not refract', (tester) async {
     await tester.pumpWidget(
       _glassHost(
         const Column(
@@ -37,15 +36,15 @@ void main() {
         ),
       ),
     );
-    final content = tester.widget<GlassContainer>(find.byType(GlassContainer));
-    expect(content.quality, GlassQuality.standard);
-    expect(content.useOwnLayer, isFalse);
+    final surfaces =
+        tester.widgetList<GlassContainer>(find.byType(GlassContainer));
+    expect(surfaces, hasLength(2));
+    expect(surfaces.every((surface) => !surface.useOwnLayer), isTrue);
+    expect(find.byType(AdaptiveGlass), findsNothing);
     expect(find.byType(GlassSwitch), findsOneWidget);
-    expect(
-      find.ancestor(
-          of: find.byType(GlassSwitch), matching: find.byType(GlassContainer),),
-      findsNothing,
-    );
+    final switchContext = tester.element(find.byType(GlassSwitch));
+    expect(InheritedGlassSurfaceStyle.maybeOf(switchContext),
+        GlassSurfaceStyle.solid,);
   });
 
   testWidgets('slider taps seek once and drags commit only on release',

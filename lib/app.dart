@@ -26,6 +26,7 @@ class JmComicApp extends ConsumerWidget {
 
     return LiquidGlassWidgets.wrap(
       theme: AppGlassTheme.preset,
+      respectSystemAccessibility: true,
       brightnessResolver: Theme.maybeBrightnessOf,
       child: MaterialApp.router(
         title: AppConfig.appName,

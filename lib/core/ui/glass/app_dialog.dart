@@ -58,7 +58,7 @@ abstract final class AppDialog {
       title: title,
       message: message,
       settings: theme.overlay,
-      quality: AppGlassTheme.controlQuality,
+      quality: AppGlassTheme.overlayQuality,
       barrierDismissible: barrierDismissible,
       content: Builder(
         builder: (context) {
@@ -68,17 +68,20 @@ abstract final class AppDialog {
           }
           return Theme(
             data: materialTheme,
-            child: Material(
-              type: MaterialType.transparency,
-              child: Builder(
-                builder: (context) => Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (iconBuilder != null)
-                      Center(child: iconBuilder(context)),
-                    if (contentBuilder != null) contentBuilder(context),
-                  ],
+            child: InheritedGlassSurfaceStyle(
+              surfaceStyle: GlassSurfaceStyle.solid,
+              child: Material(
+                type: MaterialType.transparency,
+                child: Builder(
+                  builder: (context) => Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (iconBuilder != null)
+                        Center(child: iconBuilder(context)),
+                      if (contentBuilder != null) contentBuilder(context),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -108,7 +111,9 @@ abstract final class AppDialog {
   }
 
   static Widget _metalAction<T>(
-      BuildContext context, AppDialogAction<T> action,) {
+    BuildContext context,
+    AppDialogAction<T> action,
+  ) {
     final scheme = Theme.of(context).colorScheme;
     void close() {
       if (ModalRoute.of(context)?.isCurrent == true) {
@@ -122,7 +127,8 @@ abstract final class AppDialog {
             style: action.destructive
                 ? FilledButton.styleFrom(
                     backgroundColor: scheme.error,
-                    foregroundColor: scheme.onError,)
+                    foregroundColor: scheme.onError,
+                  )
                 : null,
             child: Text(action.label),
           )

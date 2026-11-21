@@ -22,12 +22,14 @@ class AlbumCard extends StatelessWidget {
     required this.album,
     super.key,
     this.layout = AlbumCardLayout.grid,
+    this.caption,
     this.onTap,
     this.onLongPress,
   });
 
   final JmAlbumSummary album;
   final AlbumCardLayout layout;
+  final Widget? caption;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
@@ -79,7 +81,7 @@ class AlbumCard extends StatelessWidget {
                   ),
                 ),
               ),
-            _CardCaption(album: album),
+            caption ?? _CardCaption(album: album),
           ],
         ),
       ],

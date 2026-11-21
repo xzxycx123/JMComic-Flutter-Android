@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/glass/app_glass.dart';
 import '../../../data/models/jm_category.dart';
@@ -20,7 +19,6 @@ class CategoryChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return SizedBox(
       height: 44,
       child: ListView.separated(
@@ -45,30 +43,9 @@ class CategoryChips extends StatelessWidget {
             selected: selected,
             onTap: select,
             kind: AppChipKind.choice,
+            cornerRadius: 10,
+            fillSelected: true,
             padding: padding,
-            metalChild: GestureDetector(
-              onTap: select,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding: padding,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color:
-                      selected ? scheme.primary : scheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(AppColors.radiusPill),
-                  border: Border.all(
-                    color: selected ? Colors.transparent : scheme.outline,
-                  ),
-                ),
-                child: DefaultTextStyle.merge(
-                  style: TextStyle(
-                    color:
-                        selected ? scheme.onPrimary : scheme.onSurfaceVariant,
-                  ),
-                  child: label,
-                ),
-              ),
-            ),
           );
         },
       ),

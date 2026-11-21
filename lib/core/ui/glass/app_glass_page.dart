@@ -5,8 +5,8 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_glass_theme.dart';
 import '../../theme/interface_style_scope.dart';
 
-/// Keeps a single Scaffold and the same body subtree across material changes.
-class AppGlassPage extends StatelessWidget {
+/// Keeps the same body subtree while choosing the platform chrome.
+class AppGlassPage extends StatefulWidget {
   const AppGlassPage({
     super.key,
     required this.body,
@@ -29,28 +29,45 @@ class AppGlassPage extends StatelessWidget {
   final bool? resizeToAvoidBottomInset;
 
   @override
+  State<AppGlassPage> createState() => _AppGlassPageState();
+}
+
+class _AppGlassPageState extends State<AppGlassPage> {
+  final GlobalKey _bodyKey = GlobalKey();
+
+  @override
   Widget build(BuildContext context) {
-    final glass = context.isLiquidGlass;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (glass && showBackground)
-          const Positioned.fill(child: AppGlassBackground()),
-        Scaffold(
-          appBar: appBar,
-          backgroundColor: glass ? Colors.transparent : backgroundColor,
-          extendBody: extendBody,
-          extendBodyBehindAppBar: extendBodyBehindAppBar,
-          resizeToAvoidBottomInset: resizeToAvoidBottomInset,
-          bottomNavigationBar: bottomNavigationBar == null
-              ? null
-              : GlassBackdropGroup(
-                  enabled: glass,
-                  child: bottomNavigationBar!,
-                ),
-          body: body,
-        ),
-      ],
+    final body = KeyedSubtree(key: _bodyKey, child: widget.body);
+    if (context.isLiquidGlass) {
+      final hasBottomBar = widget.bottomNavigationBar != null;
+      if (!widget.showBackground && widget.appBar == null && !hasBottomBar) {
+        return Material(type: MaterialType.transparency, child: body);
+      }
+      return GlassScaffold(
+        body: Material(type: MaterialType.transparency, child: body),
+        appBar: widget.appBar,
+        bottomBar: hasBottomBar
+            ? GlassBackdropGroup(child: widget.bottomNavigationBar!)
+            : null,
+        bottomBarHeight: hasBottomBar ? 68 : null,
+        background: widget.showBackground ? const AppGlassBackground() : null,
+        backgroundColor: widget.showBackground
+            ? Theme.of(context).colorScheme.surface
+            : Colors.transparent,
+        enableBackgroundSampling: false,
+        statusBarStyle: GlassStatusBarStyle.auto,
+        resizeToAvoidBottomInset: widget.resizeToAvoidBottomInset,
+        extendBody: widget.extendBody || widget.extendBodyBehindAppBar,
+      );
+    }
+    return Scaffold(
+      appBar: widget.appBar,
+      backgroundColor: widget.backgroundColor,
+      extendBody: widget.extendBody,
+      extendBodyBehindAppBar: widget.extendBodyBehindAppBar,
+      resizeToAvoidBottomInset: widget.resizeToAvoidBottomInset,
+      bottomNavigationBar: widget.bottomNavigationBar,
+      body: body,
     );
   }
 }
@@ -89,22 +106,26 @@ class AppGlassAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final glass = context.isLiquidGlass;
-    return GlassBackdropGroup(
-      enabled: glass,
-      child: AppBar(
-        title: title,
-        leading: leading,
-        actions: actions,
-        titleSpacing: titleSpacing,
-        centerTitle: centerTitle,
-        toolbarHeight: toolbarHeight,
-        backgroundColor: glass ? Colors.transparent : null,
-        surfaceTintColor: glass ? Colors.transparent : null,
-        automaticallyImplyLeading: !glass,
-        flexibleSpace:
-            glass ? const AppGlassChrome(child: SizedBox.expand()) : null,
-      ),
+    if (context.isLiquidGlass) {
+      return DefaultTextStyle.merge(
+        style:
+            Theme.of(context).appBarTheme.titleTextStyle ?? const TextStyle(),
+        child: GlassAppBar(
+          title: title,
+          leading: leading,
+          actions: actions,
+          centerTitle: centerTitle ?? false,
+          toolbarHeight: toolbarHeight,
+        ),
+      );
+    }
+    return AppBar(
+      title: title,
+      leading: leading,
+      actions: actions,
+      titleSpacing: titleSpacing,
+      centerTitle: centerTitle,
+      toolbarHeight: toolbarHeight,
     );
   }
 }

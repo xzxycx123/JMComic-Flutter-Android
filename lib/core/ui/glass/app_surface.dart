@@ -68,36 +68,28 @@ class AppSurface extends StatelessWidget {
     }
 
     final theme = AppGlassTheme.of(context);
-    if (kind == AppSurfaceKind.controlGroup) {
-      // No backdrop sampling or clipping: controls own their lens/glow.
-      final surface = theme.scheme.surfaceContainerHigh;
-      return Container(
-        margin: margin,
-        decoration: BoxDecoration(
-          color: color == null
-              ? surface.withValues(alpha: 0.78)
-              : Color.alphaBlend(color!.withValues(alpha: 0.30), surface),
-          borderRadius: radius,
-          border: Border.all(
-              color: theme.scheme.outlineVariant.withValues(alpha: 0.48),),
-        ),
-        child: body,
-      );
-    }
-
     final overlay = kind == AppSurfaceKind.overlay;
-    return Padding(
-      padding: margin ?? EdgeInsets.zero,
-      child: GlassContainer.card(
-        shape: LiquidRoundedSuperellipse(borderRadius: radius.topLeft.x),
-        padding: EdgeInsets.zero,
-        settings: overlay ? theme.overlay : theme.control(tint: color),
-        useOwnLayer: overlay,
-        quality: overlay
-            ? AppGlassTheme.controlQuality
-            : AppGlassTheme.scrollQuality,
-        child: body,
-      ),
+    final grouped = kind == AppSurfaceKind.controlGroup;
+    return GlassContainer.card(
+      margin: margin,
+      shape: LiquidRoundedSuperellipse(borderRadius: radius.topLeft.x),
+      padding: EdgeInsets.zero,
+      color: overlay
+          ? null
+          : color ??
+              (grouped
+                  ? theme.scheme.surfaceContainerHigh
+                  : theme.scheme.surfaceContainer),
+      surfaceStyle: overlay ? GlassSurfaceStyle.glass : GlassSurfaceStyle.solid,
+      settings: overlay ? theme.overlay : null,
+      useOwnLayer: overlay,
+      quality: overlay ? AppGlassTheme.overlayQuality : null,
+      child: overlay
+          ? InheritedGlassSurfaceStyle(
+              surfaceStyle: GlassSurfaceStyle.solid,
+              child: body,
+            )
+          : body,
     );
   }
 }

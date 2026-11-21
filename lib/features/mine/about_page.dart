@@ -19,6 +19,7 @@ class AboutPage extends StatelessWidget {
     return AppGlassPage(
       appBar: AppGlassAppBar(
         leading: AppIconButton(
+          tooltip: '返回',
           icon: IconTheme(
             data: IconThemeData(color: scheme.onSurface),
             child: const SvgIcon(AppIcons.back, size: 22),

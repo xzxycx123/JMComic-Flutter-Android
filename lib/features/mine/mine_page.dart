@@ -62,6 +62,7 @@ class MinePage extends ConsumerWidget {
               onLogin: () => context.push('/login'),
               onLogout: () => _confirmLogout(context, ref),
             ),
+            const SizedBox(height: 10),
             _SettingTile(
               // 收藏图标是五角星（与详情页一致）。
               icon: AppIcons.star,

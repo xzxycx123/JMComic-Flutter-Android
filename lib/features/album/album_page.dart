@@ -21,6 +21,7 @@ import '../home/widgets/cover_image.dart';
 import '../home/widgets/feed_skeleton.dart';
 import '../home/widgets/section_header.dart';
 import '../collect/collect_providers.dart';
+import '../search/search_page.dart';
 import 'album_providers.dart';
 import 'widgets/chapter_tile.dart';
 import 'widgets/comment_section.dart';
@@ -203,6 +204,7 @@ class _AlbumContent extends ConsumerWidget {
                     ),
                     onPressed: () => _toggleFavorite(context, ref, album),
                   ),
+                  const SizedBox(width: 10),
                   AppIconButton(
                     tooltip: '分享',
                     color: scheme.onSurface,
@@ -263,7 +265,12 @@ class _AlbumContent extends ConsumerWidget {
                 ),
               ),
               if (album.related.isNotEmpty) ...<Widget>[
-                const SliverToBoxAdapter(child: SectionHeader(title: '相关推荐')),
+                SliverToBoxAdapter(
+                  child: ColoredBox(
+                    color: scheme.surface,
+                    child: const SectionHeader(title: '相关推荐'),
+                  ),
+                ),
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   sliver: SliverGrid(
@@ -292,7 +299,8 @@ class _AlbumContent extends ConsumerWidget {
           ),
         ],
       ),
-      bottomNavigationBar: AppGlassChrome(
+      bottomNavigationBar: ColoredBox(
+        color: scheme.surface,
         child: SafeArea(
           top: false,
           child: Padding(
@@ -568,26 +576,22 @@ class _InfoSection extends StatelessWidget {
               runSpacing: 8,
               children: album.tags.take(12).map((tag) {
                 const padding =
-                    EdgeInsets.symmetric(horizontal: 10, vertical: 4);
+                    EdgeInsets.symmetric(horizontal: 10, vertical: 15);
                 final label = Text(
                   tag,
                   style: AppTypography.micro
                       .copyWith(color: scheme.onSurfaceVariant),
                 );
+                void openTagSearch() => context.push(
+                      SearchPage.keywordLocation(tag),
+                    );
                 return AppChip(
                   label: label,
+                  onTap: openTagSearch,
                   padding: padding,
-                  kind: AppChipKind.staticLabel,
+                  cornerRadius: 10,
+                  kind: AppChipKind.action,
                   foregroundColor: scheme.onSurfaceVariant,
-                  metalChild: Container(
-                    padding: padding,
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainer,
-                      borderRadius: BorderRadius.circular(AppColors.radiusPill),
-                      border: Border.all(color: scheme.outlineVariant),
-                    ),
-                    child: label,
-                  ),
                 );
               }).toList(growable: false),
             ),

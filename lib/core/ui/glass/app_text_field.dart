@@ -84,6 +84,9 @@ class _AppTextFieldState extends State<AppTextField> {
     final theme = AppGlassTheme.of(context);
     final decoration = field.decoration;
     final enabled = field.enabled ?? decoration?.enabled ?? true;
+    final solid = InheritedGlassSurfaceStyle.maybeOf(context) ==
+            GlassSurfaceStyle.solid ||
+        field.isSearch;
     final shape =
         LiquidRoundedSuperellipse(borderRadius: field.isSearch ? 22 : 14);
     // The package uses CupertinoTextField. Preserve Material adornment layout,
@@ -124,6 +127,7 @@ class _AppTextFieldState extends State<AppTextField> {
             field.selectionControls ?? materialTextSelectionHandleControls,
         onTapOutside: field.onTapOutside,
         shape: shape,
+        surfaceStyle: solid ? GlassSurfaceStyle.solid : null,
         settings: theme.control(enabled: enabled),
         quality: AppGlassTheme.controlQuality,
         interactionBehavior: theme.reduceMotion
@@ -176,18 +180,33 @@ class _AppTextFieldState extends State<AppTextField> {
         decoration.contentPadding == null &&
         !field.isSearch) {
       input = Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
-          child: input,);
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+        child: input,
+      );
     }
     return ListenableBuilder(
       listenable: _focus,
       child: input,
       builder: (context, child) {
         final focused = _focus.hasFocus && enabled;
+        if (solid) {
+          return DecoratedBox(
+            decoration: ShapeDecoration(
+              color: theme.scheme.surfaceContainerHigh,
+              shape: shape.copyWith(
+                  side: BorderSide(
+                color: focused ? theme.accent : theme.scheme.outlineVariant,
+              ),),
+            ),
+            child: child!,
+          );
+        }
         return AdaptiveGlass(
           shape: shape,
           settings: theme.control(
-              tint: focused ? theme.scheme.primary : null, enabled: enabled,),
+            tint: focused ? theme.scheme.primary : null,
+            enabled: enabled,
+          ),
           quality: AppGlassTheme.controlQuality,
           useOwnLayer: false,
           clipBehavior: Clip.none,
@@ -195,9 +214,10 @@ class _AppTextFieldState extends State<AppTextField> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(field.isSearch ? 22 : 14),
               border: Border.all(
-                  color: focused
-                      ? theme.accent
-                      : theme.scheme.outlineVariant.withValues(alpha: .55),),
+                color: focused
+                    ? theme.accent
+                    : theme.scheme.outlineVariant.withValues(alpha: .55),
+              ),
             ),
             child: child!,
           ),

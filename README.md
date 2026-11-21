@@ -42,12 +42,12 @@
 
 ## 下载安装
 
-1. 打开仓库的 **Releases** 页，下载最新 `JMComic-0.3.3-release.apk`；
+1. 打开仓库的 **Releases** 页，下载最新 `JMComic-0.4.0-release.apk`；
 2. 允许「安装未知来源应用」后安装（APK 使用 debug keystore 签名，仅自用，不上架应用商店）；
 3. 首次启动如提示通知权限，建议允许（下载进度通知需要它）。
 
 ```bash
-adb install -r JMComic-0.3.3-release.apk
+adb install -r JMComic-0.4.0-release.apk
 ```
 
 ---

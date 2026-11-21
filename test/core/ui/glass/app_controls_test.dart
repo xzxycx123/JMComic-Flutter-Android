@@ -46,6 +46,13 @@ void main() {
     );
     await tester.pumpWidget(_host(cta));
     expect(find.byType(FilledButton), findsOneWidget);
+    expect(
+        tester
+            .widget<FilledButton>(find.byType(FilledButton))
+            .style
+            ?.shape
+            ?.resolve({}),
+        isA<LiquidRoundedSuperellipse>(),);
     await tester.tap(find.byType(FilledButton));
     expect(clicks, 1);
 
@@ -92,7 +99,10 @@ void main() {
             ),
             const AppChip(label: Text('静态标签')),
             AppChip(
-                label: const Text('已禁用'), enabled: false, onTap: () => taps++,),
+              label: const Text('已禁用'),
+              enabled: false,
+              onTap: () => taps++,
+            ),
           ],
         ),
         style: AppInterfaceStyle.liquidGlass,

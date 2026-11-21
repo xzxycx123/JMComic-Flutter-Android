@@ -168,6 +168,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   bool _hudVisible = true;
   bool _locked = false;
   bool _switchingLine = false;
+  bool _hudPickerOpen = false;
   Timer? _hudTimer;
   DateTime _lastProgressWrite = DateTime.fromMillisecondsSinceEpoch(0);
   double _bounceOffset = 0;
@@ -253,10 +254,10 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
 
   // ---------------------------------------------------------------- 翻页
   /// [animate] 为 null 时按设置里的「翻页动画」开关决定：关掉就是瞬切。
-  void _goToPage(int page, {bool? animate}) {
+  void _goToPage(int page, {bool? animate, bool bounceAtEdge = true}) {
     final target = page.clamp(1, _total == 0 ? 1 : _total).toInt();
     if (target == _page) {
-      if (target <= 1 || target >= _total) {
+      if (bounceAtEdge && (target <= 1 || target >= _total)) {
         _bounceController.forward(from: 0);
         HapticFeedback.lightImpact();
       }
@@ -286,6 +287,12 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
       _scrollController
           .jumpTo(ratio * _scrollController.position.maxScrollExtent);
     }
+  }
+
+  void _commitHudSeek(int page) {
+    final glass = context.isLiquidGlass;
+    if (_dragPage != null) setState(() => _dragPage = null);
+    _goToPage(page, animate: glass ? false : null, bounceAtEdge: !glass);
   }
 
   void _previousPage() {
@@ -339,7 +346,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
 
   void _restartHudTimer() {
     _hudTimer?.cancel();
-    if (!_hudVisible) return;
+    if (!_hudVisible || _hudPickerOpen) return;
     _hudTimer = Timer(const Duration(seconds: 3), () {
       if (!mounted) return;
       setState(() => _hudVisible = false);
@@ -381,82 +388,102 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   String get _lineLabel =>
       JmConstants.lineLabelOf(ref.read(jmApiProvider).apiHost);
 
-  /// 顶栏「分流」菜单：切换 API 线路 -> 重新 /setting 取该线路图床 -> 清缓存按当前页重载。
-  Future<void> _pickLine() async {
+  /// 当前线路置顶，其余已收录分流按顺序排列，最后是其它/手填线路。
+  List<String> _lineChoices() {
     final api = ref.read(jmApiProvider);
-    final store = ref.read(endpointStoreProvider);
+    final available = api.availableHosts;
     final current = api.apiHost;
-    // 当前线路置顶；其余已收录分流（线路1..5）按顺序，最后是其它/手填线路。
-    final hosts = <String>[...api.availableHosts]..sort((a, b) {
+    return <String>[...available]..sort((a, b) {
         if (a == current) return -1;
         if (b == current) return 1;
         final rank =
             JmConstants.lineRankOf(a).compareTo(JmConstants.lineRankOf(b));
-        if (rank != 0) return rank;
-        return api.availableHosts
-            .indexOf(a)
-            .compareTo(api.availableHosts.indexOf(b));
+        return rank != 0
+            ? rank
+            : available.indexOf(a).compareTo(available.indexOf(b));
       });
-    if (hosts.isEmpty) return;
+  }
 
+  Future<void> _pickLine() async {
+    final hosts = _lineChoices();
+    if (hosts.isEmpty) return;
+    _hudTimer?.cancel();
     final selected = await AppSheet.show<String>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.darkSurfaceContainer,
       showDragHandle: true,
-      builder: (sheetContext) {
-        final content = SafeArea(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(sheetContext).size.height * 0.62,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
-                  child: Text(
-                    '切换分流',
-                    style: AppTypography.sectionTitle
-                        .copyWith(color: AppColors.readerInk),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(
-                    'JMComic 常用 4 条分流（线路1-4）；切换后重新拉 /setting 取该线路图床，并按当前页重载',
-                    style: AppTypography.micro.copyWith(
-                      color: AppColors.readerInk.withValues(alpha: 0.65),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: <Widget>[
-                      for (final host in hosts)
-                        _LineTile(
-                          host: host,
-                          current: host == current,
-                          health: store.healthOf(host),
-                          onTap: () => Navigator.of(sheetContext).pop(host),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
+      builder: (sheetContext) => ReaderControlsTheme(
+        child: SafeArea(
+          child: _linePicker(
+            sheetContext,
+            hosts: hosts,
+            onSelect: Navigator.of(sheetContext).pop<String>,
           ),
-        );
-        return ReaderControlsTheme(child: content);
-      },
+        ),
+      ),
     );
+    if (!mounted) return;
+    _restartHudTimer();
+    if (selected != null) await _applyLine(selected);
+  }
 
-    if (selected == null || selected == current || !mounted) return;
+  Widget _buildGlassLinePicker(BuildContext context, VoidCallback close) =>
+      _linePicker(
+        context,
+        hosts: _lineChoices(),
+        onSelect: (host) {
+          close();
+          unawaited(_applyLine(host));
+        },
+      );
 
+  Widget _linePicker(
+    BuildContext context, {
+    required List<String> hosts,
+    required ValueChanged<String> onSelect,
+  }) {
+    final store = ref.read(endpointStoreProvider);
+    final current = ref.read(jmApiProvider).apiHost;
+    final glass = context.isLiquidGlass;
+    return ConstrainedBox(
+      constraints:
+          BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .62),
+      child: ListView(
+        shrinkWrap: true,
+        primary: false,
+        padding: EdgeInsets.fromLTRB(0, glass ? 14 : 0, 0, 8),
+        children: <Widget>[
+          Padding(
+            padding: EdgeInsets.fromLTRB(glass ? 16 : 20, 0, 20, 6),
+            child: Text('切换分流',
+                style: AppTypography.sectionTitle
+                    .copyWith(color: AppColors.readerInk),),
+          ),
+          if (!glass)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                'JMComic 常用 4 条分流（线路1-4）；切换后重新拉 /setting 取该线路图床，并按当前页重载',
+                style: AppTypography.micro.copyWith(
+                    color: AppColors.readerInk.withValues(alpha: .65),),
+              ),
+            ),
+          for (final host in hosts)
+            _LineTile(
+              host: host,
+              current: host == current,
+              health: store.healthOf(host),
+              onTap: () => onSelect(host),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _applyLine(String selected) async {
+    final api = ref.read(jmApiProvider);
+    if (!mounted || _switchingLine || selected == api.apiHost) return;
     setState(() => _switchingLine = true);
     final ok = await api.switchApiHost(selected);
     if (!mounted) return;
@@ -512,11 +539,17 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
               lineLabel: _lineLabel,
               switchingLine: _switchingLine,
               onSwitchLine: _pickLine,
+              glassPickerBuilder: _buildGlassLinePicker,
+              glassPickerHeight: 52 + _lineChoices().length * 72.0,
+              onGlassPickerOpenChanged: (open) {
+                _hudPickerOpen = open;
+                _restartHudTimer();
+              },
               onExit: _exit,
               onToggleMode: _toggleMode,
-              onJump: (page) {
-                setState(() => _dragPage = null);
-                _goToPage(page);
+              onJump: _commitHudSeek,
+              onSliderCancel: () {
+                if (_dragPage != null) setState(() => _dragPage = null);
               },
               onSliderChanged: (value) {
                 setState(() {
@@ -789,26 +822,21 @@ class _LineTile extends StatelessWidget {
           ),
           if (current) ...<Widget>[
             const SizedBox(width: 8),
-            AppChip(
-              kind: AppChipKind.staticLabel,
-              color: AppColors.darkPrimaryContainer,
-              foregroundColor: AppColors.darkOnPrimaryContainer,
+            Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              label: currentLabel,
-              metalChild: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(
-                  color: AppColors.darkPrimaryContainer,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: currentLabel,
+              decoration: BoxDecoration(
+                color: AppColors.darkPrimaryContainer,
+                borderRadius: BorderRadius.circular(6),
               ),
+              child: currentLabel,
             ),
           ],
         ],
       ),
       subtitle: Text(
         host,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: AppTypography.micro
             .copyWith(color: AppColors.readerInk.withValues(alpha: 0.6)),
       ),

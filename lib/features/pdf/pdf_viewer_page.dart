@@ -57,6 +57,7 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
     with SingleTickerProviderStateMixin {
   static const int _cacheLimit = 12;
 
+  late final PdfReader _reader;
   late final PageController _pageController = PageController();
   late final ScrollController _scrollController = ScrollController();
   late final AnimationController _bounceController = AnimationController(
@@ -76,6 +77,7 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
   int? _dragPage;
   int _renderWidth = 1080;
   bool _hudVisible = true;
+  bool _hudPickerOpen = false;
   bool _locked = false;
   double _bounceOffset = 0;
   Timer? _hudTimer;
@@ -85,6 +87,7 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
   @override
   void initState() {
     super.initState();
+    _reader = ref.read(pdfReaderProvider);
     _bounceController.addListener(() {
       setState(() {
         _bounceOffset = math.sin(_bounceController.value * math.pi) * 8;
@@ -105,7 +108,7 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
   @override
   void dispose() {
     _hudTimer?.cancel();
-    unawaited(ref.read(pdfReaderProvider).close());
+    unawaited(_reader.close());
     for (final controller in _zoom.values) {
       controller.dispose();
     }
@@ -125,7 +128,7 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
       _failed.clear();
     });
     try {
-      final info = await ref.read(pdfReaderProvider).open(widget.args.uri);
+      final info = await _reader.open(widget.args.uri);
       if (!mounted) return;
       if (info.isEmpty) {
         setState(() => _error = '这个 PDF 没有可显示的页面');
@@ -148,9 +151,7 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
     if (_rendered.containsKey(index) || _rendering.contains(index)) return;
     _rendering.add(index);
     try {
-      final bytes = await ref
-          .read(pdfReaderProvider)
-          .render(widget.args.uri, index, _renderWidth);
+      final bytes = await _reader.render(widget.args.uri, index, _renderWidth);
       if (bytes != null && bytes.isNotEmpty) {
         _rendered[index] = bytes;
         _failed.remove(index);
@@ -186,10 +187,10 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
   }
 
   // ---------------------------------------------------------------- 翻页
-  void _goToPage(int page, {bool? animate}) {
+  void _goToPage(int page, {bool? animate, bool bounceAtEdge = true}) {
     final target = page.clamp(1, math.max(1, _total)).toInt();
     if (target == _page) {
-      if (target <= 1 || target >= _total) {
+      if (bounceAtEdge && (target <= 1 || target >= _total)) {
         _bounceController.forward(from: 0);
         HapticFeedback.lightImpact();
       }
@@ -219,6 +220,12 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
     }
   }
 
+  void _commitHudSeek(int page) {
+    final glass = context.isLiquidGlass;
+    if (_dragPage != null) setState(() => _dragPage = null);
+    _goToPage(page, animate: glass ? false : null, bounceAtEdge: !glass);
+  }
+
   void _toggleHud() {
     setState(() => _hudVisible = !_hudVisible);
     unawaited(
@@ -235,7 +242,7 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
 
   void _restartHudTimer() {
     _hudTimer?.cancel();
-    if (!_hudVisible) return;
+    if (!_hudVisible || _hudPickerOpen) return;
     _hudTimer = Timer(const Duration(seconds: 3), () {
       if (!mounted) return;
       setState(() => _hudVisible = false);
@@ -251,40 +258,7 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
       backgroundColor: AppColors.darkSurfaceContainer,
       builder: (sheetContext) => ReaderControlsTheme(
         child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
-                child: Text(
-                  '阅读模式',
-                  style: AppTypography.sectionTitle
-                      .copyWith(color: AppColors.readerInk),
-                ),
-              ),
-              for (final mode in ReaderMode.values)
-                AppListTile(
-                  leading: IconTheme(
-                    data: const IconThemeData(color: AppColors.readerInk),
-                    child: SvgIcon(mode.icon, size: 20),
-                  ),
-                  title: Text(
-                    mode.label,
-                    style:
-                        AppTypography.body.copyWith(color: AppColors.readerInk),
-                  ),
-                  trailing: mode == _mode
-                      ? const IconTheme(
-                          data: IconThemeData(color: AppColors.darkPrimary),
-                          child: SvgIcon(AppIcons.check, size: 20),
-                        )
-                      : null,
-                  onTap: () => Navigator.of(sheetContext).pop(mode),
-                ),
-              const SizedBox(height: 8),
-            ],
-          ),
+          child: _modePicker((mode) => Navigator.of(sheetContext).pop(mode)),
         ),
       ),
     );
@@ -295,6 +269,44 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
     }
     _applyMode(selected);
   }
+
+  Widget _buildGlassModePicker(BuildContext context, VoidCallback close) =>
+      Padding(
+        padding: const EdgeInsets.only(top: 14),
+        child: _modePicker((mode) {
+          close();
+          if (mode != _mode) _applyMode(mode);
+        }),
+      );
+
+  Widget _modePicker(ValueChanged<ReaderMode> onSelect) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+            child: Text(
+              '阅读模式',
+              style: AppTypography.sectionTitle
+                  .copyWith(color: AppColors.readerInk),
+            ),
+          ),
+          for (final mode in ReaderMode.values)
+            AppListTile(
+              leading: SvgIcon(mode.icon, size: 20, color: AppColors.readerInk),
+              title: Text(
+                mode.label,
+                style: AppTypography.body.copyWith(color: AppColors.readerInk),
+              ),
+              trailing: mode == _mode
+                  ? const SvgIcon(AppIcons.check,
+                      size: 20, color: AppColors.darkPrimary,)
+                  : null,
+              onTap: () => onSelect(mode),
+            ),
+          const SizedBox(height: 8),
+        ],
+      );
 
   void _applyMode(ReaderMode next) {
     final ratio = _total <= 1 ? 0.0 : (_page - 1) / (_total - 1);
@@ -380,11 +392,16 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
               // HUD 右侧的模式按钮：显示当前模式名，点开就是模式选择面板。
               lineLabel: _mode.label,
               onSwitchLine: () => _pickMode(context),
+              glassPickerBuilder: _buildGlassModePicker,
+              onGlassPickerOpenChanged: (open) {
+                _hudPickerOpen = open;
+                _restartHudTimer();
+              },
               onExit: _exit,
               onToggleMode: () => _pickMode(context),
-              onJump: (page) {
-                setState(() => _dragPage = null);
-                _goToPage(page);
+              onJump: _commitHudSeek,
+              onSliderCancel: () {
+                if (_dragPage != null) setState(() => _dragPage = null);
               },
               onSliderChanged: (value) {
                 setState(() {

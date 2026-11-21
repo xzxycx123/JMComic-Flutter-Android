@@ -15,6 +15,7 @@ import '../../features/pdf/pdf_viewer_page.dart';
 import '../../features/reader/reader_mode.dart';
 import '../../features/reader/reader_page.dart';
 import '../../features/search/search_page.dart';
+import '../../features/search/search_providers.dart' as search;
 import '../../features/shell/shell_page.dart';
 
 /// 全局路由表：两 tab 壳（首页 / 我的）+ 顶层详情 / 搜索 / 阅读器 / 下载 / 历史。
@@ -84,7 +85,19 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/search',
-        builder: (context, state) => const SearchPage(),
+        builder: (context, state) => ProviderScope(
+          key: state.pageKey,
+          overrides: [
+            search.searchSortProvider
+                .overrideWith((_) => search.kSearchSorts.first),
+            search.searchControllerProvider
+                .overrideWith(search.SearchController.new),
+          ],
+          child: SearchPage(
+            initialQuery: state.uri.queryParameters['q'],
+            forceKeyword: state.uri.queryParameters['mode'] == 'keyword',
+          ),
+        ),
       ),
       GoRoute(
         path: '/album/:albumId',

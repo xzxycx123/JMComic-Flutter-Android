@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart'
+    show SliverConstraints, SliverGridLayout;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/icons/app_icons.dart';
@@ -6,6 +9,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/glass/app_glass.dart';
 import '../../../data/models/jm_album_summary.dart';
 import '../../home/widgets/album_card.dart';
+import '../search_providers.dart';
 
 /// 搜索结果网格：双列，触底自动加载下一页。
 class ResultGrid extends StatelessWidget {
@@ -46,17 +50,22 @@ class ResultGrid extends StatelessWidget {
           SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 0.52,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 16,
+              gridDelegate: _SearchGridDelegate(
+                captionHeight:
+                    MediaQuery.textScalerOf(context).scale(13) * 2.64 +
+                        MediaQuery.textScalerOf(context).scale(11) * 2.7 +
+                        22,
               ),
               delegate: SliverChildBuilderDelegate(
-                (context, index) => AlbumCard(
-                  album: items[index],
-                  onTap: () => onTap(items[index]),
-                ),
+                (context, index) {
+                  final album = items[index];
+                  return AlbumCard(
+                    key: ValueKey(album.id),
+                    album: album,
+                    caption: _SearchCaption(album: album),
+                    onTap: () => onTap(album),
+                  );
+                },
                 childCount: items.length,
               ),
             ),
@@ -88,6 +97,94 @@ class ResultGrid extends StatelessWidget {
           const SliverToBoxAdapter(child: SizedBox(height: 90)),
         ],
       ),
+    );
+  }
+}
+
+class _SearchGridDelegate extends SliverGridDelegateWithFixedCrossAxisCount {
+  const _SearchGridDelegate({required this.captionHeight})
+      : super(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 16);
+
+  final double captionHeight;
+
+  @override
+  SliverGridLayout getLayout(SliverConstraints constraints) {
+    final width = (constraints.crossAxisExtent - crossAxisSpacing) / 2;
+    return SliverGridDelegateWithFixedCrossAxisCount(
+      crossAxisCount: crossAxisCount,
+      crossAxisSpacing: crossAxisSpacing,
+      mainAxisSpacing: mainAxisSpacing,
+      mainAxisExtent: width.clamp(0.0, double.infinity) * 4 / 3 + captionHeight,
+    ).getLayout(constraints);
+  }
+
+  @override
+  bool shouldRelayout(covariant _SearchGridDelegate oldDelegate) =>
+      captionHeight != oldDelegate.captionHeight;
+}
+
+class _SearchCaption extends ConsumerWidget {
+  const _SearchCaption({required this.album});
+
+  final JmAlbumSummary album;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    final metadata = album.tags.isEmpty || !album.hasKnownAuthor
+        ? ref.watch(searchAlbumMetadataProvider(album.id)).valueOrNull
+        : null;
+    final detailAuthor = metadata?.author.trim();
+    final author = !album.hasKnownAuthor &&
+            detailAuthor != null &&
+            detailAuthor.isNotEmpty &&
+            detailAuthor.toUpperCase() != 'N/A'
+        ? detailAuthor
+        : album.displayAuthor;
+    final tags =
+        album.tags.isNotEmpty ? album.tags : metadata?.tags ?? const <String>[];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          album.displayTitle,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.cardTitle.copyWith(color: scheme.onSurface),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          author,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+        ),
+        if (tags.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              for (final tag in tags.take(3)) ...[
+                if (tag != tags.first) const SizedBox(width: 4),
+                Flexible(
+                  child: AppChip(
+                    label: Text(
+                      tag,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.micro
+                          .copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                    cornerRadius: 5,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ],
     );
   }
 }

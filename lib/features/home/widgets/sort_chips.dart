@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/jm_constants.dart';
 import '../../../core/icons/app_images.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/glass/app_glass.dart';
 
@@ -51,8 +50,6 @@ class SortChips extends StatelessWidget {
           final label = Text(
             order.label,
             style: AppTypography.micro.copyWith(
-              color:
-                  active ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
               fontWeight: active ? FontWeight.w700 : FontWeight.w500,
             ),
           );
@@ -81,33 +78,9 @@ class SortChips extends StatelessWidget {
             onTap: select,
             selected: active,
             padding: padding,
+            cornerRadius: 9,
+            fillSelected: true,
             kind: AppChipKind.choice,
-            foregroundColor:
-                active ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
-            metalChild: GestureDetector(
-              onTap: select,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                padding: padding,
-                decoration: BoxDecoration(
-                  color: active ? scheme.primaryContainer : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppColors.radiusPill),
-                  border: Border.all(
-                    color: active ? Colors.transparent : scheme.outlineVariant,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    if (rank != null) ...<Widget>[
-                      rank,
-                      const SizedBox(width: 4),
-                    ],
-                    label,
-                  ],
-                ),
-              ),
-            ),
           );
         },
       ),

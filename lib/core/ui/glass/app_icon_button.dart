@@ -18,7 +18,7 @@ class AppIconButton extends StatelessWidget {
     this.selected = false,
     this.focusNode,
     this.autofocus = false,
-    this.glassSize = 44,
+    this.glassSize,
     this.glassTransparent = false,
   });
 
@@ -33,14 +33,18 @@ class AppIconButton extends StatelessWidget {
   final bool selected;
   final FocusNode? focusNode;
   final bool autofocus;
-  final double glassSize;
+  final double? glassSize;
   final bool glassTransparent;
 
   @override
   Widget build(BuildContext context) {
+    final isBack = tooltip == '返回';
+    final displayIcon = isBack
+        ? SizedBox.square(dimension: 18, child: FittedBox(child: icon))
+        : icon;
     if (!context.isLiquidGlass) {
       return IconButton(
-        icon: icon,
+        icon: displayIcon,
         onPressed: onPressed,
         tooltip: tooltip,
         color: color,
@@ -53,9 +57,10 @@ class AppIconButton extends StatelessWidget {
       );
     }
     final tokens = AppGlassTheme.of(context);
+    final size = glassSize ?? (isBack ? 34.0 : 44.0);
     final button = GlassIconButton(
-      icon: icon,
-      size: glassSize,
+      icon: displayIcon,
+      size: size,
       iconSize: iconSize,
       iconColor: color ?? (selected ? tokens.accent : tokens.scheme.onSurface),
       onPressed: onPressed,
@@ -68,19 +73,27 @@ class AppIconButton extends StatelessWidget {
       style: glassTransparent
           ? GlassButtonStyle.transparent
           : GlassButtonStyle.filled,
-      surfaceStyle: GlassSurfaceStyle.glass,
+      surfaceStyle: glassTransparent ? GlassSurfaceStyle.solid : null,
       focusNode: focusNode,
       autofocus: autofocus,
       interactionScale: tokens.reduceMotion ? 1 : .95,
       anchorStretch: !tokens.reduceMotion,
       glowRadius: tokens.reduceMotion ? 0 : 1.2,
     );
+    final target = isBack && size < 44
+        ? GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            excludeFromSemantics: true,
+            onTap: onPressed,
+            child: SizedBox.square(dimension: 44, child: Center(child: button)),
+          )
+        : button;
     return tooltip == null
-        ? button
+        ? target
         : Tooltip(
             message: tooltip!,
             excludeFromSemantics: true,
-            child: button,
+            child: target,
           );
   }
 }

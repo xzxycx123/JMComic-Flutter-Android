@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,7 +15,15 @@ import 'widgets/search_field.dart';
 
 /// 搜索页：车号直达详情 / 关键词走 GET /search（PLAN §7.4）。
 class SearchPage extends ConsumerStatefulWidget {
-  const SearchPage({super.key});
+  const SearchPage({super.key, this.initialQuery, this.forceKeyword = false});
+
+  final String? initialQuery;
+  final bool forceKeyword;
+
+  static String keywordLocation(String tag) => Uri(
+        path: '/search',
+        queryParameters: {'q': tag, 'mode': 'keyword'},
+      ).toString();
 
   @override
   ConsumerState<SearchPage> createState() => _SearchPageState();
@@ -23,6 +33,33 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   String _liveHint = '输入车号或关键词';
+  String? _forcedQuery;
+
+  @override
+  void initState() {
+    super.initState();
+    _applyRouteQuery();
+  }
+
+  @override
+  void didUpdateWidget(covariant SearchPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialQuery != widget.initialQuery ||
+        oldWidget.forceKeyword != widget.forceKeyword) {
+      _applyRouteQuery();
+    }
+  }
+
+  void _applyRouteQuery() {
+    final query = widget.initialQuery?.trim() ?? '';
+    _forcedQuery = widget.forceKeyword && query.isNotEmpty ? query : null;
+    _controller.text = query;
+    _liveHint = resolveQuery(query, forceKeyword: _forcedQuery != null).hint;
+    if (query.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _controller.text == query) _submit(query);
+    });
+  }
 
   @override
   void dispose() {
@@ -32,12 +69,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 
   void _onChanged(String value) {
-    final decision = resolveQuery(value);
-    setState(() => _liveHint = decision.hint);
+    if (_forcedQuery != value.trim()) _forcedQuery = null;
+    final query = resolveQuery(value, forceKeyword: _forcedQuery != null);
+    setState(() => _liveHint = query.hint);
   }
 
   void _submit(String value) {
-    final decision = resolveQuery(value);
+    final decision =
+        resolveQuery(value, forceKeyword: _forcedQuery == value.trim());
     if (decision.isEmpty) return;
     if (decision.isAlbum) {
       _focusNode.unfocus();
@@ -45,10 +84,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       return;
     }
     _focusNode.unfocus();
-    ref.read(searchControllerProvider.notifier).search(decision.keyword!);
+    unawaited(
+        ref.read(searchControllerProvider.notifier).search(decision.keyword!),);
   }
 
   void _fillHistory(String keyword) {
+    _forcedQuery = keyword.trim();
     _controller.text = keyword;
     _onChanged(keyword);
     _submit(keyword);
@@ -69,6 +110,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               child: SearchField(
                 controller: _controller,
                 focusNode: _focusNode,
+                autofocus: widget.initialQuery?.trim().isNotEmpty != true,
                 onChanged: _onChanged,
                 onSubmitted: _submit,
                 onCancel: () {
@@ -190,7 +232,7 @@ class _SortBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return SizedBox(
-      height: 40,
+      height: 52,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         clipBehavior: context.isLiquidGlass ? Clip.none : Clip.hardEdge,
@@ -202,7 +244,7 @@ class _SortBar extends StatelessWidget {
           final active = order == selected;
           void select() => onSelected(order);
           final foreground =
-              active ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
+              active ? scheme.onPrimary : scheme.onSurfaceVariant;
           final label = Text(
             _labels[order] ?? order.label,
             style: AppTypography.micro.copyWith(
@@ -213,27 +255,12 @@ class _SortBar extends StatelessWidget {
           const padding = EdgeInsets.symmetric(horizontal: 14);
           return AppChip(
             label: label,
-            foregroundColor: foreground,
             onTap: select,
             selected: active,
             kind: AppChipKind.choice,
+            cornerRadius: 10,
+            fillSelected: true,
             padding: padding,
-            metalChild: GestureDetector(
-              onTap: select,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                padding: padding,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: active ? scheme.primaryContainer : Colors.transparent,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: active ? Colors.transparent : scheme.outlineVariant,
-                  ),
-                ),
-                child: label,
-              ),
-            ),
           );
         },
       ),
@@ -283,17 +310,8 @@ class _IdleBody extends StatelessWidget {
               label: Text(keyword, style: AppTypography.caption),
               onTap: select,
               kind: AppChipKind.action,
-              metalChild: ActionChip(
-                label: Text(keyword),
-                onPressed: select,
-                labelStyle:
-                    AppTypography.caption.copyWith(color: scheme.onSurface),
-                backgroundColor: scheme.surfaceContainer,
-                side: BorderSide(color: scheme.outlineVariant),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
+              cornerRadius: 10,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
             );
           }).toList(growable: false),
         ),

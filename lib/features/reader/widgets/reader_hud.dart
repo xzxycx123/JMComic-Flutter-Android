@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../../../core/icons/app_icons.dart';
 import '../../../core/theme/app_colors.dart';
@@ -23,6 +24,11 @@ class ReaderControlsTheme extends StatelessWidget {
       );
 }
 
+typedef ReaderHudPickerBuilder = Widget Function(
+  BuildContext context,
+  VoidCallback close,
+);
+
 /// 阅读器 HUD：顶部 46（退出 / 标题页码 / 模式切换），底部 64（进度 / Slider / 百分比）。
 class ReaderHud extends StatelessWidget {
   const ReaderHud({
@@ -36,9 +42,13 @@ class ReaderHud extends StatelessWidget {
     required this.onJump,
     super.key,
     this.onSliderChanged,
+    this.onSliderCancel,
     this.lineLabel = '',
     this.onSwitchLine,
     this.switchingLine = false,
+    this.glassPickerBuilder,
+    this.glassPickerHeight = 160,
+    this.onGlassPickerOpenChanged,
   });
 
   final String title;
@@ -50,11 +60,13 @@ class ReaderHud extends StatelessWidget {
   final VoidCallback onToggleMode;
   final ValueChanged<int> onJump;
   final ValueChanged<double>? onSliderChanged;
-
-  /// 当前分流标签（线路1..5）；为空或没有回调时不渲染分流按钮。
+  final VoidCallback? onSliderCancel;
   final String lineLabel;
   final VoidCallback? onSwitchLine;
   final bool switchingLine;
+  final ReaderHudPickerBuilder? glassPickerBuilder;
+  final double glassPickerHeight;
+  final ValueChanged<bool>? onGlassPickerOpenChanged;
 
   static final Color _barColor = AppColors.readerBg.withAlpha(230);
   static const Color _ink = AppColors.readerInk;
@@ -69,7 +81,6 @@ class ReaderHud extends StatelessWidget {
               : const Duration(milliseconds: 180),
           child: ReaderControlsTheme(child: Builder(builder: _buildBars)),
           builder: (context, opacity, child) {
-            // Remove both bars after fading out so hidden glass does no work.
             if (opacity == 0) return const SizedBox.shrink();
             return Opacity(opacity: opacity, child: child);
           },
@@ -78,6 +89,7 @@ class ReaderHud extends StatelessWidget {
 
   Widget _buildBars(BuildContext context) {
     final ratio = total <= 0 ? 0 : (page / total * 100).round();
+    final glass = context.isLiquidGlass;
     return Column(
       children: <Widget>[
         _bar(
@@ -89,10 +101,10 @@ class ReaderHud extends StatelessWidget {
               children: <Widget>[
                 AppIconButton(
                   onPressed: onExit,
-                  icon: const IconTheme(
-                    data: IconThemeData(color: _ink),
-                    child: SvgIcon(AppIcons.back, size: 22),
-                  ),
+                  tooltip: glass ? '返回' : null,
+                  glassSize: 34,
+                  icon: SvgIcon(AppIcons.back,
+                      size: glass ? 16 : 22, color: _ink,),
                 ),
                 Expanded(
                   child: Text(
@@ -102,42 +114,15 @@ class ReaderHud extends StatelessWidget {
                     style: AppTypography.caption.copyWith(color: _ink),
                   ),
                 ),
-                if (onSwitchLine != null && lineLabel.isNotEmpty)
-                  AppButton(
-                    variant: context.isLiquidGlass
-                        ? AppButtonVariant.secondary
-                        : AppButtonVariant.text,
-                    height: context.isLiquidGlass ? 44 : null,
-                    onPressed: switchingLine ? null : onSwitchLine,
-                    foregroundColor: _ink,
-                    style: TextButton.styleFrom(
-                      foregroundColor: _ink,
-                      minimumSize: const Size(0, 34),
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: switchingLine
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: AppProgressIndicator.circular(
-                              size: 14,
-                              strokeWidth: 2,
-                              color: _ink,
-                            ),
-                          )
-                        : Text(
-                            lineLabel,
-                            style: AppTypography.micro.copyWith(color: _ink),
-                          ),
-                  ),
+                if (lineLabel.isNotEmpty &&
+                    (onSwitchLine != null ||
+                        (glass && glassPickerBuilder != null)))
+                  _lineControl(context),
                 AppIconButton(
                   tooltip: mode.toggled.label,
                   onPressed: onToggleMode,
-                  icon: IconTheme(
-                    data: const IconThemeData(color: _ink),
-                    child: SvgIcon(mode.icon, size: 20),
-                  ),
+                  glassSize: 34,
+                  icon: SvgIcon(mode.icon, size: glass ? 16 : 20, color: _ink),
                 ),
               ],
             ),
@@ -153,15 +138,15 @@ class ReaderHud extends StatelessWidget {
               child: Row(
                 children: <Widget>[
                   const SizedBox(width: 16),
-                  Text(
-                    '已读 $page/$total',
-                    style: AppTypography.micro.copyWith(color: _ink),
-                  ),
+                  _progressText(context, '已读 $page/$total', '已读 $total/$total',
+                      AppTypography.micro,),
                   Expanded(
                     child: AppSlider(
                       value: page.clamp(1, total <= 0 ? 1 : total).toDouble(),
                       min: 1,
                       max: total <= 0 ? 1 : total.toDouble(),
+                      confineGlassThumb: glass,
+                      onGlassDragCancel: onSliderCancel,
                       onChanged: total <= 1
                           ? null
                           : (value) => onSliderChanged?.call(value),
@@ -172,10 +157,8 @@ class ReaderHud extends StatelessWidget {
                       thumbColor: _ink,
                     ),
                   ),
-                  Text(
-                    '$ratio%',
-                    style: AppTypography.numeric.copyWith(color: _ink),
-                  ),
+                  _progressText(
+                      context, '$ratio%', '100%', AppTypography.numeric,),
                   const SizedBox(width: 16),
                 ],
               ),
@@ -186,16 +169,83 @@ class ReaderHud extends StatelessWidget {
     );
   }
 
-  /// 顶部条颜色铺到状态栏底下，内容通过 SafeArea 避开状态栏。
+  Widget _progressText(
+      BuildContext context, String value, String widest, TextStyle style,) {
+    final ink = style.copyWith(
+        color: _ink, fontFeatures: const [FontFeature.tabularFigures()],);
+    if (!context.isLiquidGlass) return Text(value, style: ink);
+    final painter = TextPainter(
+      text: TextSpan(text: widest, style: ink),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final width = painter.width.ceilToDouble();
+    painter.dispose();
+    return SizedBox(
+      width: width,
+      child:
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: ink),
+    );
+  }
+
+  Widget _lineControl(BuildContext context) {
+    final content = switchingLine
+        ? const AppProgressIndicator.circular(
+            size: 14, strokeWidth: 2, color: _ink,)
+        : Text(lineLabel, style: AppTypography.micro.copyWith(color: _ink));
+    if (!context.isLiquidGlass) {
+      return AppButton.text(
+        onPressed: switchingLine ? null : onSwitchLine,
+        foregroundColor: _ink,
+        style: TextButton.styleFrom(
+          foregroundColor: _ink,
+          minimumSize: const Size(0, 34),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: content,
+      );
+    }
+    Widget trigger(BuildContext context, VoidCallback onTap) {
+      final theme = AppGlassTheme.of(context);
+      return GlassButton.custom(
+        label: lineLabel,
+        onTap: onTap,
+        enabled: !switchingLine,
+        height: 34,
+        shape: const LiquidRoundedSuperellipse(borderRadius: 9),
+        quality: AppGlassTheme.controlQuality,
+        settings: theme.control(enabled: !switchingLine),
+        interactionScale: theme.reduceMotion ? 1 : .96,
+        stretch: theme.reduceMotion ? 0 : .16,
+        anchorStretch: !theme.reduceMotion,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Center(widthFactor: 1, child: content),
+          ),
+        ),
+      );
+    }
+
+    final builder = glassPickerBuilder;
+    if (builder == null) return trigger(context, () => onSwitchLine?.call());
+    return _ReaderHudPicker(
+      triggerBuilder: trigger,
+      contentBuilder: builder,
+      height: glassPickerHeight,
+      onOpenChanged: onGlassPickerOpenChanged,
+    );
+  }
+
+  /// 顶部背景覆盖状态栏，内容仍通过 SafeArea 避开状态栏。
   Widget _bar(BuildContext context, {required Widget child, bool top = false}) {
     final content = top ? SafeArea(bottom: false, child: child) : child;
     if (context.isLiquidGlass) {
-      // The controls are already glass; the bar only tints the background.
       return AppGlassChrome(
-        reader: true,
-        metalColor: _barColor,
-        child: content,
-      );
+          reader: true, metalColor: _barColor, child: content,);
     }
     return ClipRect(
       child: BackdropFilter(
@@ -205,6 +255,83 @@ class ReaderHud extends StatelessWidget {
           child: content,
         ),
       ),
+    );
+  }
+}
+
+class _ReaderHudPicker extends StatefulWidget {
+  const _ReaderHudPicker({
+    required this.triggerBuilder,
+    required this.contentBuilder,
+    required this.height,
+    this.onOpenChanged,
+  });
+
+  final Widget Function(BuildContext, VoidCallback) triggerBuilder;
+  final ReaderHudPickerBuilder contentBuilder;
+  final double height;
+  final ValueChanged<bool>? onOpenChanged;
+
+  @override
+  State<_ReaderHudPicker> createState() => _ReaderHudPickerState();
+}
+
+class _ReaderHudPickerState extends State<_ReaderHudPicker> {
+  final _controller = GlassPopoverController();
+  LocalHistoryEntry? _history;
+
+  void _open() {
+    final route = ModalRoute.of(context);
+    if (route != null && _history == null) {
+      final entry = LocalHistoryEntry(
+        impliesAppBarDismissal: false,
+        onRemove: () {
+          if (_history == null) return;
+          _history = null;
+          _controller.close();
+        },
+      );
+      _history = entry;
+      route.addLocalHistoryEntry(entry);
+    }
+    widget.onOpenChanged?.call(true);
+  }
+
+  void _removeHistory() {
+    final entry = _history;
+    _history = null;
+    entry?.remove();
+  }
+
+  void _close() {
+    _removeHistory();
+    widget.onOpenChanged?.call(false);
+  }
+
+  @override
+  void dispose() {
+    _removeHistory();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppGlassTheme.of(context);
+    final size = MediaQuery.sizeOf(context);
+    final safeArea = MediaQuery.viewPaddingOf(context);
+    final maxHeight = (size.height - safeArea.vertical - 24).clamp(1.0, 336.0);
+    return GlassPopover(
+      controller: _controller,
+      triggerBuilder: widget.triggerBuilder,
+      contentBuilder: widget.contentBuilder,
+      popoverWidth: (size.width - safeArea.horizontal - 24).clamp(1.0, 288.0),
+      popoverHeight: widget.height.clamp(1.0, maxHeight),
+      popoverBorderRadius: 20,
+      settings: theme.overlay,
+      quality: GlassQuality.premium,
+      enableInteractionGlow: !theme.reduceMotion,
+      onOpen: _open,
+      onClose: _close,
     );
   }
 }

@@ -70,7 +70,7 @@ class AppMenu<T> extends StatelessWidget {
         icon: icon,
         semanticLabel: label,
         menuSemanticLabel: label,
-        quality: AppGlassTheme.controlQuality,
+        quality: AppGlassTheme.overlayQuality,
         settings: theme.overlay,
         // A task row remains scrollable; opening the menu requires a tap.
         enableContinuousSwipe: false,

@@ -23,6 +23,9 @@ class AppChip extends StatelessWidget {
     this.semanticLabel,
     this.metalChild,
     this.kind = AppChipKind.staticLabel,
+    this.cornerRadius,
+    this.solid = true,
+    this.fillSelected = false,
   });
 
   final Widget label;
@@ -37,16 +40,28 @@ class AppChip extends StatelessWidget {
   final String? semanticLabel;
   final Widget? metalChild;
   final AppChipKind kind;
+  final double? cornerRadius;
+  final bool solid;
+  final bool fillSelected;
 
   static const _delete = SvgIcon(AppIcons.close, size: 16);
 
   @override
   Widget build(BuildContext context) {
-    if (!context.isLiquidGlass) return metalChild ?? _buildMetal();
+    final glass = context.isLiquidGlass;
+    final radius = cornerRadius;
+    if (radius != null && onDeleted == null) {
+      return _buildRounded(context, radius);
+    }
+    if (!glass) return metalChild ?? _buildMetal();
 
     final tokens = AppGlassTheme.of(context);
-    final ink =
-        foregroundColor ?? (selected ? tokens.accent : tokens.scheme.onSurface);
+    final resolvedSolid = solid ||
+        InheritedGlassSurfaceStyle.maybeOf(context) == GlassSurfaceStyle.solid;
+    final ink = fillSelected && selected
+        ? tokens.selectionInk
+        : foregroundColor ??
+            (selected ? tokens.accent : tokens.scheme.onSurface);
     final text = label is Text ? label as Text : null;
     final plain = text?.data ?? text?.textSpan?.toPlainText();
     final inset =
@@ -77,19 +92,77 @@ class AppChip extends StatelessWidget {
             fontWeight: selected ? FontWeight.w600 : text?.style?.fontWeight,
           ),
       selected: selected,
-      selectedColor: tokens.selection,
+      selectedColor: fillSelected ? tokens.scheme.primary : tokens.selection,
+      color: resolvedSolid ? color : null,
       enabled: enabled,
       onTap: onTap,
       onDeleted: onDeleted,
       deleteIcon: _delete,
       padding: inset,
-      settings: settings,
-      quality: AppGlassTheme.scrollQuality,
-      surfaceStyle: GlassSurfaceStyle.glass,
+      settings: resolvedSolid ? null : settings,
+      quality: resolvedSolid ? null : AppGlassTheme.scrollQuality,
+      surfaceStyle:
+          resolvedSolid ? GlassSurfaceStyle.solid : GlassSurfaceStyle.glass,
       interactionScale: tokens.reduceMotion ? 1 : .97,
       anchorStretch: !tokens.reduceMotion,
       stretch: tokens.reduceMotion ? 0 : .12,
       glowRadius: tokens.reduceMotion ? 0 : .65,
+    );
+  }
+
+  Widget _buildRounded(BuildContext context, double radius) {
+    final theme = AppGlassTheme.of(context);
+    final scheme = theme.scheme;
+    final shape = LiquidRoundedSuperellipse(borderRadius: radius);
+    final active = selected && enabled;
+    final fill = active
+        ? (fillSelected ? scheme.primary : scheme.primaryContainer)
+        : color ?? scheme.surfaceContainerHigh;
+    final ink = active && fillSelected
+        ? theme.selectionInk
+        : foregroundColor ?? (active ? theme.accent : scheme.onSurfaceVariant);
+    final tap = enabled ? onTap : null;
+    final content = Padding(
+      padding:
+          padding ?? const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      child: DefaultTextStyle.merge(
+        style: AppTypography.caption.copyWith(color: ink),
+        child: IconTheme.merge(
+          data: IconThemeData(color: ink),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (leading != null) ...[leading!, const SizedBox(width: 5)],
+              Flexible(child: label),
+            ],
+          ),
+        ),
+      ),
+    );
+    return Semantics(
+      label: semanticLabel,
+      selected: kind == AppChipKind.choice ? selected : null,
+      enabled: onTap == null ? null : enabled,
+      button: onTap != null,
+      child: Opacity(
+        opacity: enabled ? 1 : .48,
+        child: Material(
+          type: MaterialType.transparency,
+          child: Ink(
+            decoration: ShapeDecoration(
+              color: fill,
+              shape: shape.copyWith(
+                  side: active
+                      ? BorderSide.none
+                      : BorderSide(color: scheme.outlineVariant),),
+            ),
+            child: tap == null
+                ? content
+                : InkWell(customBorder: shape, onTap: tap, child: content),
+          ),
+        ),
+      ),
     );
   }
 

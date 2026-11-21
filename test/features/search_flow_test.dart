@@ -39,6 +39,14 @@ void main() {
       expect(decision.hint.contains('回车搜索'), isTrue);
     });
 
+    test('显式关键词模式保留纯数字与 JM 形态', () {
+      for (final input in ['350234', 'JM350234']) {
+        final decision = resolveSearchQuery(input, forceKeyword: true);
+        expect(decision.isKeyword, isTrue);
+        expect(decision.keyword, input);
+      }
+    });
+
     test('空输入 → empty（不发请求）', () {
       expect(resolveSearchQuery('   ').isEmpty, isTrue);
       expect(resolveSearchQuery('').hint, '输入车号或关键词');

@@ -21,6 +21,8 @@ class AppSlider extends StatefulWidget {
     this.focusNode,
     this.autofocus = false,
     this.padding,
+    this.confineGlassThumb = false,
+    this.onGlassDragCancel,
   })  : assert(value >= min && value <= max),
         assert(divisions == null || divisions > 0);
 
@@ -32,6 +34,10 @@ class AppSlider extends StatefulWidget {
   final FocusNode? focusNode;
   final bool autofocus;
   final EdgeInsetsGeometry? padding;
+
+  /// Leaves room for the lifted lens at the ends, without painting over labels.
+  final bool confineGlassThumb;
+  final VoidCallback? onGlassDragCancel;
 
   @override
   State<AppSlider> createState() => _AppSliderState();
@@ -66,15 +72,17 @@ class _AppSliderState extends State<AppSlider> {
     final hasRange = slider.max > slider.min;
     final enabled = slider.onChanged != null && hasRange;
     final current = hasRange ? slider.value : 0.0;
-    const thumbRadius = 15.0;
+    final thumbRadius = slider.confineGlassThumb ? 12.0 : 15.0;
     void commitStep(double value) {
       slider.onChangeStart?.call(slider.value);
       slider.onChanged!(value);
       slider.onChangeEnd?.call(value);
     }
 
-    return Padding(
-      padding: slider.padding ?? EdgeInsets.zero,
+    Widget track = Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: slider.confineGlassThumb ? 14 : 0,
+      ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final width =
@@ -83,8 +91,10 @@ class _AppSliderState extends State<AppSlider> {
             width: width,
             child: Listener(
               onPointerCancel: (_) {
+                final wasDragging = _dragging;
                 _dragging = false;
                 _dragValue = null;
+                if (wasDragging) slider.onGlassDragCancel?.call();
               },
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
@@ -106,7 +116,8 @@ class _AppSliderState extends State<AppSlider> {
                           logical = (logical * divisions).round() / divisions;
                         }
                         commitStep(
-                            slider.min + logical * (slider.max - slider.min),);
+                          slider.min + logical * (slider.max - slider.min),
+                        );
                       }
                     : null,
                 child: GlassSlider(
@@ -164,5 +175,7 @@ class _AppSliderState extends State<AppSlider> {
         },
       ),
     );
+    if (slider.confineGlassThumb) track = ClipRect(child: track);
+    return Padding(padding: slider.padding ?? EdgeInsets.zero, child: track);
   }
 }

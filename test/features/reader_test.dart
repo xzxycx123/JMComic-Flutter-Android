@@ -202,9 +202,23 @@ void main() {
       expect(slider, findsOneWidget);
       expect(Theme.of(tester.element(slider)).brightness, Brightness.dark);
       final track = tester.getRect(slider);
+      final confinement =
+          find.ancestor(of: slider, matching: find.byType(ClipRect));
+      expect(confinement, findsOneWidget);
+      final paintBounds = tester.getRect(confinement);
+      expect(tester.widget<ClipRect>(confinement).clipBehavior, Clip.hardEdge);
+      expect(paintBounds.left,
+          greaterThanOrEqualTo(tester.getRect(find.text('已读 12/20')).right),);
+      expect(paintBounds.right,
+          lessThanOrEqualTo(tester.getRect(find.text('60%')).left),);
+      expect(track.left, greaterThan(paintBounds.left));
       final gesture = await tester.startGesture(track.center);
-      await gesture.moveBy(const Offset(40, 0));
-      await gesture.moveBy(const Offset(40, 0));
+      await gesture.moveBy(Offset(-track.width * .25, 0));
+      await gesture.moveBy(Offset(-track.width * .5, 0));
+      await tester.pump(const Duration(milliseconds: 175));
+      expect(find.text('已读 1/20'), findsOneWidget);
+      expect(tester.getRect(slider), track);
+      await gesture.moveTo(track.center + const Offset(80, 0));
       await tester.pump();
       expect(previews, isNotEmpty);
       expect(jumps, isEmpty);
@@ -233,6 +247,74 @@ void main() {
       await tester.tapAt(endOfTrack);
       expect(underlyingTaps, 1);
       expect(jumps, [endPage, 20]);
+    });
+
+    testWidgets('玻璃线路按钮展开浮层，返回键先关闭浮层', (tester) async {
+      final changes = <bool>[];
+      var selected = 0;
+      await tester.pumpWidget(
+        LiquidGlassWidgets.wrap(
+          child: MaterialApp(
+            home: InterfaceStyleScope(
+              style: AppInterfaceStyle.liquidGlass,
+              child: Scaffold(
+                body: ReaderHud(
+                  title: '阅读器',
+                  page: 1,
+                  total: 10,
+                  mode: ReaderMode.paged,
+                  visible: true,
+                  lineLabel: '线路2',
+                  glassPickerBuilder: (context, close) => Material(
+                    type: MaterialType.transparency,
+                    child: TextButton(
+                      onPressed: () {
+                        selected++;
+                        close();
+                      },
+                      child: const Text('选择线路3'),
+                    ),
+                  ),
+                  onGlassPickerOpenChanged: changes.add,
+                  onExit: () {},
+                  onToggleMode: () {},
+                  onJump: (_) {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final lineLabel = find.text('线路2');
+      final trigger = find.ancestor(
+        of: lineLabel,
+        matching: find.byType(GlassButton),
+      );
+      expect(tester.widget<GlassButton>(trigger).shape,
+          const LiquidRoundedSuperellipse(borderRadius: 9),);
+      expect(tester.getSize(trigger).height, lessThan(40));
+      for (final icon
+          in tester.widgetList<GlassIconButton>(find.byType(GlassIconButton))) {
+        expect(icon.size, 34);
+      }
+      await tester.tap(lineLabel);
+      await tester.pumpAndSettle();
+      expect(find.text('选择线路3'), findsOneWidget);
+      expect(changes, [true]);
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      expect(await navigator.maybePop(), isTrue);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpAndSettle();
+      expect(find.text('选择线路3'), findsNothing);
+      expect(lineLabel, findsOneWidget);
+      expect(changes, [true, false]);
+      await tester.tap(lineLabel);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('选择线路3'));
+      await tester.pumpAndSettle();
+      expect(selected, 1);
+      expect(changes, [true, false, true, false]);
     });
 
     testWidgets('顶栏显示当前分流并可点击切换', (tester) async {

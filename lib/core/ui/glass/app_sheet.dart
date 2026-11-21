@@ -46,7 +46,7 @@ abstract final class AppSheet {
       settings: settings,
       expandedColor: backgroundColor,
       expandedDarkColor: backgroundColor,
-      quality: AppGlassTheme.controlQuality,
+      quality: AppGlassTheme.overlayQuality,
       showDragIndicator: showDragHandle ?? true,
       initialState:
           startsExpanded ? GlassSheetState.full : GlassSheetState.half,
@@ -61,22 +61,25 @@ abstract final class AppSheet {
         data: materialTheme,
         child: Material(
           type: MaterialType.transparency,
-          child: Builder(
-            builder: (context) {
-              final child = builder(context);
-              final double keyboard = keyboardInsetHandledByBuilder
-                  ? 0
-                  : MediaQuery.viewInsetsOf(context).bottom;
-              return SafeArea(
-                top: useSafeArea,
-                child: Padding(
-                  padding: EdgeInsets.only(bottom: keyboard),
-                  child: isScrollControlled && !keyboardInsetHandledByBuilder
-                      ? child
-                      : SingleChildScrollView(child: child),
-                ),
-              );
-            },
+          child: InheritedGlassSurfaceStyle(
+            surfaceStyle: GlassSurfaceStyle.solid,
+            child: Builder(
+              builder: (context) {
+                final child = builder(context);
+                final double keyboard = keyboardInsetHandledByBuilder
+                    ? 0
+                    : MediaQuery.viewInsetsOf(context).bottom;
+                return SafeArea(
+                  top: useSafeArea,
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: keyboard),
+                    child: isScrollControlled && !keyboardInsetHandledByBuilder
+                        ? child
+                        : SingleChildScrollView(primary: false, child: child),
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ),
