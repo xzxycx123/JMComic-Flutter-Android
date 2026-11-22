@@ -159,7 +159,12 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   List<Widget> _buildContent(BuildContext context, HomeFeed feed) {
     final categories = _categoriesOf(feed);
-    final selectedCategory = ref.watch(selectedCategoryProvider);
+    final selection = ref.watch(selectedCategoryProvider);
+    final selectedCategory = selection.id;
+    final activeCategory = _categoryOf(categories, selectedCategory);
+    // 选中具体分类时整页切到「筛选结果」：轮播 / 推荐分节是全局内容，留着只会
+    // 让人觉得标签没生效，这里直接隐藏，只留分类条 + 排序 + 该分类的瀑布流。
+    final filtered = selectedCategory.isNotEmpty && selectedCategory != '0';
     final scheme = Theme.of(context).colorScheme;
     final loadingMore = ref.watch(loadingMoreProvider);
     final loadMoreError = ref.watch(loadMoreErrorProvider);
@@ -185,7 +190,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             ),
           ),
         ),
-      if (feed.banners.isNotEmpty)
+      if (!filtered && feed.banners.isNotEmpty)
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.only(top: 4, bottom: 10),
@@ -208,6 +213,17 @@ class _HomePageState extends ConsumerState<HomePage> {
           },
         ),
       ),
+      if (filtered && (activeCategory?.subs.isNotEmpty ?? false))
+        SliverToBoxAdapter(
+          child: SubCategoryChips(
+            subs: activeCategory?.subs ?? const <JmSubCategory>[],
+            selectedSlug: selection.sub,
+            onSelected: (slug) {
+              _controller.jumpTo(0);
+              ref.read(homeFeedProvider.notifier).selectSub(slug);
+            },
+          ),
+        ),
       if (feed.partialErrors.isNotEmpty)
         SliverToBoxAdapter(
           child: Padding(
@@ -219,7 +235,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             ),
           ),
         ),
-      ..._buildModules(feed.modules),
+      if (!filtered) ..._buildModules(feed.modules),
       SliverToBoxAdapter(
         child: SortChips(
           selected: ref.watch(albumOrderProvider),
@@ -233,10 +249,23 @@ class _HomePageState extends ConsumerState<HomePage> {
       ),
       SliverToBoxAdapter(
         child: SectionHeader(
-          title: selectedCategory == '0' ? '最新上架' : '分类推荐',
-          onMore: () => context.push('/search'),
+          title: filtered ? (activeCategory?.name ?? '分类结果') : '最新上架',
+          onMore: filtered ? null : () => context.push('/search'),
         ),
       ),
+      if (filtered)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: Text(
+              _filterSummary(feed, activeCategory, selection.sub),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style:
+                  AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
+            ),
+          ),
+        ),
       SliverPadding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         sliver: SliverGrid(
@@ -260,15 +289,85 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
         ),
       ),
+      if (feed.grid.isEmpty && !loadingMore && loadMoreError == null)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 32),
+            child: EmptyState(
+              illustration: AppIllustrations.emptySearch,
+              title: filtered ? '「${activeCategory?.name ?? '该分类'}」暂无内容' : '暂时没有内容',
+              description: filtered ? '换个分类或排序再试试' : '下拉刷新试试',
+            ),
+          ),
+        ),
       SliverToBoxAdapter(
         child: _GridFooter(
           loading: loadingMore,
           error: loadMoreError,
           exhausted: feed.grid.isEmpty,
-          onRetry: () => ref.read(homeFeedProvider.notifier).loadMore(),
+          onRetry: () => ref.read(homeFeedProvider.notifier).retry(),
         ),
       ),
     ];
+  }
+
+  /// 筛选态的一行说明：分类 / 二级分类 + 本分类实际总数 + 当前排序。
+  ///
+  /// 总数用瀑布流响应里的 `total`（有 10000 上限，触顶显示 `10,000+`）：
+  /// `/categories.total_albums` 与筛选接口并不一致（韓漫 total=2276 / total_albums=132372）。
+  String _filterSummary(
+    HomeFeed feed,
+    JmCategory? category,
+    String subSlug,
+  ) {
+    final order = ref.watch(albumOrderProvider);
+    final parts = <String>[
+      '已筛选「${category?.name ?? '该分类'}」',
+      if (subSlug.isNotEmpty) _subName(category, subSlug),
+    ];
+    final total = _gridTotalText(feed);
+    if (total.isNotEmpty) {
+      parts.add('共 $total 本');
+    } else if ((category?.totalAlbums ?? 0) > 0) {
+      parts.add('共 ${_groupDigits(category?.totalAlbums ?? 0)} 本');
+    }
+    parts.add('排序：${order.label}');
+    return parts.join(' · ');
+  }
+
+  static String _subName(JmCategory? category, String subSlug) {
+    for (final sub in category?.subs ?? const <JmSubCategory>[]) {
+      if (sub.slug == subSlug) return sub.name;
+    }
+    return subSlug;
+  }
+
+  static String _gridTotalText(HomeFeed feed) {
+    if (feed.gridTotal <= 0) return '';
+    final text = _groupDigits(feed.gridTotal);
+    return feed.gridTotalCapped ? '$text+' : text;
+  }
+
+  static String _groupDigits(int value) {
+    final digits = value.toString();
+    final buffer = StringBuffer();
+    for (var index = 0; index < digits.length; index++) {
+      if (index > 0 && (digits.length - index) % 3 == 0) buffer.write(',');
+      buffer.write(digits[index]);
+    }
+    return buffer.toString();
+  }
+
+  static JmCategory? _categoryOf(List<JmCategory> categories, String id) {
+    for (final category in categories) {
+      if (category.id == id) return category;
+    }
+    for (final item in JmCategoryFallback.items) {
+      if (item.id == id) {
+        return JmCategory(id: item.id, name: item.name, slug: item.slug);
+      }
+    }
+    return null;
   }
 
   List<Widget> _buildModules(List<JmPromoteModule> modules) {
@@ -311,7 +410,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   List<JmCategory> _categoriesOf(HomeFeed feed) {
     if (feed.categories.isNotEmpty) return feed.categories;
     return JmCategoryFallback.items
-        .map((item) => JmCategory(id: item.id, name: item.name))
+        .map((item) => JmCategory(id: item.id, name: item.name, slug: item.slug))
         .toList(growable: false);
   }
 

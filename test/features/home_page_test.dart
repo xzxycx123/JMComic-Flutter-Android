@@ -74,4 +74,110 @@ void main() {
     expect(find.text('同人'), findsWidgets);
     expect(find.text('English Manga'), findsOneWidget);
   });
+
+  testWidgets('点「同人」用 slug 重查，轮播/分节收起，网格只剩同人', (tester) async {
+    final api = FakeJmApi();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          jmApiProvider.overrideWithValue(api),
+          jmBootstrapProvider.overrideWith((ref) async => api),
+          homeRepositoryProvider.overrideWith(
+            (ref) async => HomeRepository(api: api),
+          ),
+        ],
+        child: const MaterialApp(home: HomePage()),
+      ),
+    );
+    await _pumpFrames(tester);
+
+    expect(find.byType(HeroBanner), findsOneWidget);
+    await tester.tap(
+      find.descendant(
+        of: find.byType(CategoryChips),
+        matching: find.text('同人'),
+      ),
+    );
+    await _pumpFrames(tester);
+
+    // `/categories/filter?c=doujin`：数字 id 会被服务端忽略，所以这里必须是 slug。
+    expect(
+      api.filterQueries.where((query) => query.slug == 'doujin'),
+      isNotEmpty,
+    );
+    // 筛选态：全局轮播 / 推荐分节隐藏，避免「看着没变」。
+    expect(find.byType(HeroBanner), findsNothing);
+    // 网格只剩同人那一本（fixture 里 1490702）。
+    expect(find.text('瀑布流測試條目 B'), findsNothing);
+    expect(find.textContaining('子供を甘く見るな'), findsWidgets);
+  });
+
+  testWidgets('筛选结果为空时给空态而不是白屏', (tester) async {
+    final api = FakeJmApi();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          jmApiProvider.overrideWithValue(api),
+          jmBootstrapProvider.overrideWith((ref) async => api),
+          homeRepositoryProvider.overrideWith(
+            (ref) async => HomeRepository(api: api),
+          ),
+        ],
+        child: const MaterialApp(home: HomePage()),
+      ),
+    );
+    await _pumpFrames(tester);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(CategoryChips),
+        matching: find.text('韓漫'),
+      ),
+    );
+    await _pumpFrames(tester);
+
+    expect(api.filterQueries.any((query) => query.slug == 'hanman'), isTrue);
+    expect(find.textContaining('暂无内容'), findsOneWidget);
+  });
+
+  testWidgets('二级分类按 父slug_子slug 重查', (tester) async {
+    final api = FakeJmApi();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          jmApiProvider.overrideWithValue(api),
+          jmBootstrapProvider.overrideWith((ref) async => api),
+          homeRepositoryProvider.overrideWith(
+            (ref) async => HomeRepository(api: api),
+          ),
+        ],
+        child: const MaterialApp(home: HomePage()),
+      ),
+    );
+    await _pumpFrames(tester);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(CategoryChips),
+        matching: find.text('同人'),
+      ),
+    );
+    await _pumpFrames(tester);
+
+    // 二级条只在带 sub_categories 的分类下出现。
+    expect(find.byType(SubCategoryChips), findsOneWidget);
+    await tester.tap(
+      find.descendant(
+        of: find.byType(SubCategoryChips),
+        matching: find.text('漢化'),
+      ),
+    );
+    await _pumpFrames(tester);
+
+    expect(
+      api.filterQueries.any((query) => query.slug == 'doujin_chinese'),
+      isTrue,
+      reason: '二级筛选要用 父slug_子slug，不是 sub.CID',
+    );
+  });
 }

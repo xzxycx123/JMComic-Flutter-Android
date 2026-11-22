@@ -299,8 +299,11 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
                 style: AppTypography.body.copyWith(color: AppColors.readerInk),
               ),
               trailing: mode == _mode
-                  ? const SvgIcon(AppIcons.check,
-                      size: 20, color: AppColors.darkPrimary,)
+                  ? const SvgIcon(
+                      AppIcons.check,
+                      size: 20,
+                      color: AppColors.darkPrimary,
+                    )
                   : null,
               onTap: () => onSelect(mode),
             ),
@@ -497,11 +500,14 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
               style: AppTypography.caption.copyWith(color: AppColors.readerInk),
             ),
             const SizedBox(height: 8),
+            // 药丸形（全圆角）重试，和详情 / 阅读器的重试按钮统一。
             AppButton.text(
               onPressed: () {
                 _failed.remove(index);
                 unawaited(_ensure(index));
               },
+              cornerRadius: AppColors.radiusPill,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
               child: const Text('重试'),
             ),
           ],
@@ -570,6 +576,7 @@ class _PdfViewerPageState extends ConsumerState<PdfViewerPage>
                       const SizedBox(height: 18),
                       AppButton(
                         onPressed: () => unawaited(_open()),
+                        cornerRadius: AppColors.radiusPill,
                         child: const Text('重试'),
                       ),
                       const SizedBox(height: 10),

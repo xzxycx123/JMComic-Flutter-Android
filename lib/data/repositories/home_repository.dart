@@ -15,6 +15,9 @@ import '../models/jm_search_page.dart';
 import '../sources/jm_api_client.dart';
 
 /// 首页聚合 + 分页 + 缓存 + 降级（PLAN §6.1/§6.2）。
+///
+/// 分类筛选一律用 **slug**（[JmCategory.slug]）：`/categories/filter` 的 `c`
+/// 传数字 id 时服务端会忽略并退回默认榜，这正是「点标签没反应」的根因。
 class HomeRepository {
   HomeRepository({
     required JmApi api,
@@ -69,11 +72,16 @@ class HomeRepository {
   }
 
   /// 拉首页 feed：四个端点各自容错，全挂才整页报错。
+  ///
+  /// [categorySlug] 为空 = 不过滤（最新A漫）。[persistCache] 默认只对默认首页开：
+  /// 分类页不写磁盘缓存，否则冷启动会把「上次点的分类」当成首页画出来。
   Future<HomeFeed> fetchFeed({
     bool preferCache = false,
-    String category = '0',
+    String categorySlug = '',
     AlbumOrder order = AlbumOrder.latestUpdate,
+    bool? persistCache,
   }) async {
+    final persist = persistCache ?? categorySlug.isEmpty;
     final cached = preferCache ? readCache() : null;
     if (cached != null && !cacheExpired()) return cached;
 
@@ -106,7 +114,11 @@ class HomeRepository {
     }
 
     try {
-      final page = await _api.fetchFilter(page: 1, category: category, order: order);
+      final page = await _api.fetchFilter(
+        page: 1,
+        categorySlug: categorySlug,
+        order: order,
+      );
       grid = page.content;
       total = page.total;
     } catch (error) {
@@ -140,36 +152,42 @@ class HomeRepository {
       updatedAt: DateTime.now(),
       partialErrors: errors,
     );
-    await _writeCache(feed);
+    if (persist) await _writeCache(feed);
     return feed;
   }
 
-  /// 只拉第一页瀑布流：分类标签预热用（1 次请求，不重复取 promote/latest/categories）。
+  /// 只拉第一页瀑布流：分类标签用（1 次请求，不重复取 promote/latest/categories）。
   Future<JmSearchPage> categoryPage({
-    String category = '0',
+    String categorySlug = '',
     AlbumOrder order = AlbumOrder.latestUpdate,
   }) =>
-      _api.fetchFilter(page: 1, category: category, order: order);
+      _api.fetchFilter(page: 1, categorySlug: categorySlug, order: order);
 
   /// 加载下一页瀑布流；失败时返回原 feed（UI 底部给"重试"条）。
   ///
-  /// 服务端返回空页即视为到底（`o=mv_t` 这类 total=121 的分类第 3 页就会空），
+  /// 服务端返回空页即视为到底（`o=mv_t` 这类分类第 3 页就会空），
   /// 置 `gridExhausted` 后不再发请求。
   Future<HomeFeed> loadMore(
     HomeFeed current, {
-    String category = '0',
+    String categorySlug = '',
     AlbumOrder order = AlbumOrder.latestUpdate,
+    bool? persistCache,
   }) async {
+    final persist = persistCache ?? categorySlug.isEmpty;
     if (current.gridExhausted) return current;
     if (current.gridTotal >= AppConfig.maxServerTotal &&
         current.gridPage >= (AppConfig.maxServerTotal / AppConfig.pageSize).ceil()) {
       return current.copyWith(gridExhausted: true);
     }
     final nextPage = current.gridPage + 1;
-    final page = await _api.fetchFilter(page: nextPage, category: category, order: order);
+    final page = await _api.fetchFilter(
+      page: nextPage,
+      categorySlug: categorySlug,
+      order: order,
+    );
     if (page.content.isEmpty) {
       final updated = current.copyWith(gridPage: nextPage, gridExhausted: true);
-      await _writeCache(updated);
+      if (persist) await _writeCache(updated);
       return updated;
     }
     final merged = mergeUnique(current.grid, page.content);
@@ -182,7 +200,7 @@ class HomeRepository {
       updatedAt: DateTime.now(),
       partialErrors: const <String>[],
     );
-    await _writeCache(updated);
+    if (persist) await _writeCache(updated);
     return updated;
   }
 
@@ -216,11 +234,11 @@ class HomeRepository {
     return banners;
   }
 
-  /// 分类接口失败时用固定的 10 个顶层分类兜底（PLAN §5.4）。
+  /// 分类接口失败时用固定的 10 个顶层分类兜底（PLAN §5.4），slug 用于筛选。
   static List<JmCategory> _categoriesWithFallback(List<JmCategory> categories) {
     if (categories.isNotEmpty) return categories;
     return JmCategoryFallback.items
-        .map((item) => JmCategory(id: item.id, name: item.name))
+        .map((item) => JmCategory(id: item.id, name: item.name, slug: item.slug))
         .toList(growable: false);
   }
 }

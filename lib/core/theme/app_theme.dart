@@ -60,6 +60,16 @@ abstract final class AppTheme {
           TargetPlatform.iOS: FadeForwardsPageTransitionsBuilder(),
         },
       ),
+      // Metal 皮肤的「二级菜单」（`showModalBottomSheet`：阅读器更多、排序、主题
+      // 选择等）默认走 M3 的圆形圆角 RRect，和 LiquidGlass 一侧的超椭圆对不上。
+      // 统一换成连续曲率（squircle）的顶部圆角，两套皮肤的面板曲率一致。
+      bottomSheetTheme: const BottomSheetThemeData(
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppColors.radiusPanel),
+          ),
+        ),
+      ),
       sliderTheme: SliderThemeData(
         trackHeight: 3,
         activeTrackColor: scheme.primary,
@@ -78,7 +88,8 @@ abstract final class AppTheme {
         filled: true,
         fillColor: scheme.surfaceContainer,
         hintStyle: AppTypography.body.copyWith(color: scheme.onSurfaceVariant),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppColors.radiusPill),
           borderSide: BorderSide.none,
@@ -95,7 +106,8 @@ abstract final class AppTheme {
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: scheme.inverseSurface,
-        contentTextStyle: AppTypography.body.copyWith(color: scheme.onInverseSurface),
+        contentTextStyle:
+            AppTypography.body.copyWith(color: scheme.onInverseSurface),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),

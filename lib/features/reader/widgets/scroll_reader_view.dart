@@ -42,8 +42,7 @@ class ScrollReaderView extends StatelessWidget {
       notification.metrics.maxScrollExtent - footerExtent,
     );
     if (contentExtent <= 0) return false;
-    final ratio =
-        (notification.metrics.pixels / contentExtent).clamp(0.0, 1.0);
+    final ratio = (notification.metrics.pixels / contentExtent).clamp(0.0, 1.0);
     final page = (ratio * (total - 1)).round() + 1;
     onPageChanged(math.min(math.max(page, 1), total));
     return false;

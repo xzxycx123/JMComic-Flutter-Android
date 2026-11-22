@@ -95,5 +95,40 @@ void main() {
         throwsA(isA<Exception>()),
       );
     });
+
+    test('分类筛选按 slug 请求，且不污染首页磁盘缓存', () async {
+      final box = Hive.box<dynamic>(HiveBoxes.feedCache);
+      await box.clear();
+      final api = FakeJmApi();
+      final repository = HomeRepository(api: api, cacheBox: box);
+
+      final filtered = await repository.fetchFeed(
+        categorySlug: 'doujin',
+        order: AlbumOrder.mostViewed,
+      );
+      expect(api.lastCategorySlug, 'doujin', reason: 'c 必须传 slug，不能传数字 id');
+      expect(api.lastFilterOrder, AlbumOrder.mostViewed);
+      expect(filtered.grid.length, 1);
+      expect(filtered.grid.single.categoryId, '1');
+      expect(box.get('feed'), isNull, reason: '分类页不写首页缓存');
+
+      final latest = await repository.fetchFeed();
+      expect(api.lastCategorySlug, isEmpty);
+      expect(latest.grid.length, 3);
+      expect(box.get('feed'), isNotNull);
+      await box.clear();
+    });
+
+    test('分页沿用 slug：第二页仍带同一分类', () async {
+      final api = FakeJmApi();
+      final repository = HomeRepository(api: api);
+      final feed = await repository.fetchFeed(categorySlug: 'single');
+      expect(feed.grid.length, 2);
+      expect(feed.grid.every((album) => album.categoryId == '2'), isTrue);
+
+      await repository.loadMore(feed, categorySlug: 'single');
+      expect(api.filterQueries.last.slug, 'single');
+      expect(api.filterQueries.last.page, 2);
+    });
   });
 }

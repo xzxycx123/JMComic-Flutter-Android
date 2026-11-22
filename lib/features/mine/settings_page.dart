@@ -6,11 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../core/config/app_config.dart';
 import '../../core/di/providers.dart';
 import '../../core/icons/app_icons.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/interface_style_selector.dart';
+import '../../core/theme/theme_mode_selector.dart';
 import '../../core/ui/app_toast.dart';
 import '../../core/ui/glass/app_glass.dart';
 import '../../core/utils/file_names.dart';
@@ -22,6 +24,8 @@ import '../../data/sources/jm_host_probe.dart';
 import '../collect/collect_providers.dart';
 import '../download/download_providers.dart';
 import '../home/widgets/section_header.dart';
+import '../update/update_dialog.dart';
+import '../update/update_providers.dart';
 
 /// 设置页：阅读 / 外观 / 网络 / 存储 四组，全部即时生效。
 class SettingsPage extends ConsumerStatefulWidget {
@@ -43,6 +47,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final settings = ref.watch(settingsProvider);
     final session = ref.watch(sessionProvider);
     final records = ref.watch(downloadRecordsProvider);
+    final update = ref.watch(updateCheckProvider);
 
     return AppGlassPage(
       appBar: AppGlassAppBar(
@@ -95,12 +100,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 8),
           const SectionHeader(title: '外观'),
           const InterfaceStyleSelector(),
-          _SettingsTile(
-            icon: AppIcons.theme,
-            title: '主题模式',
-            value: settings.themeMode.label,
-            onTap: () => _pickTheme(settings.themeMode),
-          ),
+          const ThemeModeSelector(),
           const SizedBox(height: 8),
           const SectionHeader(title: '网络'),
           _SettingsTile(
@@ -180,6 +180,39 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             value: '${records.length} 条',
             onTap: _exportRecords,
           ),
+          const SizedBox(height: 8),
+          const SectionHeader(title: '更新'),
+          _SettingsTile(
+            icon: AppIcons.refresh,
+            title: '自动检查更新',
+            value: settings.autoUpdateCheck ? '启动时检查' : '已关闭',
+            trailing: AppSwitch.adaptive(
+              value: settings.autoUpdateCheck,
+              onChanged: (value) =>
+                  ref.read(settingsProvider.notifier).setAutoUpdateCheck(value),
+            ),
+          ),
+          _SettingsTile(
+            icon: AppIcons.download,
+            title: '检查新版本',
+            value: update.summary,
+            busy: update.checking,
+            onTap: _checkUpdate,
+          ),
+          _SettingsTile(
+            icon: AppIcons.check,
+            title: '当前版本',
+            value: update.currentVersion.isKnown
+                ? update.currentVersion.display
+                : 'v${AppConfig.appVersion}',
+          ),
+          if (settings.skippedReleaseTag.isNotEmpty)
+            _SettingsTile(
+              icon: AppIcons.close,
+              title: '已跳过 ${settings.skippedReleaseTag}',
+              value: '点此恢复提醒',
+              onTap: _clearSkippedRelease,
+            ),
           const SizedBox(height: 8),
           const SectionHeader(title: '关于'),
           _SettingsTile(
@@ -301,35 +334,31 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _showToast('保存目录：$value');
   }
 
-  Future<void> _pickTheme(AppThemeMode current) async {
-    final selected = await AppSheet.show<AppThemeMode>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            for (final mode in AppThemeMode.values)
-              AppListTile(
-                title: Text(mode.label),
-                trailing: mode == current
-                    ? IconTheme(
-                        data: IconThemeData(
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        child: const SvgIcon(AppIcons.check, size: 20),
-                      )
-                    : null,
-                onTap: () => Navigator.of(context).pop(mode),
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-    if (selected != null && mounted) {
-      await ref.read(settingsProvider.notifier).setThemeMode(selected);
+  /// 手动检查更新：有新版就弹「检测到新版本」（用户主动点的，无视跳过记录）。
+  Future<void> _checkUpdate() async {
+    final state = await ref.read(updateCheckProvider.notifier).check();
+    if (!mounted) return;
+    final release = state.release;
+    if (release == null) {
+      _showToast(
+        state.phase == UpdatePhase.failed
+            ? '检查失败：${state.message}'
+            : '已是最新版本 ${state.currentVersion.display}',
+      );
+      return;
     }
+    await promptForRelease(
+      context: context,
+      ref: ref,
+      release: release,
+      current: state.currentVersion,
+    );
+  }
+
+  /// 取消「跳过此版本」，下次启动恢复提醒。
+  Future<void> _clearSkippedRelease() async {
+    await ref.read(updateCheckProvider.notifier).clearSkipped();
+    _showToast('已恢复更新提醒');
   }
 
   Future<void> _pickReaderMode(String current) async {
@@ -384,6 +413,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           removed++;
         }
       }
+      // 顺带清掉没装成的更新包（jm-update/）。
+      await ref.read(updateRepositoryProvider).clearDownloads();
       _showToast('已清理 $removed 个临时目录');
     } catch (error) {
       _showToast('清理失败：$error');

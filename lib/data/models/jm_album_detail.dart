@@ -1,3 +1,4 @@
+import '../../core/utils/author_name.dart';
 import 'jm_album_summary.dart';
 import 'jm_chapter.dart';
 
@@ -40,9 +41,12 @@ class JmAlbumDetail {
 
   bool get isSingleChapter => chapters.length <= 1;
 
+  /// 剥掉 `[作者]` 这类中括号后的作者名（显示与作者搜索都用它）。
+  String get authorName => normalizeAuthorName(author);
+
   String get displayAuthor {
-    final value = author.trim();
-    return (value.isEmpty || value == 'N/A') ? '未知作者' : value;
+    final value = authorName;
+    return (value.isEmpty || value.toUpperCase() == 'N/A') ? '未知作者' : value;
   }
 
   String get displayTitle => title.trim().isEmpty ? 'JM$id' : title.trim();

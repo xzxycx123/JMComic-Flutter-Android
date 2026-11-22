@@ -285,7 +285,7 @@ const kDomainServerUrls = <String>[
 | 2 | `/promote` | — | `[{id,title,slug,type,filter_val,content:[album…]}]` 共 8 个模块 | 首页轮播 + 分节 |
 | 3 | `/latest` | `page`（1 起） | `[album…]` 每页 80 | 最新上架 |
 | 4 | `/categories` | `page=1` | `{categories:[{id,name,slug,total_albums,type,sub_categories:[{CID,name,slug}]}]}` | 分类 chips |
-| 5 | `/categories/filter` | `page,order=,c=<分类id>,o=<排序>` | `{search_query,total,content:[album…]}`，`total` 上限 10000 | 无限流 |
+| 5 | `/categories/filter` | `page,order=,c=<分类 **slug**>,o=<排序>` | `{search_query,total,content:[album…]}`，`total` 上限 10000 | 无限流 |
 | 6 | `/search` | `main_tag=0,search_query,page,o,t=a` | `{search_query,search_type,total,content[]}`；命中车号时 `{redirect_aid:"350234",total:1,content:[]}` | 搜索 |
 | 7 | `/album` | `id` | 详见 §5.5 | 详情 |
 | 8 | `/chapter` | `id`（章节/单本 id） | `{id,name,images:["00001.webp",…],tags,series_id,…}` | 页面清单 |
@@ -305,8 +305,14 @@ const kDomainServerUrls = <String>[
 | id | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
 |---|---|---|---|---|---|---|---|---|---|---|
 | name | 最新A漫 | 同人 | 單本 | 短篇 | 其他類 | 韓漫 | English Manga | Cosplay | 3D | 禁漫漢化組 |
+| **slug（筛选用）** | *(空)* | doujin | single | short | another | hanman | meiman | another_cosplay | 3D | 禁漫漢化組 |
 
-`id=1`（同人）的子分类样例：`漢化 / 日語 / CG圖集 / 禁漫去碼 / 禁漫上色`（字段名 `CID`、`name`、`slug`）。
+> ⚠️ `/categories/filter` 的 `c` **只认 slug**：实测（2026-11-22）`c=1/2/3…` 全部返回同一份默认榜（首条 id 一致），
+> 只有 `c=doujin` / `c=single` / `c=3D` 才真正按分类过滤。详见 `docs/JM_CATEGORY_FILTER_2026-11-22.md`。
+
+`id=1`（同人）的子分类样例：`漢化 / 日語 / CG圖集 / 禁漫去碼 / 禁漫上色`（字段名 `CID`、`name`、`slug`）；
+二级筛选用 **`c=父slug_子slug`**（实测 `doujin_chinese` / `single_youth` / `meiman_fakku` 生效）；
+`c=<子slug>`（只给子类）或 `o=` / `filter=` / `sub_category=` 等服务端都不认，会掉回混合流或父分类。
 
 `/promote` 实测 8 个模块：
 | id | type | filter_val | 条目数 | title |
@@ -708,7 +714,7 @@ abstract final class AppColors {
 | AppBar | `SliverAppBar(floating: true, pinned: false)`；滚动 > 40px 时背景 `surface.withOpacity(.82)` + blur；左侧「JMComic」字标（宽 96，`FontWeight.w800`，字距 -0.5），右侧搜索、主题切换 |
 | 搜索 | 点击进搜索页（§7.4）。**输入是车号 → 直接进详情页**（不经过结果页）；输入是关键词 → GET 搜索接口出结果页 |
 | 轮播 | 高 180，左右 margin 16，圆角 20，`PageView` 自动 5s，`Timer` 在 `dispose` 停止；底部渐变 scrim 高 88，标题 2 行 ellipsis + 分类徽标；指示点 6×6（激活 18×6 胶囊） |
-| 分类条 | 高 44，`SliverPersistentHeader(pinned: true)`；chip 高 32、圆角 999、选中 `primary` 实底；数据来自 `/categories`（实测 10 个顶层：`0 最新A漫 / 1 同人 / 2 單本 / 3 短篇 / 4 其他類 / 5 韓漫 / 6 English Manga / 7 Cosplay / 8 3D / 9 禁漫漢化組`）→ 点击切 `c=<id>` 并重置分页 |
+| 分类条 | 高 44，`SliverPersistentHeader(pinned: true)`；chip 高 32、圆角 999、选中 `primary` 实底；数据来自 `/categories`（实测 10 个顶层：`0 最新A漫 / 1 同人 / 2 單本 / 3 短篇 / 4 其他類 / 5 韓漫 / 6 English Manga / 7 Cosplay / 8 3D / 9 禁漫漢化組`）→ 点击切 `c=<该分类 slug>`（不是 id！）并重置分页；筛选态隐藏轮播/推荐分节，只留分类条 + 排序 + 该分类瀑布流 |
 | 分节头 | 标题 16 w700 + 「更多 ›」12 `onSurfaceVariant` |
 | 横滑分节 | 每模块 `SizedBox(height: 232)` + `ListView.horizontal`，卡片宽 148，封面 3:4，标题 2 行 |
 | 瀑布流 | 双列 `SliverGrid`，`childAspectRatio: 0.58`（封面 3:4 + 2 行标题），`crossAxisSpacing 12`、`mainAxisSpacing 16` |

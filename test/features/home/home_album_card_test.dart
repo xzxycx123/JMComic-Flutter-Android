@@ -6,8 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jm_comic/core/di/providers.dart';
 import 'package:jm_comic/core/icons/app_icons.dart';
 import 'package:jm_comic/core/theme/app_theme.dart';
+import 'package:jm_comic/core/theme/interface_style_scope.dart';
 import 'package:jm_comic/core/ui/glass/app_chip.dart';
 import 'package:jm_comic/core/ui/glass/app_surface.dart';
+import 'package:jm_comic/data/local/settings_store.dart';
 import 'package:jm_comic/data/models/jm_album_summary.dart';
 import 'package:jm_comic/features/home/widgets/album_card.dart';
 import 'package:jm_comic/features/home/widgets/cover_image.dart';
@@ -148,5 +150,50 @@ void main() {
     expect(find.text('服务端标签'), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('caption-tag')), findsOneWidget);
     expect(find.text('9'), findsOneWidget);
+  });
+
+  testWidgets('LiquidGlass 下标题不再垫圆角矩形底衬', (tester) async {
+    const album = JmAlbumSummary(
+      id: '5',
+      title: '玻璃标题',
+      author: '測試作者',
+      tags: <String>['同人'],
+      likes: 3,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          jmApiProvider.overrideWithValue(FakeJmApi()),
+          jmBootstrapProvider
+              .overrideWith((ref) => Completer<FakeJmApi>().future),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          builder: (context, child) => InterfaceStyleScope(
+            style: AppInterfaceStyle.liquidGlass,
+            child: child!,
+          ),
+          home: const Scaffold(
+            body: Center(
+              child: SizedBox(width: 160, child: AlbumCard(album: album)),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // 标题区不再包一层 Stack/底衬：标题不是任何 Stack 的后代，只剩封面自己
+    // 的 Stack（封面 + 喜欢数 + 新上架角标）。
+    expect(
+      find.ancestor(
+        of: find.text('玻璃标题'),
+        matching: find.byType(Stack),
+      ),
+      findsNothing,
+    );
+    final title = tester.getRect(find.text('玻璃标题'));
+    final cover = tester.getRect(find.byType(CoverImage));
+    expect(title.top, greaterThanOrEqualTo(cover.bottom));
   });
 }

@@ -186,7 +186,7 @@ class FavoritesRepository {
         item
             .copyWith(
               title: item.title.isEmpty ? remote.title : item.title,
-              author: item.author.isEmpty ? remote.author : item.author,
+              author: item.author.isEmpty ? remote.authorName : item.author,
               categoryId: item.categoryId.isEmpty ? remote.categoryId : item.categoryId,
               categoryTitle:
                   item.categoryTitle.isEmpty ? remote.categoryTitle : item.categoryTitle,

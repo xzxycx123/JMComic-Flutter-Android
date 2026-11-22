@@ -216,6 +216,27 @@ class FakeJmApi implements JmApi {
   int filterCalls = 0;
   int loginCalls = 0;
 
+  /// `/categories/filter` 入参快照：断言「点分类真的带 slug 重查」。
+  final List<({String slug, AlbumOrder order, int page})> filterQueries =
+      <({String slug, AlbumOrder order, int page})>[];
+
+  /// 最近一次 `/categories/filter` 的分类 slug（空串 = 不过滤）。
+  String? get lastCategorySlug =>
+      filterQueries.isEmpty ? null : filterQueries.last.slug;
+
+  /// 最近一次 `/categories/filter` 的排序。
+  AlbumOrder? get lastFilterOrder =>
+      filterQueries.isEmpty ? null : filterQueries.last.order;
+
+  /// 模拟服务端按 slug 过滤：fixture 里只有「同人」「單本」两条分类。
+  ///
+  /// 二级分类是 `父slug_子slug` 拼接（`doujin_chinese`），服务端按父类降级过滤。
+  static const Map<String, String> slugToCategoryId = <String, String>{
+    'doujin': '1',
+    'single': '2',
+    'doujin_chinese': '1',
+  };
+
   void _throwIfFailing() {
     if (failAll) {
       throw const JmApiException('所有 API 线路均连接失败', network: true);
@@ -553,11 +574,12 @@ class FakeJmApi implements JmApi {
   @override
   Future<JmSearchPage> fetchFilter({
     int page = 1,
-    String category = '0',
+    String categorySlug = '',
     AlbumOrder order = AlbumOrder.latestUpdate,
   }) async {
     _throwIfFailing();
     filterCalls++;
+    filterQueries.add((slug: categorySlug, order: order, page: page));
     if (emptyAfterFirstPage && page > 1) {
       return JmSearchPage(
         query: '',
@@ -566,7 +588,27 @@ class FakeJmApi implements JmApi {
         page: page,
       );
     }
-    return JmResponseParser.searchPage(Fixtures.filter(), page: page);
+    final base = JmResponseParser.searchPage(Fixtures.filter(), page: page);
+    if (categorySlug.isEmpty) return base;
+    // 模拟真机服务端行为：只认 slug，数字 id 会被忽略、退回默认榜。
+    final categoryId = slugToCategoryId[categorySlug];
+    if (categoryId == null) {
+      return JmSearchPage(
+        query: '',
+        total: 0,
+        content: const <JmAlbumSummary>[],
+        page: page,
+      );
+    }
+    final filtered = base.content
+        .where((album) => album.categoryId == categoryId)
+        .toList(growable: false);
+    return JmSearchPage(
+      query: '',
+      total: filtered.isEmpty ? 0 : base.total,
+      content: filtered,
+      page: page,
+    );
   }
 
   @override

@@ -1,3 +1,4 @@
+import '../../core/utils/author_name.dart';
 import 'json_field.dart';
 
 /// 列表项（首页 / 分类 / 搜索共用）。
@@ -24,8 +25,11 @@ class JmAlbumSummary {
   final String author;
   final List<String> tags;
 
+  /// 剥掉 `[作者]` 这类中括号后的作者名（显示与作者搜索都用它）。
+  String get authorName => normalizeAuthorName(author);
+
   bool get hasKnownAuthor {
-    final value = author.trim();
+    final value = authorName;
     return value.isNotEmpty && value.toUpperCase() != 'N/A';
   }
 
@@ -43,7 +47,7 @@ class JmAlbumSummary {
 
   String get displayTitle => title.trim().isEmpty ? 'JM$id' : title.trim();
 
-  String get displayAuthor => hasKnownAuthor ? author.trim() : '未知作者';
+  String get displayAuthor => hasKnownAuthor ? authorName : '未知作者';
 
   /// 卡片左上角标签：`tags` 优先，其次子分类，最后一级分类。
   ///

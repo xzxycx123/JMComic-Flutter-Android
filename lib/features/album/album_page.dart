@@ -449,16 +449,19 @@ class _InteractionBar extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
       child: Row(
         children: <Widget>[
-          _Pill(
+          AppActionPill(
             icon: like.liked ? AppIcons.heartFilled : AppIcons.heart,
             label: like.liked ? '已点赞 ${like.likes}' : '点赞 ${like.likes}',
             active: like.liked,
+            semanticLabel:
+                like.liked ? '已点赞 ${like.likes}' : '点赞 ${like.likes}',
             onTap: () => _like(context, ref, like),
           ),
           const SizedBox(width: 10),
-          _Pill(
+          AppActionPill(
             icon: AppIcons.comment,
             label: commentCount > 0 ? '评论 $commentCount' : '写评论',
+            prominent: true,
             onTap: () => _comment(context, ref),
           ),
         ],
@@ -496,53 +499,6 @@ class _InteractionBar extends ConsumerWidget {
     final draft = await showCommentComposer(context, albumId: album.id);
     if (draft == null || !context.mounted) return;
     sendCommentOptimistically(context, ref, albumId: album.id, draft: draft);
-  }
-}
-
-class _Pill extends StatelessWidget {
-  const _Pill({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.active = false,
-  });
-
-  final String icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final foreground =
-        active ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
-    final text =
-        Text(label, style: AppTypography.caption.copyWith(color: foreground));
-    final glyph = SvgIcon(icon, size: 16, color: foreground);
-    return AppChip(
-      label: text,
-      leading: glyph,
-      onTap: onTap,
-      selected: active,
-      kind: AppChipKind.action,
-      foregroundColor: foreground,
-      metalChild: Material(
-        color: active ? scheme.primaryContainer : scheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(AppColors.radiusPill),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppColors.radiusPill),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[glyph, const SizedBox(width: 6), text],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -615,7 +571,7 @@ class _AuthorLine extends StatelessWidget {
 
   /// 空作者 / 未知作者 / N/A 不给点击，免得搜出来一片空列表。
   static bool canSearch(JmAlbumDetail album) {
-    final raw = album.author.trim().toLowerCase();
+    final raw = album.authorName.toLowerCase();
     if (raw.isEmpty || raw == 'n/a' || raw == 'na') return false;
     return album.displayAuthor != '未知作者';
   }

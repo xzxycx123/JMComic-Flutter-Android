@@ -26,6 +26,7 @@ import java.util.concurrent.Executors
 class MainActivity : FlutterActivity() {
     private val channelName = "jm_comic/pdf_store"
     private val pdfReaderChannelName = "jm_comic/pdf_reader"
+    private val appChannelName = "jm_comic/app"
     private val relativePath = "${Environment.DIRECTORY_DOCUMENTS}/JMComics/"
 
     /** 内置 PDF 阅读器：同一时刻只保留一份打开的 PdfRenderer（Dart 侧也只读一个文件）。 */
@@ -130,6 +131,43 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        // 自动更新的系统侧能力：读真实 versionName + 拉起浏览器 / 安装器。
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, appChannelName)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "versionName" -> {
+                        try {
+                            val info = packageManager.getPackageInfo(packageName, 0)
+                            result.success(info.versionName ?: "")
+                        } catch (error: Exception) {
+                            result.error("version_failed", error.message, null)
+                        }
+                    }
+                    "openUrl" -> {
+                        val url = call.argument<String>("url")
+                        if (url.isNullOrBlank()) {
+                            result.success(false)
+                            return@setMethodCallHandler
+                        }
+                        result.success(openUrl(url))
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    /** 用系统默认应用打开链接（发布页 / 应用商店）。 */
+    private fun openUrl(url: String): Boolean = try {
+        startActivity(
+            Intent(Intent.ACTION_VIEW).apply {
+                setData(Uri.parse(url))
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        )
+        true
+    } catch (_: Exception) {
+        false
     }
 
     /** 打开 PDF 并返回页数与首页尺寸（content:// 与 file:// 都支持）。 */

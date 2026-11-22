@@ -1,5 +1,6 @@
 export '../../theme/app_glass_theme.dart';
 export '../../theme/interface_style_scope.dart';
+export 'app_action_pill.dart';
 export 'app_badge.dart';
 export 'app_button.dart';
 export 'app_chip.dart';

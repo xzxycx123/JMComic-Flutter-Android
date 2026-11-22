@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jm_comic/core/theme/app_colors.dart';
 import 'package:jm_comic/core/theme/app_glass_theme.dart';
+import 'package:jm_comic/core/theme/app_theme.dart';
 import 'package:jm_comic/core/theme/interface_style_scope.dart';
 import 'package:jm_comic/core/ui/glass/app_dialog.dart';
 import 'package:jm_comic/core/ui/glass/app_sheet.dart';
@@ -20,6 +22,22 @@ Widget _host(AppInterfaceStyle style, WidgetBuilder builder) {
 }
 
 void main() {
+  test('Metal 二级菜单（bottom sheet）用连续曲率的超椭圆圆角', () {
+    for (final theme in <ThemeData>[AppTheme.light(), AppTheme.dark()]) {
+      final shape = theme.bottomSheetTheme.shape;
+      expect(
+        shape,
+        isA<RoundedSuperellipseBorder>(),
+        reason: '二级菜单面板必须是 squircle（连续曲率），不是普通 RRect',
+      );
+      final borderRadius =
+          (shape! as RoundedSuperellipseBorder).borderRadius as BorderRadius;
+      expect(borderRadius.topLeft.x, AppColors.radiusPanel);
+      expect(borderRadius.topRight.x, AppColors.radiusPanel);
+      expect(borderRadius.bottomLeft, Radius.zero, reason: '只有顶边圆角');
+    }
+  });
+
   for (final style in AppInterfaceStyle.values) {
     testWidgets('$style dialog returns a typed action exactly once',
         (tester) async {

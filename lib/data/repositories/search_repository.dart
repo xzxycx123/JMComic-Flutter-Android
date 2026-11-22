@@ -69,7 +69,8 @@ class SearchAlbumMetadata {
 
   factory SearchAlbumMetadata.fromAlbum(JmAlbumDetail album) =>
       SearchAlbumMetadata(
-        author: album.author,
+        // 卡片上显示的作者，统一去掉中括号（部分本子写成 `[作者]`）。
+        author: album.authorName,
         tags: album.tags,
       );
 

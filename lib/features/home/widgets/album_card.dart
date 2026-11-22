@@ -77,23 +77,8 @@ class AlbumCard extends StatelessWidget {
         else
           AspectRatio(aspectRatio: 3 / 4, child: cover),
         const SizedBox(height: 8),
-        Stack(
-          children: <Widget>[
-            // 滚动内容里的标题底衬用实色，不用玻璃（避免折射层套在列表里）。
-            if (context.isLiquidGlass)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                ),
-              ),
-            caption ?? _CardCaption(album: album),
-          ],
-        ),
+        // 标题/作者/标签直接铺在页面上：LiquidGlass 模式下不再垫圆角矩形底衬。
+        caption ?? _CardCaption(album: album),
       ],
     );
 

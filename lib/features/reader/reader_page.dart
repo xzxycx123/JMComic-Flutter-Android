@@ -146,7 +146,12 @@ class _ReaderError extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 18),
-                    AppButton(onPressed: onRetry, child: const Text('重试')),
+                    // 药丸形（全圆角）主按钮，和 LiquidGlass 一侧的胶囊一致。
+                    AppButton(
+                      onPressed: onRetry,
+                      cornerRadius: AppColors.radiusPill,
+                      child: const Text('重试'),
+                    ),
                   ],
                 ),
               ),
@@ -418,6 +423,44 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
     _goToPage(_page + 1);
   }
 
+  /// 竖读「翻一屏」：按视口高度整屏移动，到边界回弹。
+  ///
+  /// [direction] 为 `1` 向后（往下）翻一屏，`-1` 向前（往上）翻一屏。
+  ///
+  /// 竖读本来就是无动画的（跳页 / 切模式都用 `jumpTo`）：这里同样瞬切，
+  /// 连点也不会被上一段动画吞掉半屏，`_page` 由滚动通知照常回写进度。
+  void _turnVerticalScreen(int direction) {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final screen = position.viewportDimension;
+    if (screen <= 0) return;
+    _restartHudTimer();
+    final target = (position.pixels + direction * screen)
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    if ((target - position.pixels).abs() < .5) {
+      _bounceController.forward(from: 0);
+      HapticFeedback.lightImpact();
+      return;
+    }
+    _scrollController.jumpTo(target);
+  }
+
+  /// 竖读单击三分区：左翻上一屏，中显示详情（HUD），右翻下一屏。
+  ///
+  /// 和左右翻页共用同一套比例（[readerTapZoneAt]）：换模式不换手感。
+  void _onVerticalTapUp(TapUpDetails details) {
+    final width = MediaQuery.sizeOf(context).width;
+    switch (readerTapZoneAt(details.localPosition.dx, width)) {
+      case ReaderTapZone.previous:
+        _turnVerticalScreen(-1);
+      case ReaderTapZone.hud:
+        _toggleHud();
+      case ReaderTapZone.next:
+        _turnVerticalScreen(1);
+    }
+  }
+
   /// 当前阅读位置的快照：同步取值，不依赖 widget 树 / 仓储是否就绪。
   ///
   /// `total == 0`（空章节，没有任何可读页）时返回 null：不写脏进度。
@@ -582,43 +625,35 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
             ),
           ),
         ),
-        AppListTile(
-          leading: IconTheme(
-            data: const IconThemeData(color: ink),
-            child: SvgIcon(_mode.icon, size: 20),
-          ),
-          title: Text('翻页方式', style: titleStyle()),
-          subtitle: Text('当前：${_mode.label}', style: subStyle()),
-          trailing: Text(
-            '切换到${_mode.toggled.label}',
-            style:
-                AppTypography.micro.copyWith(color: ink.withValues(alpha: .7)),
-          ),
+        // 每行「图标 · 标题 · 右侧取值」压在同一根中线上，副标题另起一行：
+        // 之前用 ListTile 的 title + subtitle + trailing，Material 把 trailing
+        // 垂直居中到两行之间，肉眼就是「文字和按钮没对齐」。
+        _MoreMenuRow(
+          icon: SvgIcon(_mode.icon, size: 20),
+          title: '翻页方式',
+          value: _mode.label,
+          subtitle: '点击切换到${_mode.toggled.label}',
+          titleStyle: titleStyle(),
+          subtitleStyle: subStyle(),
           onTap: () => Navigator.of(sheetContext).pop('mode'),
         ),
-        AppListTile(
-          leading: const IconTheme(
-            data: IconThemeData(color: ink),
-            child: SvgIcon(AppIcons.refresh, size: 20),
-          ),
-          title: Text('选择节点', style: titleStyle()),
-          subtitle: Text('当前：$_lineLabel', style: subStyle()),
+        _MoreMenuRow(
+          icon: const SvgIcon(AppIcons.refresh, size: 20),
+          title: '选择节点',
+          value: _lineLabel,
+          subtitle: '点击换一条分流线路',
+          titleStyle: titleStyle(),
+          subtitleStyle: subStyle(),
           onTap: () => Navigator.of(sheetContext).pop('line'),
         ),
-        AppListTile(
-          leading: const IconTheme(
-            data: IconThemeData(color: ink),
-            child: SvgIcon(AppIcons.download, size: 20),
-          ),
-          title: Text('下载当页图片', style: titleStyle()),
-          subtitle: Text(
-            _mode == ReaderMode.paged
-                ? '保存为 ${readerImageName(albumId: widget.data.args.albumId, chapterTitle: widget.data.title, page: math.min(_page, _total))}'
-                : '仅左右翻页模式可用',
-            style: subStyle(),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+        _MoreMenuRow(
+          icon: const SvgIcon(AppIcons.download, size: 20),
+          title: '下载当页图片',
+          subtitle: _mode == ReaderMode.paged
+              ? '保存为 ${readerImageName(albumId: widget.data.args.albumId, chapterTitle: widget.data.title, page: math.min(_page, _total))}'
+              : '仅左右翻页模式可用',
+          titleStyle: titleStyle(),
+          subtitleStyle: subStyle(),
           onTap: () => Navigator.of(sheetContext).pop('save'),
         ),
         const SizedBox(height: 8),
@@ -629,6 +664,10 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   // ---------------------------------------------------------------- 玻璃更多菜单
   /// LiquidGlass「更多」：GlassPullDownButton 从按钮本身灵 morph 出二级玻璃气泡，
   /// 「选择节点」用 GlassMenuItem.submenu 原生展开三级气泡（不再开第二个菜单 / Sheet）。
+  ///
+  /// 每行只放一行文本：包内 `GlassMenuItem` 的行内容是 Row(图标, 标题+副标题, trailing)、
+  /// 且整体垂直居中，带副标题时图标 / 箭头会落在两行中间，就是「文字和按钮没对齐」。
+  /// 当前值直接并进标题（或作为 trailing），所有行都只有一行，图标、文字、箭头天然对齐。
   ///
   /// 气泡由根 Overlay 绘制（HUD 只提供触发点），App 主题可能是浅色：
   /// 玻璃设置走 `AppGlassTheme.of(context, reader: true)`，文字 / 图标颜色
@@ -653,7 +692,8 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
         buttonWidth: 34,
         buttonHeight: 34,
         menuWidth: 264,
-        menuBorderRadius: 22,
+        // 面板与二级卡片都按超椭圆（连续曲率）绘制，这里给 iOS 26 的 28。
+        menuBorderRadius: 28,
         controller: _moreMenuController,
         settings: tokens.overlay,
         quality: AppGlassTheme.overlayQuality,
@@ -663,21 +703,18 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
         items: <Widget>[
           GlassMenuItem(
             title: '翻页方式',
-            subtitle: '当前：${_mode.label}',
             icon: iconOf(_mode.icon),
             titleStyle: titleStyle,
-            subtitleStyle: subStyle,
             iconColor: ink,
+            // 单行：标题与右侧取值同一条中线，不再把 trailing 挂在两行文字中间。
             trailing: Text('切换到${_mode.toggled.label}', style: subStyle),
             enablePressScale: !accessibility.reduceMotion,
             onTap: _toggleMode,
           ),
           GlassMenuItem(
             title: '选择节点',
-            subtitle: '当前：$_lineLabel',
             icon: iconOf(AppIcons.refresh),
             titleStyle: titleStyle,
-            subtitleStyle: subStyle,
             iconColor: ink,
             enablePressScale: !accessibility.reduceMotion,
             // 带 submenu 的父行 onTap 必需但不会被调用：激活它是展开三级气泡。
@@ -690,13 +727,8 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
           ),
           GlassMenuItem(
             title: '下载当页图片',
-            // 读到结束页时 `_page` 可能是 N+1，文案按实际会被保存的页 clamp。
-            subtitle: _mode == ReaderMode.paged
-                ? '保存为 ${readerImageName(albumId: widget.data.args.albumId, chapterTitle: widget.data.title, page: math.min(_page, _total))}'
-                : '仅左右翻页模式可用',
             icon: iconOf(AppIcons.download),
             titleStyle: titleStyle,
-            subtitleStyle: subStyle,
             iconColor: ink,
             enablePressScale: !accessibility.reduceMotion,
             onTap: () => unawaited(_saveCurrentPage()),
@@ -707,6 +739,8 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   }
 
   /// 三级气泡：分流列表（当前线路打勾，切线路中整列禁用）。
+  ///
+  /// 保持单行：主机串放在 trailing（当前线路换成勾），标题与取值同一中线。
   List<Widget> _glassLineItems({
     required TextStyle titleStyle,
     required TextStyle subStyle,
@@ -718,13 +752,21 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
         GlassMenuItem(
           key: ValueKey<String>('glass-node-$host'),
           title: JmConstants.lineLabelOf(host),
-          subtitle: host,
           titleStyle: titleStyle,
-          subtitleStyle: subStyle,
           iconColor: ink,
           trailing: host == current
               ? SvgIcon(AppIcons.check, size: 14, color: ink)
-              : null,
+              // 主机串定宽右对齐：大字号/窄面板下只截断它，不把整行挤溢出。
+              : SizedBox(
+                  width: 104,
+                  child: Text(
+                    host,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: subStyle,
+                  ),
+                ),
           semanticsSelected: host == current,
           enabled: !_switchingLine,
           onTap: () => unawaited(_applyLine(host)),
@@ -874,9 +916,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
       if (!mounted) return;
       AppToast.show(
         context,
-        ticket.reused
-            ? '这本已在下载队列中'
-            : '已加入下载队列：${ticket.record.displayTitle}',
+        ticket.reused ? '这本已在下载队列中' : '已加入下载队列：${ticket.record.displayTitle}',
         actionLabel: '查看',
         onAction: openDownloads,
       );
@@ -1115,7 +1155,9 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
       onPointerCancel: _onVerticalPointerEnd,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onTap: _toggleHud,
+        // 三分区落点：左翻上一屏，中显示详情（HUD），右翻下一屏。
+        // 用外层 onTapUp 而不是叠一层点击区：结束页上的按钮必须还能拿到点击。
+        onTapUp: _onVerticalTapUp,
         onDoubleTap: _toggleVerticalZoom,
         // 放大后横向拖动用来左右看边缘；纵向仍交给列表滚动。
         onHorizontalDragUpdate: _verticalZoomed ? _panVerticalZoom : null,
@@ -1287,10 +1329,13 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
               style: AppTypography.caption.copyWith(color: AppColors.readerInk),
             ),
             const SizedBox(height: 10),
+            // 单页重试也是药丸形，不再是小圆角方块。
             AppButton.text(
               onPressed: () {
                 _loader.request(page);
               },
+              cornerRadius: AppColors.radiusPill,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
               child: const Text('重试'),
             ),
           ],
@@ -1463,6 +1508,112 @@ class _LineTile extends StatelessWidget {
         detail,
         style: AppTypography.micro.copyWith(
           color: ok == true ? AppColors.darkPrimary : AppColors.darkInkVariant,
+        ),
+      ),
+    );
+  }
+}
+
+/// 「更多」二级菜单的一行：图标、标题、右侧取值压在同一根中线上，副标题另起一行。
+///
+/// 之前用 `ListTile` 的 title + subtitle + trailing，Material 会把 trailing
+/// 垂直居中到两行之间（图标同理），看起来就是「文字和按钮没对齐」。
+/// 这里把标题行显式做成一个 Row，图标固定 21（body 字号 14 × 1.5）居中于标题行。
+class _MoreMenuRow extends StatelessWidget {
+  const _MoreMenuRow({
+    required this.icon,
+    required this.title,
+    required this.titleStyle,
+    required this.subtitleStyle,
+    required this.onTap,
+    this.value,
+    this.subtitle,
+  });
+
+  final Widget icon;
+  final String title;
+  final String? value;
+  final String? subtitle;
+  final TextStyle titleStyle;
+  final TextStyle subtitleStyle;
+  final VoidCallback onTap;
+
+  /// 与 [titleStyle]（14 × 1.5）等高的标题行，图标和右侧取值都按它居中。
+  static const double _titleRowHeight = 21;
+
+  @override
+  Widget build(BuildContext context) {
+    const ink = AppColors.readerInk;
+    final trailing = value;
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        // 连续曲率的触点高亮，和 LiquidGlass 一侧的面板曲率一致。
+        customBorder: const RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              // 图标按标题行的中线对齐，而不是两行文字块的中线。
+              SizedBox(
+                width: 20,
+                height: _titleRowHeight,
+                child: Center(
+                  child: IconTheme(
+                    data: const IconThemeData(color: ink),
+                    child: icon,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    SizedBox(
+                      height: _titleRowHeight,
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: titleStyle,
+                            ),
+                          ),
+                          if (trailing != null) ...<Widget>[
+                            const SizedBox(width: 10),
+                            Flexible(
+                              child: Text(
+                                trailing,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: subtitleStyle,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (subtitle != null) ...<Widget>[
+                      const SizedBox(height: 1),
+                      Text(
+                        subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: subtitleStyle,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

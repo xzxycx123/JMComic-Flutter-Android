@@ -1,8 +1,19 @@
 /// 全局可调参数（并发、分页、缓存、图片上限）。
 abstract final class AppConfig {
-  /// 应用展示名 / 关于页版本前缀，实际版本号来自 pubspec（package_info 未接入时用此常量）。
+  /// 应用展示名 / 关于页版本前缀，实际版本号来自 pubspec（运行时优先读
+  /// `PackageManager.versionName`，见 `UpdateRepository.resolveInstalledVersion`）。
   static const String appName = 'JMComic';
-  static const String appVersion = '0.4.3';
+  static const String appVersion = '0.4.4';
+
+  /// 自动更新：发布页与取数地址（只用这一个仓库，见 docs/AUTO_UPDATE.md）。
+  static const String releaseOwner = 'xzxycx123';
+  static const String releaseRepo = 'JMComic-Flutter-Android';
+  static const String releasesPageUrl =
+      'https://github.com/$releaseOwner/$releaseRepo/releases';
+  static const String releasesApiUrl =
+      'https://api.github.com/repos/$releaseOwner/$releaseRepo/releases';
+  static const String releasesAtomUrl =
+      'https://github.com/$releaseOwner/$releaseRepo/releases.atom';
 
   /// 版权与许可证（关于页展示；仓库根 LICENSE 为全文，assets/licenses 里是同一份）。
   static const String copyright = 'Copyright (C) 2026 xzxycx';

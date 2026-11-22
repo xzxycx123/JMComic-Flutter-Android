@@ -59,6 +59,8 @@ class AppSettings {
     this.autoSwitchHost = true,
     this.rememberPassword = true,
     this.saveImagePath = defaultSaveImageDir,
+    this.autoUpdateCheck = true,
+    this.skippedReleaseTag = '',
   });
 
   final AppThemeMode themeMode;
@@ -75,6 +77,12 @@ class AppSettings {
   /// 阅读器「下载当页图片」的保存目录（相对公共存储，默认 `Pictures/JMComicDownloader/`）。
   final String saveImagePath;
 
+  /// 启动时自动检查 GitHub 发布页有没有新版本（默认开）。
+  final bool autoUpdateCheck;
+
+  /// 用户点过「跳过此版本」的 tag；下次同 tag 不再弹窗，新版本来照常提醒。
+  final String skippedReleaseTag;
+
   AppSettings copyWith({
     AppThemeMode? themeMode,
     AppInterfaceStyle? interfaceStyle,
@@ -83,6 +91,8 @@ class AppSettings {
     bool? autoSwitchHost,
     bool? rememberPassword,
     String? saveImagePath,
+    bool? autoUpdateCheck,
+    String? skippedReleaseTag,
   }) =>
       AppSettings(
         themeMode: themeMode ?? this.themeMode,
@@ -92,6 +102,8 @@ class AppSettings {
         autoSwitchHost: autoSwitchHost ?? this.autoSwitchHost,
         rememberPassword: rememberPassword ?? this.rememberPassword,
         saveImagePath: saveImagePath ?? this.saveImagePath,
+        autoUpdateCheck: autoUpdateCheck ?? this.autoUpdateCheck,
+        skippedReleaseTag: skippedReleaseTag ?? this.skippedReleaseTag,
       );
 }
 
@@ -106,6 +118,8 @@ class SettingsStore {
   static const String _keyAutoSwitchHost = 'autoSwitchHost';
   static const String _keyRememberPassword = 'rememberPassword';
   static const String _keySaveImagePath = 'saveImagePath';
+  static const String _keyAutoUpdateCheck = 'autoUpdateCheck';
+  static const String _keySkippedReleaseTag = 'skippedReleaseTag';
 
   final Box<dynamic> _box;
 
@@ -120,6 +134,8 @@ class SettingsStore {
         saveImagePath: normalizeSaveDir(
           (_box.get(_keySaveImagePath) as String?) ?? defaultSaveImageDir,
         ),
+        autoUpdateCheck: (_box.get(_keyAutoUpdateCheck) as bool?) ?? true,
+        skippedReleaseTag: (_box.get(_keySkippedReleaseTag) as String?) ?? '',
       );
 
   Future<void> write(AppSettings settings) async {
@@ -130,6 +146,8 @@ class SettingsStore {
     await _box.put(_keyAutoSwitchHost, settings.autoSwitchHost);
     await _box.put(_keyRememberPassword, settings.rememberPassword);
     await _box.put(_keySaveImagePath, settings.saveImagePath);
+    await _box.put(_keyAutoUpdateCheck, settings.autoUpdateCheck);
+    await _box.put(_keySkippedReleaseTag, settings.skippedReleaseTag);
   }
 }
 
@@ -170,6 +188,14 @@ class SettingsNotifier extends Notifier<AppSettings> {
   /// 保存图片目录（自动去掉首尾斜杠，空值回落默认目录）。
   Future<void> setSaveImagePath(String path) =>
       _commit(state.copyWith(saveImagePath: normalizeSaveDir(path)));
+
+  /// 启动自动检查更新。
+  Future<void> setAutoUpdateCheck(bool enabled) =>
+      _commit(state.copyWith(autoUpdateCheck: enabled));
+
+  /// 记住「跳过此版本」的 tag（空字符串 = 不跳过任何版本）。
+  Future<void> setSkippedReleaseTag(String tag) =>
+      _commit(state.copyWith(skippedReleaseTag: tag.trim()));
 }
 
 /// 便捷派生：MaterialApp 的 ThemeMode。

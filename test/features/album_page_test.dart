@@ -174,6 +174,30 @@ void main() {
     expect(find.byType(AlbumPage), findsOneWidget);
   });
 
+  testWidgets('作者名带中括号时显示与搜索都不带括号', (tester) async {
+    await pumpAlbum(tester, album: _album(author: '[作者甲]'));
+
+    expect(find.text('作者：作者甲'), findsOneWidget);
+    expect(find.text('作者：[作者甲]'), findsNothing);
+
+    await tester.tap(find.text('作者：作者甲'));
+    await tester.pumpAndSettle();
+
+    expect(_searchUri!.queryParameters['q'], '作者甲');
+    expect(_searchUri!.queryParameters['mode'], 'keyword');
+  });
+
+  testWidgets('作者名只有一对空括号时不触发搜索跳转', (tester) async {
+    await pumpAlbum(tester, album: _album(author: '[]'));
+
+    expect(find.text('作者：未知作者'), findsOneWidget);
+
+    await tester.tap(find.text('作者：未知作者'));
+    await tester.pumpAndSettle();
+
+    expect(_searchUri, isNull);
+  });
+
   testWidgets('第 1 页进度也显示「继续阅读 · 第 1 页」', (tester) async {
     await pumpAlbum(
       tester,

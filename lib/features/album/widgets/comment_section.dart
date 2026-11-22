@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -536,6 +537,9 @@ class _ComposerSheet extends ConsumerStatefulWidget {
 }
 
 class _ComposerSheetState extends ConsumerState<_ComposerSheet> {
+  /// 与 `/forum` 的正文上限一致；计数改到标题行右侧，不再额外占一行高度。
+  static const int _maxLength = 500;
+
   final TextEditingController _controller = TextEditingController();
   bool _spoiler = false;
   bool _closing = false;
@@ -568,62 +572,125 @@ class _ComposerSheetState extends ConsumerState<_ComposerSheet> {
     _close(CommentDraft(text, spoiler: _spoiler));
   }
 
+  /// 固定高度的输入井：约 3.4 行正文，大字号时按文字缩放入参，最矮 96、
+  /// 最高 220 —— 不再随 minLines 越撑越高。
+  double _fieldHeight(BuildContext context) {
+    final line = MediaQuery.textScalerOf(context).scale(
+      AppTypography.body.fontSize! * (AppTypography.body.height ?? 1.4),
+    );
+    return (line * 3.4 + 26).clamp(96.0, 220.0);
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final glass = context.isLiquidGlass;
+    // GlassModalSheet 不随键盘缩高，只有玻璃分支需要自己补键盘 + 安全区；
+    // Material 的 modal sheet 已经让出键盘，重复叠加会把内容顶得过高。
+    final keyboard = glass ? MediaQuery.viewInsetsOf(context).bottom : 0.0;
+    final text = _controller.text;
+    final canSend = text.trim().isNotEmpty;
     return SingleChildScrollView(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 4,
-        bottom: MediaQuery.viewInsetsOf(context).bottom +
-            MediaQuery.paddingOf(context).bottom +
-            16,
+      padding: EdgeInsets.fromLTRB(
+        20,
+        2,
+        20,
+        keyboard + MediaQuery.paddingOf(context).bottom + 20,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(
-            widget.parentId == null ? '写评论' : '回复评论',
-            style: AppTypography.sectionTitle.copyWith(color: scheme.onSurface),
-          ),
-          const SizedBox(height: 10),
-          AppTextField(
-            controller: _controller,
-            autofocus: true,
-            maxLines: 4,
-            minLines: 3,
-            maxLength: 500,
-            textInputAction: TextInputAction.newline,
-            decoration: const InputDecoration(hintText: '友善发言，剧透请勾选下方选项'),
-          ),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
             children: <Widget>[
               Expanded(
-                child: Row(
-                  children: <Widget>[
-                    AppSwitch.adaptive(
-                      value: _spoiler,
-                      onChanged: (value) => setState(() => _spoiler = value),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '含剧透',
-                      style: AppTypography.caption
-                          .copyWith(color: scheme.onSurfaceVariant),
-                    ),
-                  ],
+                child: Text(
+                  widget.parentId == null ? '写评论' : '回复评论',
+                  style: AppTypography.sectionTitle
+                      .copyWith(color: scheme.onSurface),
                 ),
               ),
+              Text(
+                '${text.length}/$_maxLength',
+                style: AppTypography.micro
+                    .copyWith(color: scheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: _fieldHeight(context),
+            child: Stack(
+              children: <Widget>[
+                Positioned.fill(
+                  child: AppTextField(
+                    controller: _controller,
+                    autofocus: true,
+                    expands: true,
+                    maxLines: null,
+                    minLines: null,
+                    // 圆角矩形 + 连续曲率：Metal 与 LiquidGlass 同形，只是
+                    // 一个实色井、一个玻璃井。
+                    cornerRadius: 16,
+                    contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    textAlignVertical: TextAlignVertical.top,
+                    textInputAction: TextInputAction.newline,
+                    style: AppTypography.body.copyWith(color: scheme.onSurface),
+                    inputFormatters: <TextInputFormatter>[
+                      LengthLimitingTextInputFormatter(_maxLength),
+                    ],
+                    decoration: const InputDecoration(),
+                  ),
+                ),
+                // 占位文案自己画在左上角（与 contentPadding 对齐），避免
+                // InputDecorator 在多行 + expands 时把 hint 摆到垂直居中。
+                if (text.isEmpty)
+                  Positioned(
+                    left: 16,
+                    top: 12,
+                    right: 16,
+                    child: IgnorePointer(
+                      child: Text(
+                        '友善发言，剧透请勾选下方选项',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.body
+                            .copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: <Widget>[
+              AppSwitch.adaptive(
+                value: _spoiler,
+                onChanged: (value) => setState(() => _spoiler = value),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '含剧透',
+                style: AppTypography.caption.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const Spacer(),
               AppButton.text(
                 onPressed: _close,
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: const Text('取消'),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 4),
               AppButton(
                 cornerRadius: AppColors.radiusPill,
-                onPressed: _controller.text.trim().isEmpty ? null : _submit,
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                onPressed: canSend ? _submit : null,
                 label: '发送',
               ),
             ],

@@ -47,9 +47,13 @@ abstract class JmApi {
 
   Future<List<JmCategory>> fetchCategories();
 
+  /// `GET /categories/filter?page&order=&c=<slug>&o=<排序>`。
+  ///
+  /// `c` 只认分类 **slug**（`doujin` / `single` / `3D`…），传数字 id 会被服务端
+  /// 静默忽略并退回默认榜；`0`/空串表示不过滤（最新A漫）。见 [JmCategoryFallback]。
   Future<JmSearchPage> fetchFilter({
     int page = 1,
-    String category = '0',
+    String categorySlug = '',
     AlbumOrder order = AlbumOrder.latestUpdate,
   });
 
@@ -337,7 +341,7 @@ class JmApiClient implements JmApi {
   @override
   Future<JmSearchPage> fetchFilter({
     int page = 1,
-    String category = '0',
+    String categorySlug = '',
     AlbumOrder order = AlbumOrder.latestUpdate,
   }) async {
     final decoded = await _requestApi(
@@ -345,7 +349,8 @@ class JmApiClient implements JmApi {
       query: <String, String>{
         'page': '$page',
         'order': '',
-        'c': category,
+        // 服务端只认 slug：`c=1` 与 `c=0` 会返回同一份榜（实测 2026-11-22）。
+        'c': categorySlug,
         'o': order.code,
       },
     );

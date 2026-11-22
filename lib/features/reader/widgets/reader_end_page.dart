@@ -107,7 +107,7 @@ class _ReaderEndPageState extends ConsumerState<ReaderEndPage> {
       // 专辑标题未知时留空（展示端回落 JM 号），不拿章节名冒充专辑名。
       title: detail?.title ?? widget.albumTitle,
       // 详情没拉到、本地已有条目时保留原作者，避免把账本信息洗成 N/A。
-      author: detail?.author ?? existing?.author ?? 'N/A',
+      author: detail?.authorName ?? existing?.author ?? 'N/A',
     );
   }
 

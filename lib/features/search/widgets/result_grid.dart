@@ -7,6 +7,7 @@ import '../../../core/config/app_config.dart';
 import '../../../core/icons/app_icons.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/glass/app_glass.dart';
+import '../../../core/utils/author_name.dart';
 import '../../../data/models/jm_album_summary.dart';
 import '../../home/home_likes.dart';
 import '../search_providers.dart';
@@ -134,9 +135,8 @@ class _SearchCaption extends ConsumerWidget {
     final metadata = album.tags.isEmpty || !album.hasKnownAuthor
         ? ref.watch(searchAlbumMetadataProvider(album.id)).valueOrNull
         : null;
-    final detailAuthor = metadata?.author.trim();
+    final detailAuthor = normalizeAuthorName(metadata?.author ?? '');
     final author = !album.hasKnownAuthor &&
-            detailAuthor != null &&
             detailAuthor.isNotEmpty &&
             detailAuthor.toUpperCase() != 'N/A'
         ? detailAuthor

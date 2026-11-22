@@ -628,7 +628,8 @@ void main() {
       expect(find.text('翻页方式'), findsOneWidget);
       expect(find.text('选择节点'), findsOneWidget);
       expect(find.text('下载当页图片'), findsOneWidget);
-      expect(find.textContaining('当前：左右翻页'), findsOneWidget);
+      // 标题行右侧显示当前模式，副标题是「点击切换到…」提示。
+      expect(find.text('左右翻页'), findsOneWidget);
 
       // 三级菜单：选择节点 → 分流列表。
       await tester.tap(find.text('选择节点'));
@@ -644,6 +645,21 @@ void main() {
       final pop = tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       await pop;
+    });
+
+    testWidgets('「更多」菜单：标题与右侧取值压在同一条中线，副标题另起一行', (tester) async {
+      await _pumpReader(tester);
+      await openMore(tester);
+
+      final titleY = tester.getCenter(find.text('翻页方式')).dy;
+      final valueY = tester.getCenter(find.text('左右翻页')).dy;
+      expect(
+        valueY,
+        moreOrLessEquals(titleY, epsilon: .5),
+        reason: '右侧取值与标题同一中线（之前 trailing 会被居中到两行之间）',
+      );
+      final subtitleY = tester.getCenter(find.text('点击切换到上下滚动')).dy;
+      expect(subtitleY, greaterThan(titleY), reason: '副标题另起一行，不再和取值挤在一起');
     });
 
     testWidgets('二级菜单里切换翻页方式', (tester) async {

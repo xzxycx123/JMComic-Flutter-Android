@@ -17,6 +17,9 @@ import '../../data/repositories/download_repository.dart';
 import '../../data/repositories/home_repository.dart';
 import '../../data/repositories/search_repository.dart';
 import '../../data/repositories/session_repository.dart';
+import '../../data/repositories/update_repository.dart';
+import '../../data/sources/app_platform_channel.dart';
+import '../../data/sources/github_release_client.dart';
 import '../../data/sources/jm_api_client.dart';
 import '../../data/sources/jm_endpoint_resolver.dart';
 import '../../data/sources/jm_host_probe.dart';
@@ -26,6 +29,7 @@ import '../../data/models/user_session.dart';
 import '../../features/download/engine/notification_service.dart';
 import '../../features/download/engine/pdf_sink.dart';
 import '../constants/jm_constants.dart';
+import '../config/app_config.dart';
 import '../network/dio_factory.dart';
 
 /// 依赖注入入口：所有跨层对象在这里组装，UI 只 watch provider。
@@ -70,7 +74,9 @@ final Provider<Dio> jmProbeDioProvider = Provider<Dio>((ref) {
 final Provider<JmHostProbe> hostProbeProvider = Provider<JmHostProbe>((ref) {
   final appVersion = ref.watch(endpointStoreProvider).appVersion;
   return JmHostProbe(
-      dio: ref.watch(jmProbeDioProvider), appVersion: appVersion,);
+    dio: ref.watch(jmProbeDioProvider),
+    appVersion: appVersion,
+  );
 });
 
 final Provider<JmEndpointResolver> endpointResolverProvider =
@@ -134,7 +140,6 @@ final Provider<SearchHistoryStore> searchHistoryStoreProvider =
     Provider<SearchHistoryStore>(
   (ref) => SearchHistoryStore(Hive.box<dynamic>(HiveBoxes.searchHistory)),
 );
-
 
 // ---------------------------------------------------------------- 仓储
 final FutureProvider<HomeRepository> homeRepositoryProvider =
@@ -202,7 +207,8 @@ final Provider<PdfReader> pdfReaderProvider =
 
 final Provider<DownloadNotificationService> downloadNotificationProvider =
     Provider<DownloadNotificationService>(
-        (ref) => DownloadNotificationService(),);
+  (ref) => DownloadNotificationService(),
+);
 
 final Provider<DownloadRepository> downloadRepositoryProvider =
     Provider<DownloadRepository>(
@@ -211,5 +217,42 @@ final Provider<DownloadRepository> downloadRepositoryProvider =
     history: ref.watch(downloadHistoryProvider),
     sink: ref.watch(pdfSinkProvider),
     notifications: ref.watch(downloadNotificationProvider),
+  ),
+);
+
+// ---------------------------------------------------------------- 自动更新
+/// GitHub 专用 Dio：不带 JM 的 cookie / 轮换拦截器，只给发布页取数与下包用。
+final Provider<Dio> releaseDioProvider = Provider<Dio>((ref) {
+  final dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 10),
+      sendTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 30),
+      responseType: ResponseType.plain,
+      followRedirects: true,
+      maxRedirects: 5,
+      headers: <String, dynamic>{
+        'User-Agent': '${AppConfig.appName}-Android/${AppConfig.appVersion}',
+      },
+    ),
+  );
+  ref.onDispose(dio.close);
+  return dio;
+});
+
+final Provider<AppPlatformChannel> appPlatformChannelProvider =
+    Provider<AppPlatformChannel>((ref) => AppPlatformChannel());
+
+final Provider<GithubReleaseClient> githubReleaseClientProvider =
+    Provider<GithubReleaseClient>(
+  (ref) => GithubReleaseClient(dio: ref.watch(releaseDioProvider)),
+);
+
+final Provider<UpdateRepository> updateRepositoryProvider =
+    Provider<UpdateRepository>(
+  (ref) => UpdateRepository(
+    client: ref.watch(githubReleaseClientProvider),
+    channel: ref.watch(appPlatformChannelProvider),
+    downloadDio: ref.watch(releaseDioProvider),
   ),
 );

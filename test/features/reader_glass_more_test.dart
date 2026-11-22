@@ -296,10 +296,10 @@ void main() {
 
     await _openMore(tester);
     expect(find.text('翻页方式'), findsOneWidget);
-    expect(find.textContaining('当前：左右翻页'), findsOneWidget);
+    // 单行菜单：当前模式换成右侧「切换到…」提示，和标题同一条中线。
+    expect(find.textContaining('切换到'), findsOneWidget);
     expect(find.text('选择节点'), findsOneWidget);
     expect(find.text('下载当页图片'), findsOneWidget);
-    expect(find.textContaining('保存为 JMComic-7000'), findsOneWidget);
     expect(find.byType(GlassMenu), findsOneWidget, reason: '二级菜单只有一个气泡');
 
     // 选择节点 → 原生子菜单卡片（GlassMenuItem.submenu），不另开第二个菜单。

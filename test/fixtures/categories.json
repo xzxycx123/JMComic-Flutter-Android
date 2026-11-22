@@ -3,9 +3,9 @@
     {
       "id": "0",
       "name": "最新A漫",
-      "slug": "latest",
+      "slug": "",
       "total_albums": 0,
-      "type": "category",
+      "type": "",
       "sub_categories": []
     },
     {
@@ -13,22 +13,22 @@
       "name": "同人",
       "slug": "doujin",
       "total_albums": 357417,
-      "type": "category",
+      "type": "slug",
       "sub_categories": [
         { "CID": "1", "name": "漢化", "slug": "chinese" },
         { "CID": "2", "name": "日語", "slug": "japanese" },
         { "CID": "3", "name": "CG圖集", "slug": "cg" },
-        { "CID": "20", "name": "禁漫去碼", "slug": "uncensored" },
-        { "CID": "23", "name": "禁漫上色", "slug": "colored" }
+        { "CID": "20", "name": "禁漫去碼", "slug": "no_mosaic" },
+        { "CID": "23", "name": "禁漫上色", "slug": "coloring" }
       ]
     },
-    { "id": "2", "name": "單本", "slug": "single", "total_albums": 43543, "type": "category", "sub_categories": [] },
-    { "id": "3", "name": "短篇", "slug": "short", "total_albums": 119982, "type": "category", "sub_categories": [] },
-    { "id": "4", "name": "其他類", "slug": "other", "total_albums": 53200, "type": "category", "sub_categories": [] },
-    { "id": "5", "name": "韓漫", "slug": "manhwa", "total_albums": 131914, "type": "category", "sub_categories": [] },
-    { "id": "6", "name": "English Manga", "slug": "english", "total_albums": 397295, "type": "category", "sub_categories": [] },
-    { "id": "7", "name": "Cosplay", "slug": "cosplay", "total_albums": 0, "type": "category", "sub_categories": [] },
-    { "id": "8", "name": "3D", "slug": "3d", "total_albums": 0, "type": "category", "sub_categories": [] },
-    { "id": "9", "name": "禁漫漢化組", "slug": "group", "total_albums": 0, "type": "category", "sub_categories": [] }
+    { "id": "2", "name": "單本", "slug": "single", "total_albums": 43543, "type": "slug", "sub_categories": [] },
+    { "id": "3", "name": "短篇", "slug": "short", "total_albums": 119982, "type": "slug", "sub_categories": [] },
+    { "id": "4", "name": "其他類", "slug": "another", "total_albums": 53200, "type": "slug", "sub_categories": [] },
+    { "id": "5", "name": "韓漫", "slug": "hanman", "total_albums": 131914, "type": "slug", "sub_categories": [] },
+    { "id": "6", "name": "English Manga", "slug": "meiman", "total_albums": 397295, "type": "slug", "sub_categories": [] },
+    { "id": "7", "name": "Cosplay", "slug": "another_cosplay", "total_albums": 0, "type": "search", "sub_categories": [] },
+    { "id": "8", "name": "3D", "slug": "3D", "total_albums": 0, "type": "search", "sub_categories": [] },
+    { "id": "9", "name": "禁漫漢化組", "slug": "禁漫漢化組", "total_albums": 0, "type": "search", "sub_categories": [] }
   ]
 }

@@ -13,14 +13,15 @@ class CatalogRepository {
     final list = await _api.fetchCategories();
     if (list.isNotEmpty) return list;
     return JmCategoryFallback.items
-        .map((item) => JmCategory(id: item.id, name: item.name))
+        .map((item) => JmCategory(id: item.id, name: item.name, slug: item.slug))
         .toList(growable: false);
   }
 
+  /// [categorySlug] 为分类 slug（`doujin` / `single`…），空串 = 不过滤。
   Future<JmSearchPage> page({
     required int page,
-    String category = '0',
+    String categorySlug = '',
     AlbumOrder order = AlbumOrder.latestUpdate,
   }) =>
-      _api.fetchFilter(page: page, category: category, order: order);
+      _api.fetchFilter(page: page, categorySlug: categorySlug, order: order);
 }

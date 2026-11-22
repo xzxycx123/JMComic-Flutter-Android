@@ -112,6 +112,17 @@ void main() {
       expect(action, findsOneWidget);
       expect(tester.getSize(action).height, 48);
       expect(find.text('详情标签'), findsOneWidget);
+      // 「写评论」是 iOS 27 的 tinted 玻璃胶囊，不再是平的实色 chip。
+      final comment = find.ancestor(
+        of: find.text('写评论'),
+        matching: find.byType(GlassButton),
+      );
+      expect(comment, findsOneWidget);
+      expect(tester.getSize(comment).height, greaterThanOrEqualTo(36));
+      expect(
+        tester.getSize(comment).width,
+        greaterThan(tester.getSize(comment).height),
+      );
       final download = find.ancestor(
         of: find.text('下载'),
         matching: find.byType(AppButton),
@@ -155,6 +166,15 @@ void main() {
     await tester.tap(find.text('打开评论表单'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
+    // 输入井固定高度（约 3 行半正文），不再随 minLines 越撑越高。
+    final field = find.byType(TextField);
+    expect(field, findsOneWidget);
+    final fieldRect = tester.getRect(field);
+    expect(fieldRect.height, lessThan(150));
+    // 占位文案贴左上角，和正文的 contentPadding 对齐。
+    final hint = tester.getRect(find.text('友善发言，剧透请勾选下方选项'));
+    expect(hint.top - fieldRect.top, lessThan(30));
+    expect(hint.left - fieldRect.left, lessThan(30));
     tester.view.viewInsets = const FakeViewPadding(bottom: 310);
     await tester.pump();
     final send = find.text('发送');
@@ -166,6 +186,58 @@ void main() {
     await tester.pumpAndSettle();
     expect(result?.content, '评论草稿');
     expect(result?.spoiler, isTrue);
+  });
+
+  testWidgets('Metal 下评论输入井同形、同高，占位文案贴左上角', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 720);
+    addTearDown(tester.view.reset);
+    CommentDraft? result;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: _liquidGlass(
+          MaterialApp(
+            theme: AppTheme.light(),
+            builder: (context, child) => InterfaceStyleScope(
+              style: AppInterfaceStyle.metal,
+              child: MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  textScaler: const TextScaler.linear(1.0),
+                  disableAnimations: true,
+                ),
+                child: child!,
+              ),
+            ),
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () async {
+                    result = await showCommentComposer(context, albumId: '100');
+                  },
+                  child: const Text('打开评论表单'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('打开评论表单'));
+    await tester.pumpAndSettle();
+
+    final field = find.byType(TextField);
+    final fieldRect = tester.getRect(field);
+    // 约 3.4 行正文 + 上下 12dp 内边距，不再按 minLines 堆到 4 行以上。
+    expect(fieldRect.height, inInclusiveRange(96, 130));
+    final hint = tester.getRect(find.text('友善发言，剧透请勾选下方选项'));
+    expect(hint.top - fieldRect.top, lessThan(30));
+    expect(hint.left - fieldRect.left, lessThan(30));
+
+    await tester.enterText(find.byType(EditableText), '金属皮肤草稿');
+    await tester.pump();
+    await tester.tap(find.text('发送'));
+    await tester.pumpAndSettle();
+    expect(result?.content, '金属皮肤草稿');
   });
 
   for (final style in AppInterfaceStyle.values) {
@@ -227,9 +299,10 @@ void main() {
       initialLocation: '/album/100',
       routes: [
         GoRoute(
-            path: '/album/:id',
-            builder: (_, state) =>
-                AlbumPage(albumId: state.pathParameters['id']!),),
+          path: '/album/:id',
+          builder: (_, state) =>
+              AlbumPage(albumId: state.pathParameters['id']!),
+        ),
         GoRoute(
           path: '/search',
           builder: (_, state) => SearchPage(
@@ -240,20 +313,31 @@ void main() {
       ],
     );
     addTearDown(router.dispose);
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        jmApiProvider.overrideWithValue(api),
-        jmBootstrapProvider.overrideWith((_) => Completer<FakeJmApi>().future),
-        albumDetailProvider('100').overrideWith((_) async =>
-            const JmAlbumDetail(id: '100', title: '详情', tags: ['350234']),),
-        albumCommentsProvider.overrideWith(_EmptyComments.new),
-        searchHistoryStoreProvider.overrideWithValue(history),
-        searchRepositoryProvider.overrideWith(
-            (_) async => SearchRepository(api: api, history: history),),
-      ],
-      child: _liquidGlass(MaterialApp.router(
-          routerConfig: router, builder: _scope, theme: AppTheme.light(),),),
-    ),);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          jmApiProvider.overrideWithValue(api),
+          jmBootstrapProvider
+              .overrideWith((_) => Completer<FakeJmApi>().future),
+          albumDetailProvider('100').overrideWith(
+            (_) async =>
+                const JmAlbumDetail(id: '100', title: '详情', tags: ['350234']),
+          ),
+          albumCommentsProvider.overrideWith(_EmptyComments.new),
+          searchHistoryStoreProvider.overrideWithValue(history),
+          searchRepositoryProvider.overrideWith(
+            (_) async => SearchRepository(api: api, history: history),
+          ),
+        ],
+        child: _liquidGlass(
+          MaterialApp.router(
+            routerConfig: router,
+            builder: _scope,
+            theme: AppTheme.light(),
+          ),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('350234'));
     await tester.pumpAndSettle();
@@ -290,14 +374,25 @@ class _TagSearchApi extends FakeJmApi {
   String? lastQuery;
 
   @override
-  Future<JmSearchPage> search(
-      {required String query,
-      int page = 1,
-      AlbumOrder order = AlbumOrder.latestUpdate,}) async {
+  Future<JmSearchPage> search({
+    required String query,
+    int page = 1,
+    AlbumOrder order = AlbumOrder.latestUpdate,
+  }) async {
     lastQuery = query;
-    return JmSearchPage(query: query, total: 1, page: page, content: const [
-      JmAlbumSummary(id: '123', title: '搜索结果', author: '测试作者', tags: ['服务端标签']),
-    ],);
+    return JmSearchPage(
+      query: query,
+      total: 1,
+      page: page,
+      content: const [
+        JmAlbumSummary(
+          id: '123',
+          title: '搜索结果',
+          author: '测试作者',
+          tags: ['服务端标签'],
+        ),
+      ],
+    );
   }
 }
 

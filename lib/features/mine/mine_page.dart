@@ -9,6 +9,7 @@ import '../../core/icons/app_images.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/interface_style_selector.dart';
+import '../../core/theme/theme_mode_selector.dart';
 import '../../core/ui/app_toast.dart';
 import '../../core/ui/glass/app_glass.dart';
 import '../../data/local/settings_store.dart';
@@ -18,6 +19,8 @@ import '../collect/collect_providers.dart';
 import '../collect/favorites_sync.dart';
 import '../download/download_providers.dart';
 import '../home/widgets/section_header.dart';
+import '../update/update_dialog.dart';
+import '../update/update_providers.dart';
 import 'check_in_providers.dart';
 
 /// 我的：资料卡 + 统计 + 五组设置入口。
@@ -40,6 +43,7 @@ class MinePage extends ConsumerWidget {
     final session = ref.watch(sessionProvider).valueOrNull;
     final syncState = ref.watch(favoritesSyncProvider);
     final checkIn = ref.watch(checkInProvider);
+    final update = ref.watch(updateCheckProvider);
 
     return AppGlassPage(
       showBackground: false,
@@ -136,12 +140,7 @@ class MinePage extends ConsumerWidget {
             const SizedBox(height: 10),
             const SectionHeader(title: '外观'),
             const InterfaceStyleSelector(),
-            _SettingTile(
-              icon: AppIcons.theme,
-              title: '主题模式',
-              value: settings.themeMode.label,
-              onTap: () => _pickTheme(context, ref, settings.themeMode),
-            ),
+            const ThemeModeSelector(),
             const SizedBox(height: 10),
             const SectionHeader(title: '网络'),
             _SettingTile(
@@ -178,8 +177,16 @@ class MinePage extends ConsumerWidget {
             _SettingTile(
               icon: AppIcons.check,
               title: '关于 JMComic',
-              value: 'v${AppConfig.appVersion}',
+              value: update.currentVersion.isKnown
+                  ? update.currentVersion.display
+                  : 'v${AppConfig.appVersion}',
               onTap: () => context.push('/mine/about'),
+            ),
+            _SettingTile(
+              icon: AppIcons.refresh,
+              title: '检查更新',
+              value: update.summary,
+              onTap: () => _checkUpdate(context, ref),
             ),
             const SizedBox(height: 14),
             Text(
@@ -246,24 +253,27 @@ class MinePage extends ConsumerWidget {
     );
   }
 
-  Future<void> _pickTheme(
-    BuildContext context,
-    WidgetRef ref,
-    AppThemeMode current,
-  ) async {
-    final selected = await AppSheet.show<AppThemeMode>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => _OptionSheet<AppThemeMode>(
-        title: '主题模式',
-        options: AppThemeMode.values,
-        current: current,
-        labelOf: (mode) => mode.label,
-      ),
-    );
-    if (selected != null && context.mounted) {
-      await ref.read(settingsProvider.notifier).setThemeMode(selected);
+  /// 手动检查更新：有新版直接走同一套「检测到新版本」弹窗（无视跳过记录）。
+  Future<void> _checkUpdate(BuildContext context, WidgetRef ref) async {
+    final state = await ref.read(updateCheckProvider.notifier).check();
+    if (!context.mounted) return;
+    final release = state.release;
+    if (release == null) {
+      AppToast.show(
+        context,
+        state.phase == UpdatePhase.failed
+            ? '检查失败：${state.message}'
+            : '已是最新版本 ${state.currentVersion.display}',
+        duration: const Duration(seconds: 4),
+      );
+      return;
     }
+    await promptForRelease(
+      context: context,
+      ref: ref,
+      release: release,
+      current: state.currentVersion,
+    );
   }
 
   Future<void> _pickReaderMode(

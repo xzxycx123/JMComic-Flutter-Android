@@ -35,6 +35,10 @@ class AppTextField extends StatefulWidget {
     this.autofillHints = const <String>[],
     this.selectionControls,
     this.enableInteractiveSelection,
+    this.cornerRadius,
+    this.contentPadding,
+    this.expands = false,
+    this.textAlignVertical,
   });
 
   final TextEditingController? controller;
@@ -55,6 +59,20 @@ class AppTextField extends StatefulWidget {
   final TapRegionCallback? onTapOutside;
   final Iterable<String>? autofillHints;
   final TextSelectionControls? selectionControls;
+
+  /// 非空时两套材质（Metal / LiquidGlass）都渲染同一枚「圆角矩形 + 连续曲率」
+  /// 输入框：Metal 用实色底板，LiquidGlass 用同形状的玻璃/实色井。留空保持
+  /// 各材质原有外观。
+  final double? cornerRadius;
+
+  /// 圆角矩形输入框的内边距；默认左上角 14/12，文字统一从左上起始。
+  final EdgeInsetsGeometry? contentPadding;
+
+  /// 撑满父级给出的高度（配合固定 `SizedBox` 高度使用，多行输入不再按行数
+  /// 撑高）。开启时 `maxLines` / `minLines` 必须为空。
+  final bool expands;
+
+  final TextAlignVertical? textAlignVertical;
 
   @protected
   bool get isSearch => false;
@@ -87,11 +105,17 @@ class _AppTextFieldState extends State<AppTextField> {
     final solid = InheritedGlassSurfaceStyle.maybeOf(context) ==
             GlassSurfaceStyle.solid ||
         field.isSearch;
-    final shape =
-        LiquidRoundedSuperellipse(borderRadius: field.isSearch ? 22 : 14);
+    // 调用方要求「圆角矩形 + 连续曲率」时，Metal 与 LiquidGlass 共用同一形状。
+    final shaped = field.cornerRadius != null;
+    final shape = LiquidRoundedSuperellipse(
+      borderRadius: field.cornerRadius ?? (field.isSearch ? 22 : 14),
+    );
+    final inset =
+        field.contentPadding ?? const EdgeInsets.fromLTRB(14, 12, 14, 12);
     // The package uses CupertinoTextField. Preserve Material adornment layout,
     // counters, tap groups, cursor overrides and editing hooks when requested.
-    final simple = decoration != null &&
+    final simple = !shaped &&
+        decoration != null &&
         (decoration == InputDecoration(hintText: decoration.hintText) ||
             decoration == const InputDecoration()) &&
         field.maxLines == 1 &&
@@ -139,7 +163,7 @@ class _AppTextFieldState extends State<AppTextField> {
     Widget input = TextField(
       controller: _controller,
       focusNode: _focus,
-      decoration: glass
+      decoration: glass || shaped
           ? decoration?.copyWith(
               filled: false,
               border: InputBorder.none,
@@ -148,6 +172,7 @@ class _AppTextFieldState extends State<AppTextField> {
               disabledBorder: InputBorder.none,
               errorBorder: InputBorder.none,
               focusedErrorBorder: InputBorder.none,
+              contentPadding: shaped ? inset : null,
             )
           : decoration,
       keyboardType: field.keyboardType,
@@ -161,6 +186,9 @@ class _AppTextFieldState extends State<AppTextField> {
       enableSuggestions: field.enableSuggestions,
       maxLines: field.maxLines,
       minLines: field.minLines,
+      expands: field.expands,
+      textAlignVertical: field.textAlignVertical ??
+          (field.expands ? TextAlignVertical.top : null),
       maxLength: field.maxLength,
       maxLengthEnforcement: field.maxLengthEnforcement,
       onChanged: field.onChanged,
@@ -175,10 +203,11 @@ class _AppTextFieldState extends State<AppTextField> {
       selectionControls: field.selectionControls,
       enableInteractiveSelection: field.enableInteractiveSelection,
     );
-    if (!glass) return input;
+    if (!glass && !shaped) return input;
     if (decoration != null &&
         decoration.contentPadding == null &&
-        !field.isSearch) {
+        !field.isSearch &&
+        !shaped) {
       input = Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
         child: input,
@@ -189,14 +218,32 @@ class _AppTextFieldState extends State<AppTextField> {
       child: input,
       builder: (context, child) {
         final focused = _focus.hasFocus && enabled;
+        if (!glass) {
+          // Metal：与 LiquidGlass 完全同形的「圆角矩形 + 连续曲率」实色井，
+          // 文字从左上起始（内边距由 contentPadding 统一给出）。
+          return DecoratedBox(
+            decoration: ShapeDecoration(
+              color: theme.scheme.surfaceContainerHigh,
+              shape: shape.copyWith(
+                side: BorderSide(
+                  color: focused
+                      ? theme.scheme.primary
+                      : theme.scheme.outlineVariant,
+                ),
+              ),
+            ),
+            child: child!,
+          );
+        }
         if (solid) {
           return DecoratedBox(
             decoration: ShapeDecoration(
               color: theme.scheme.surfaceContainerHigh,
               shape: shape.copyWith(
-                  side: BorderSide(
-                color: focused ? theme.accent : theme.scheme.outlineVariant,
-              ),),
+                side: BorderSide(
+                  color: focused ? theme.accent : theme.scheme.outlineVariant,
+                ),
+              ),
             ),
             child: child!,
           );
@@ -211,12 +258,13 @@ class _AppTextFieldState extends State<AppTextField> {
           useOwnLayer: false,
           clipBehavior: Clip.none,
           child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(field.isSearch ? 22 : 14),
-              border: Border.all(
-                color: focused
-                    ? theme.accent
-                    : theme.scheme.outlineVariant.withValues(alpha: .55),
+            decoration: ShapeDecoration(
+              shape: shape.copyWith(
+                side: BorderSide(
+                  color: focused
+                      ? theme.accent
+                      : theme.scheme.outlineVariant.withValues(alpha: .55),
+                ),
               ),
             ),
             child: child!,

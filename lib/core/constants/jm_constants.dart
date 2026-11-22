@@ -200,23 +200,30 @@ enum AlbumOrder {
   }
 }
 
-/// 顶层分类的固定兜底表（/categories 请求失败时用；id 与实测一致）。
+/// 顶层分类的固定兜底表（/categories 请求失败时用；id/slug 与实测一致）。
+///
+/// **slug 是 `/categories/filter` 唯一认的分类参数**：实测（2026-11-22）
+/// `?c=1` / `?c=2` 这类数字 id 会被服务端忽略，返回同一份默认榜（首条 id 一致）；
+/// 只有 `?c=doujin` / `?c=single` / `?c=3D` 这类 slug 才真正按分类过滤。
 class JmCategoryFallback {
-  const JmCategoryFallback(this.id, this.name);
+  const JmCategoryFallback(this.id, this.name, [this.slug = '']);
 
   final String id;
   final String name;
 
+  /// `/categories/filter?c=` 用的分类 slug（0/最新A漫为空 = 不过滤）。
+  final String slug;
+
   static const List<JmCategoryFallback> items = <JmCategoryFallback>[
     JmCategoryFallback('0', '最新A漫'),
-    JmCategoryFallback('1', '同人'),
-    JmCategoryFallback('2', '單本'),
-    JmCategoryFallback('3', '短篇'),
-    JmCategoryFallback('4', '其他類'),
-    JmCategoryFallback('5', '韓漫'),
-    JmCategoryFallback('6', 'English Manga'),
-    JmCategoryFallback('7', 'Cosplay'),
-    JmCategoryFallback('8', '3D'),
-    JmCategoryFallback('9', '禁漫漢化組'),
+    JmCategoryFallback('1', '同人', 'doujin'),
+    JmCategoryFallback('2', '單本', 'single'),
+    JmCategoryFallback('3', '短篇', 'short'),
+    JmCategoryFallback('4', '其他類', 'another'),
+    JmCategoryFallback('5', '韓漫', 'hanman'),
+    JmCategoryFallback('6', 'English Manga', 'meiman'),
+    JmCategoryFallback('7', 'Cosplay', 'another_cosplay'),
+    JmCategoryFallback('8', '3D', '3D'),
+    JmCategoryFallback('9', '禁漫漢化組', '禁漫漢化組'),
   ];
 }

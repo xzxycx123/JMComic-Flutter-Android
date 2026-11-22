@@ -254,7 +254,7 @@ class AppButton extends StatelessWidget {
             textOnly ? GlassButtonStyle.transparent : GlassButtonStyle.filled,
         surfaceStyle:
             solidSurface ? GlassSurfaceStyle.solid : GlassSurfaceStyle.glass,
-        color: solidSurface && !textOnly && prominent
+        color: solidSurface && !textOnly && prominent && action != null
             ? (destructive ? scheme.errorContainer : scheme.primaryContainer)
             : null,
         quality: solidSurface ? null : AppGlassTheme.controlQuality,

@@ -84,7 +84,8 @@ class FavoritesStore {
     final now = DateTime.now().millisecondsSinceEpoch;
     final next = (existing ?? FavoriteItem(albumId: album.id, addedAt: now)).copyWith(
       title: album.title,
-      author: album.author,
+      // 本地账本里的作者也存规范名（去掉 `[作者]` 的中括号）。
+      author: album.authorName,
       categoryId: album.categoryId,
       categoryTitle: album.categoryTitle,
       updateAt: album.updateAt,
