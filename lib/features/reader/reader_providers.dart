@@ -4,6 +4,7 @@ import '../../core/di/providers.dart';
 import '../../data/local/progress_store.dart';
 import '../../data/local/settings_store.dart';
 import '../../data/models/jm_chapter.dart';
+import 'reader_image_saver.dart';
 import 'reader_mode.dart';
 
 /// 阅读页边界：`total > 0` 时夹到 `1..total`；`total == 0`（空章节）一律落到第 1 页。
@@ -16,6 +17,14 @@ int clampReaderPage(int page, int total) {
 final Provider<ProgressRecorder> readerProgressRecorderProvider =
     Provider<ProgressRecorder>(
   (ref) => ProgressRecorder(store: ref.watch(progressStoreProvider)),
+);
+
+/// 「下载当页图片」的落盘器：目录来自设置里的保存路径（「我的 - 设置」可改）。
+final Provider<ReaderImageSaver> readerImageSaverProvider =
+    Provider<ReaderImageSaver>(
+  (ref) => ReaderImageSaver(
+    directory: () => ref.read(settingsProvider).saveImagePath,
+  ),
 );
 
 /// 阅读器首屏数据（章节图片清单 + 切片阈值 + 初始页码 + 默认模式）。

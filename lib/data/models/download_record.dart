@@ -26,6 +26,8 @@ class DownloadRecord {
   const DownloadRecord({
     required this.workId,
     required this.albumId,
+    this.chapterId = '',
+    this.chapterTitle = '',
     this.title = '',
     this.state = DownloadState.queued,
     this.status = '',
@@ -44,6 +46,19 @@ class DownloadRecord {
 
   final String workId;
   final String albumId;
+
+  /// 阅读器结束页导出的章节 id；整本下载为空串（旧记录解码后也是空串）。
+  ///
+  /// 只用于「同一本同一章不重复入队」与按钮状态，不改变整本下载语义。
+  final String chapterId;
+
+  /// 阅读器结束页导出的章节标题（整本下载为空串）。
+  ///
+  /// 单独存一份，**不要**复用 [detail]：detail 会被进度/错误文案反复覆盖，
+  /// 进程重启后按记录重建导出任务时需要稳定的章节标题。
+  final String chapterTitle;
+
+  /// 专辑标题（阅读器导出存原始值，可能为空；展示时用 [displayTitle] 回落 JM 号）。
   final String title;
   final DownloadState state;
 
@@ -72,7 +87,8 @@ class DownloadRecord {
 
   bool get isFinished => !isActive;
 
-  bool get isOpenable => state == DownloadState.succeeded && (pdfUri != null || pdfPath != null);
+  bool get isOpenable =>
+      state == DownloadState.succeeded && (pdfUri != null || pdfPath != null);
 
   /// 内置 PDF 阅读器用的 URI（优先 content://，其次 file://）。
   String? get openUri {
@@ -91,6 +107,8 @@ class DownloadRecord {
 
   DownloadRecord copyWith({
     String? albumId,
+    String? chapterId,
+    String? chapterTitle,
     String? title,
     DownloadState? state,
     String? status,
@@ -111,6 +129,8 @@ class DownloadRecord {
     return DownloadRecord(
       workId: workId,
       albumId: albumId ?? this.albumId,
+      chapterId: chapterId ?? this.chapterId,
+      chapterTitle: chapterTitle ?? this.chapterTitle,
       title: title ?? this.title,
       state: state ?? this.state,
       status: status ?? this.status,
@@ -131,6 +151,8 @@ class DownloadRecord {
   factory DownloadRecord.fromJson(Map<String, dynamic> json) => DownloadRecord(
         workId: asStringOr(json['workId'], ''),
         albumId: asStringOr(json['albumId'], ''),
+        chapterId: asStringOr(json['chapterId'], ''),
+        chapterTitle: asStringOr(json['chapterTitle'], ''),
         title: asStringOr(json['title'], ''),
         state: DownloadState.fromCode(asString(json['state'])),
         status: asStringOr(json['status'], ''),
@@ -150,6 +172,8 @@ class DownloadRecord {
   Map<String, dynamic> toJson() => <String, dynamic>{
         'workId': workId,
         'albumId': albumId,
+        'chapterId': chapterId,
+        'chapterTitle': chapterTitle,
         'title': title,
         'state': state.code,
         'status': status,

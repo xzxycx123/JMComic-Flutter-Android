@@ -10,13 +10,6 @@ import 'package:jm_comic/features/search/search_page.dart';
 import '../../helpers/fixtures.dart';
 import '../../helpers/test_env.dart';
 
-const String _searchHtml = '''
-<html><body>
-<span id="albim_likes_1490702">42</span>
-<span id="albim_likes_1490703">7</span>
-</body></html>
-''';
-
 class _MemorySearchHistory extends Fake implements SearchHistoryStore {
   final List<String> _terms = <String>[];
 
@@ -45,10 +38,12 @@ void main() {
     await clearTestBoxes();
   });
 
-  testWidgets('搜索结果卡片也显示网页抓到的喜欢数', (tester) async {
-    final api = FakeJmApi();
+  testWidgets('搜索结果卡片用 JmAPI 的点赞量渲染', (tester) async {
+    final api = FakeJmApi()
+      ..likesByAlbum.addAll(<String, int>{'1490702': 42, '1490703': 7});
     final history = _MemorySearchHistory();
-    final requested = <Uri>[];
+    final requested = <String>[];
+
     await tester.pumpWidget(
       ProviderScope(
         overrides: <Override>[
@@ -58,9 +53,9 @@ void main() {
           searchRepositoryProvider.overrideWith(
             (ref) async => SearchRepository(api: api, history: history),
           ),
-          albumLikesHtmlProvider.overrideWithValue((Uri uri) async {
-            requested.add(uri);
-            return _searchHtml;
+          albumLikesFetcherProvider.overrideWithValue((String id) async {
+            requested.add(id);
+            return api.likesByAlbum[id] ?? 0;
           }),
         ],
         child: const MaterialApp(
@@ -72,11 +67,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 60));
     }
 
-    // 搜索页去抓的是网页搜索页（不是 /albums）。
-    expect(requested, isNotEmpty);
-    expect(requested.first.path, '/search/photos');
-    expect(requested.first.queryParameters['search_query'], '测试');
-
+    // 只对搜索结果里出现的本子取数（不再去抓网页搜索页）。
+    expect(requested, containsAll(<String>['1490702', '1490703']));
     expect(find.text('42'), findsWidgets);
   });
 }

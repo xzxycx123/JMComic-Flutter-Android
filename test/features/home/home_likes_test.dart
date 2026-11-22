@@ -1,34 +1,31 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jm_comic/core/di/providers.dart';
+import 'package:jm_comic/data/models/jm_album_summary.dart';
 import 'package:jm_comic/data/repositories/home_repository.dart';
 import 'package:jm_comic/features/home/home_likes.dart';
-import 'package:jm_comic/data/models/jm_album_summary.dart';
-import 'package:jm_comic/data/sources/jm_likes_scraper.dart';
 import 'package:jm_comic/features/home/home_page.dart';
 
 import '../../helpers/fixtures.dart';
 import '../../helpers/test_env.dart';
 
-/// 官方网页列表卡片的真实标记：`<span id="albim_likes_<id>">355</span>`。
-///
-/// 首页网格来自 `/categories/filter` fixture（1490702/1490703/1490704），
-/// 横滑分节来自 `/promote` fixture（1485385…）。
-const String _homeHtml = '''
-<html><body>
-<div class="item"><a href="/album/1490702/x/"><span id="albim_likes_1490702">42</span></a></div>
-<div class="item"><a href="/album/1490703/x/"><span id="albim_likes_1490703" class="num">7</span></a></div>
-<div class="item"><a href="/album/1485385/x/"><span id="albim_likes_1485385">
-  1234
-</span></a></div>
-</body></html>
-''';
-
 Future<void> _pumpFrames(WidgetTester tester, {int frames = 10}) async {
   for (var index = 0; index < frames; index++) {
     await tester.pump(const Duration(milliseconds: 60));
   }
+}
+
+ProviderContainer _container(Future<int> Function(String) fetcher) {
+  final container = ProviderContainer(
+    overrides: <Override>[
+      albumLikesFetcherProvider.overrideWithValue(fetcher),
+    ],
+  );
+  addTearDown(container.dispose);
+  return container;
 }
 
 void main() {
@@ -42,83 +39,150 @@ void main() {
     await clearTestBoxes();
   });
 
-  group('JmLikesScraper.parse', () {
-    test('解析 albim_likes_* 计数', () {
-      final likes = JmLikesScraper.parse(_homeHtml);
-      expect(likes['1490702'], 42);
-      expect(likes['1490703'], 7);
-      expect(likes['1485385'], 1234);
-    });
-
-    test('兜底正则：中间夹图标也能解析', () {
-      const html = '<a id="albim_likes_1490702"><i class="fa"></i>355</a>';
-      expect(JmLikesScraper.parse(html)['1490702'], 355);
-    });
-
-    test('没有喜欢数标记 / 乱码返回空', () {
-      expect(JmLikesScraper.parse('<html>error</html>'), isEmpty);
-      expect(JmLikesScraper.parse(''), isEmpty);
-      expect(
-        JmLikesScraper.parse('<span id="albim_likes_1">abc</span>'),
-        isEmpty,
-      );
-    });
-  });
-
-  group('网页线路', () {
-    test('国内优先、国外兜底，域名来自常量', () {
-      final candidates = AlbumLikesNotifier.webCandidates;
-      expect(candidates, isNotEmpty);
-      expect(candidates.first.domestic, isTrue);
-      expect(candidates.any((candidate) => !candidate.domestic), isTrue);
-    });
-
-    test('列表页地址带分页与排序', () {
-      final uri = JmLikesScraper.listUri(
-        '18comic.ink',
-        page: 2,
-        order: 'mr',
-      );
-      expect(uri.toString(), 'https://18comic.ink/albums?page=2&o=mr');
-    });
-
-    test('搜索页地址带关键词与分页（URL 编码）', () {
-      final uri = JmLikesScraper.searchUri(
-        '18comic.ink',
-        query: '同人',
-        page: 3,
-      );
-      expect(uri.path, '/search/photos');
-      expect(uri.queryParameters['search_query'], '同人');
-      expect(uri.queryParameters['page'], '3');
-    });
-  });
-
-  group('withScrapedLikes', () {
+  group('withResolvedLikes', () {
     const album = JmAlbumSummary(id: '7', title: 'A');
 
-    test('抓到正数就覆盖，0 / 缺失保持原样（显示 --）', () {
-      expect(withScrapedLikes(album, {'7': 42}).likes, 42);
-      expect(withScrapedLikes(album, {'7': 0}).likes, 0);
-      expect(withScrapedLikes(album, {}).likes, 0);
-      expect(withScrapedLikes(album, {}).displayLikes, '--');
+    test('已确认的正数覆盖卡片数据', () {
+      expect(withResolvedLikes(album, const <String, int>{'7': 42}).likes, 42);
+      expect(
+        withResolvedLikes(album, const <String, int>{'7': 42}).displayLikes,
+        '42',
+      );
+    });
+
+    test('缺失保持原样（显示 --）', () {
+      expect(withResolvedLikes(album, const <String, int>{}).likes, 0);
+      expect(
+        withResolvedLikes(album, const <String, int>{}).displayLikes,
+        JmAlbumSummary.noLikeCount,
+      );
+    });
+
+    test('JmAPI 给的真实 0 不会覆盖详情页已有的正数', () {
+      const withDetail = JmAlbumSummary(id: '7', title: 'A', likes: 355);
+      expect(withResolvedLikes(withDetail, const <String, int>{'7': 0}).likes, 355);
+      expect(withResolvedLikes(withDetail, const <String, int>{'7': 400}).likes, 400);
     });
   });
 
-  testWidgets('首页卡片用网页抓到的喜欢数渲染', (tester) async {
-    final requested = <Uri>[];
+  group('AlbumLikesNotifier（JmAPI 取数）', () {
+    test('同一个 id 只请求一次，结果进 state', () async {
+      final calls = <String>[];
+      final container = _container((String id) async {
+        calls.add(id);
+        return 355;
+      });
+      final notifier = container.read(albumLikesProvider.notifier);
+
+      notifier.ensure(<String>['1490702']);
+      notifier.ensure(<String>['1490702']);
+      await pumpEventQueue();
+      notifier.ensure(<String>['1490702']);
+      await pumpEventQueue();
+
+      expect(calls, <String>['1490702']);
+      expect(container.read(albumLikesProvider).likes['1490702'], 355);
+    });
+
+    test('并发上限：一屏卡片不会瞬间把整页打到服务端', () async {
+      final pending = <Completer<int>>[];
+      final container = _container((String id) {
+        final completer = Completer<int>();
+        pending.add(completer);
+        return completer.future;
+      });
+      final notifier = container.read(albumLikesProvider.notifier);
+
+      notifier.ensure(List<String>.generate(10, (index) => '$index'));
+      await pumpEventQueue();
+      expect(pending.length, AlbumLikesNotifier.maxConcurrent);
+
+      pending.first.complete(1);
+      await pumpEventQueue();
+      expect(pending.length, AlbumLikesNotifier.maxConcurrent + 1);
+
+      // 一边完成一边排队：全部 id 都要拿到结果。
+      var guard = 0;
+      while (container.read(albumLikesProvider).likes.length < 10) {
+        for (final completer in pending) {
+          if (!completer.isCompleted) completer.complete(1);
+        }
+        await pumpEventQueue();
+        if (++guard > 20) break;
+      }
+      expect(container.read(albumLikesProvider).likes.length, 10);
+    });
+
+    test('失败一次后，下次 ensure 重试成功', () async {
+      var calls = 0;
+      final container = _container((String id) async {
+        calls++;
+        if (calls == 1) {
+          throw StateError('模拟网络失败');
+        }
+        return 42;
+      });
+      final notifier = container.read(albumLikesProvider.notifier);
+
+      notifier.ensure(<String>['7']);
+      await pumpEventQueue();
+      expect(container.read(albumLikesProvider).likes.containsKey('7'), isFalse);
+
+      notifier.ensure(<String>['7']);
+      await pumpEventQueue();
+      expect(calls, 2);
+      expect(container.read(albumLikesProvider).likes['7'], 42);
+    });
+
+    test('连续失败达到上限后放弃该 id，不再发请求', () async {
+      var calls = 0;
+      final container = _container((String id) async {
+        calls++;
+        throw StateError('模拟网络失败');
+      });
+      final notifier = container.read(albumLikesProvider.notifier);
+
+      for (var round = 0; round < 4; round++) {
+        notifier.ensure(<String>['7']);
+        await pumpEventQueue();
+      }
+
+      expect(calls, AlbumLikesNotifier.maxAttempts);
+      expect(container.read(albumLikesProvider).failed, contains('7'));
+    });
+
+    test('真实 0 赞会写入 state（不再靠 -- 猜）', () async {
+      final container = _container((String id) async => 0);
+      final notifier = container.read(albumLikesProvider.notifier);
+
+      notifier.ensure(<String>['7']);
+      await pumpEventQueue();
+
+      expect(container.read(albumLikesProvider).isResolved('7'), isTrue);
+      expect(container.read(albumLikesProvider).likes['7'], 0);
+    });
+  });
+
+  testWidgets('首页卡片显示 JmAPI 返回的点赞量', (tester) async {
+    final requested = <String>[];
+    final api = FakeJmApi()
+      ..likesByAlbum.addAll(<String, int>{
+        '1485385': 1234,
+        '1490702': 42,
+        '1490703': 21,
+      });
+
     await tester.pumpWidget(
       ProviderScope(
         overrides: <Override>[
-          jmApiProvider.overrideWithValue(FakeJmApi()),
-          jmBootstrapProvider.overrideWith((ref) async => FakeJmApi()),
+          jmApiProvider.overrideWithValue(api),
+          jmBootstrapProvider.overrideWith((ref) async => api),
           homeRepositoryProvider.overrideWith(
-            (ref) async => HomeRepository(api: FakeJmApi()),
+            (ref) async => HomeRepository(api: api),
           ),
-          // 不打真实网络：返回官方网页同款标记。
-          albumLikesHtmlProvider.overrideWithValue((Uri uri) async {
-            requested.add(uri);
-            return _homeHtml;
+          albumLikesFetcherProvider.overrideWithValue((String id) async {
+            requested.add(id);
+            return api.likesByAlbum[id] ?? 0;
           }),
         ],
         child: const MaterialApp(home: HomePage()),
@@ -127,11 +191,7 @@ void main() {
     await _pumpFrames(tester);
 
     expect(requested, isNotEmpty);
-    expect(requested.first.host, 'comic18j-susu.com');
-    expect(requested.first.path, '/albums');
-    expect(requested.first.queryParameters['page'], '1');
-
-    // 横滑分节里的 1485385（首屏就构建）拿到 1234。
+    // 横滑分节里的 1485385（首屏就构建）拿到 JmAPI 的 1234。
     expect(find.text('1234'), findsWidgets);
 
     // 网格在折叠线以下：滚到网格后，fixture 首条 1490702 显示 42。
@@ -140,6 +200,7 @@ void main() {
       const Offset(0, -600),
     );
     await tester.pump();
+    await _pumpFrames(tester, frames: 4);
     expect(find.text('42'), findsWidgets);
   });
 }

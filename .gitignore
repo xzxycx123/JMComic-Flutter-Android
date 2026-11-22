@@ -10,6 +10,9 @@ pubspec_overrides.yaml
 *.iml
 *.lock.bak
 
+# 其他构建
+web/
+windows/
 # ================================================================ IDE / 编辑器
 .idea/
 .vscode/

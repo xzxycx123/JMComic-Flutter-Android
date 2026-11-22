@@ -8,7 +8,7 @@ import '../../../core/icons/app_icons.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/glass/app_glass.dart';
 import '../../../data/models/jm_album_summary.dart';
-import '../../home/widgets/album_card.dart';
+import '../../home/home_likes.dart';
 import '../search_providers.dart';
 
 /// 搜索结果网格：双列，触底自动加载下一页。
@@ -59,7 +59,7 @@ class ResultGrid extends StatelessWidget {
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
                   final album = items[index];
-                  return AlbumCard(
+                  return LikesAlbumCard(
                     key: ValueKey(album.id),
                     album: album,
                     caption: _SearchCaption(album: album),

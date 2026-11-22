@@ -69,6 +69,16 @@ abstract final class JmResponseParser {
     );
   }
 
+  // ---------------------------------------------------------------- 喜欢数
+  /// `/album.likes` 的精确计数（列表接口没有这个字段）。
+  ///
+  /// 与 [album] 的区别：允许 `name` 为空、不建章节，只取计数 ——
+  /// 首页批量补数时不用为了一本本子构造整套详情。
+  static int albumLikes(Map<String, dynamic> root) {
+    final value = asInt(root['likes']);
+    return value < 0 ? 0 : value;
+  }
+
   // ---------------------------------------------------------------- 章节
   static JmChapter chapter(Map<String, dynamic> root, JmChapterRef fallback) {
     final images = asStringList(root['images']);

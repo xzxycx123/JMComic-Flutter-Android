@@ -22,6 +22,9 @@ class AlbumRepository {
 
   Future<JmAlbumDetail> album(String albumId) => _api.getAlbum(albumId);
 
+  /// 卡片「喜歡」数的精确值（JmAPI `/album.likes`）：列表接口不带计数。
+  Future<int> likes(String albumId) => _api.fetchAlbumLikes(albumId);
+
   Future<JmChapter> chapter(JmChapterRef reference) => _api.getChapter(reference);
 
   // ---------------------------------------------------------------- 互动

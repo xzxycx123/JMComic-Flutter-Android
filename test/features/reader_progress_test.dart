@@ -10,9 +10,11 @@ import 'package:jm_comic/core/di/providers.dart';
 import 'package:jm_comic/core/ui/glass/app_glass.dart';
 import 'package:jm_comic/data/local/hive_init.dart';
 import 'package:jm_comic/data/local/progress_store.dart';
+import 'package:jm_comic/data/local/settings_store.dart';
 import 'package:jm_comic/data/models/jm_chapter.dart';
 import 'package:jm_comic/data/repositories/album_repository.dart';
 import 'package:jm_comic/features/album/album_providers.dart';
+import 'package:jm_comic/features/reader/reader_image_saver.dart';
 import 'package:jm_comic/features/reader/reader_mode.dart';
 import 'package:jm_comic/features/reader/reader_page.dart';
 import 'package:jm_comic/features/reader/reader_providers.dart';
@@ -53,8 +55,11 @@ class _StubReaderController extends ReaderController {
 
 /// 页面字节固定失败（不跑图片解码），只关心进度落盘。
 class _StubAlbumRepository extends AlbumRepository {
-  _StubAlbumRepository(ProgressStore store)
+  _StubAlbumRepository(ProgressStore store, {this.bytes})
       : super(api: FakeJmApi(), progress: store);
+
+  /// 非空时 `loadPage` 返回这张图（测试「下载当页图片」用）。
+  final Uint8List? bytes;
 
   @override
   Future<Uint8List?> loadPage({
@@ -62,12 +67,12 @@ class _StubAlbumRepository extends AlbumRepository {
     required String filename,
     int? scrambleIdOverride,
   }) async =>
-      null;
+      bytes;
 }
 
 /// 可注入延迟的 store：验证「旧页慢写不会盖掉新页」。
 class _SlowProgressStore extends ProgressStore {
-  _SlowProgressStore(Box<dynamic> box, {required this.delays}) : super(box);
+  _SlowProgressStore(super.box, {required this.delays});
 
   final Map<int, Duration> delays;
 
@@ -91,7 +96,7 @@ ProgressStore _store() =>
 /// Hive 的写盘定时器在 widget 测试的 fake-async 区域里不会触发，
 /// 直接等真实 box 会让用例挂死；真实落盘由上面的非 widget 用例覆盖。
 class _MemoryProgressStore extends ProgressStore {
-  _MemoryProgressStore(Box<dynamic> box) : super(box);
+  _MemoryProgressStore(super.box);
 
   final Map<String, ReaderProgress> _values = <String, ReaderProgress>{};
 
@@ -108,6 +113,19 @@ class _MemoryProgressStore extends ProgressStore {
     _values[ProgressStore.keyFor(albumId, chapterId)] = progress;
     notifyChanged();
   }
+}
+
+/// widget 测试用的内存设置 store：避免 Hive 写盘定时器卡在 fake-async 里。
+class _MemorySettingsStore extends SettingsStore {
+  _MemorySettingsStore(Box<dynamic> box) : super(box);
+
+  AppSettings _value = const AppSettings();
+
+  @override
+  AppSettings read() => _value;
+
+  @override
+  Future<void> write(AppSettings settings) async => _value = settings;
 }
 
 class _Harness {
@@ -132,15 +150,24 @@ class _Harness {
 Future<_Harness> _pumpReader(
   WidgetTester tester, {
   ReaderMode mode = ReaderMode.paged,
+  Uint8List? pageBytes,
+  ReaderImageSaver? imageSaver,
 }) async {
   final store =
       _MemoryProgressStore(Hive.box<dynamic>(HiveBoxes.readerProgress));
   final container = ProviderContainer(
     overrides: <Override>[
+      sharedPreferencesProvider.overrideWithValue(await testPreferences()),
+      settingsStoreProvider.overrideWithValue(
+        _MemorySettingsStore(Hive.box<dynamic>(HiveBoxes.settings)),
+      ),
       jmApiProvider.overrideWithValue(FakeJmApi()),
       progressStoreProvider.overrideWithValue(store),
-      albumRepositoryProvider
-          .overrideWith((ref) async => _StubAlbumRepository(store)),
+      if (imageSaver != null)
+        readerImageSaverProvider.overrideWithValue(imageSaver),
+      albumRepositoryProvider.overrideWith(
+        (ref) async => _StubAlbumRepository(store, bytes: pageBytes),
+      ),
       readerDataProvider
           .overrideWith(() => _StubReaderController(_readerData(mode: mode))),
     ],
@@ -584,6 +611,97 @@ void main() {
       final pop = tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       await pop;
+    });
+  });
+
+  group('更多菜单 / 下载当页图片', () {
+    Future<void> openMore(WidgetTester tester) async {
+      // 顶栏只剩「退出」「更多」两个按钮，更多在最后。
+      await tester.tap(find.byType(AppIconButton).last);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('二级菜单含翻页方式 / 选择节点 / 下载当页图片，节点是三级菜单', (tester) async {
+      await _pumpReader(tester);
+
+      await openMore(tester);
+      expect(find.text('翻页方式'), findsOneWidget);
+      expect(find.text('选择节点'), findsOneWidget);
+      expect(find.text('下载当页图片'), findsOneWidget);
+      expect(find.textContaining('当前：左右翻页'), findsOneWidget);
+
+      // 三级菜单：选择节点 → 分流列表。
+      await tester.tap(find.text('选择节点'));
+      await tester.pumpAndSettle();
+      expect(find.text('切换分流'), findsOneWidget);
+      expect(find.textContaining('www.cd'), findsWidgets);
+
+      // 返回键先关三级菜单，再退出阅读器。
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('切换分流'), findsNothing);
+
+      final pop = tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await pop;
+    });
+
+    testWidgets('二级菜单里切换翻页方式', (tester) async {
+      await _pumpReader(tester);
+
+      await openMore(tester);
+      await tester.tap(find.text('翻页方式'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ScrollReaderView), findsOneWidget, reason: '切到上下滚动');
+
+      final pop = tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await pop;
+    });
+
+    testWidgets('竖读模式点「下载当页图片」只给提示，不落盘', (tester) async {
+      final saver = MemoryReaderImageSaver();
+      await _pumpReader(tester, mode: ReaderMode.vertical, imageSaver: saver);
+
+      await openMore(tester);
+      expect(find.textContaining('仅左右翻页模式可用'), findsOneWidget);
+      await tester.tap(find.text('下载当页图片'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('「下载当页图片」只在左右翻页模式可用'), findsOneWidget);
+      expect(saver.files, isEmpty);
+
+      // 等提示自己的计时器跑完，再退出阅读器（避免残留 Overlay / Timer）。
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump(const Duration(milliseconds: 300));
+      unawaited(tester.binding.handlePopRoute());
+      await tester.pump();
+      await tester.pumpAndSettle();
+      // 把残留的 HUD 定时器也跑完。
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump();
+    });
+
+    testWidgets('横读模式下载当页：命名 JMComic-[编号]-第几章-第几页', (tester) async {
+      final saver = MemoryReaderImageSaver();
+      await _pumpReader(tester, pageBytes: syntheticPng(), imageSaver: saver);
+      await _tapNext(tester); // -> 第 2 页
+      await openMore(tester);
+      await tester.tap(find.text('下载当页图片'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(saver.files.keys, <String>['JMComic-7000-第1章-第2页.png']);
+      expect(find.textContaining('已保存'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump(const Duration(milliseconds: 300));
+      unawaited(tester.binding.handlePopRoute());
+      await tester.pump();
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump();
     });
   });
 }

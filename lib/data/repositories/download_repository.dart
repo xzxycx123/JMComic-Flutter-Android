@@ -7,6 +7,7 @@ import '../sources/jm_api_client.dart';
 import '../../features/download/engine/download_coordinator.dart';
 import '../../features/download/engine/notification_service.dart';
 import '../../features/download/engine/pdf_sink.dart';
+import '../../features/download/engine/reader_export_worker.dart';
 
 /// 下载功能的门面：投递任务、订阅状态、打开产物。
 class DownloadRepository {
@@ -34,16 +35,30 @@ class DownloadRepository {
 
   Stream<List<DownloadRecord>> get stream => _history.stream;
 
-  int get completedCount =>
-      _history.records.where((record) => record.state == DownloadState.succeeded).length;
+  int get completedCount => _history.records
+      .where((record) => record.state == DownloadState.succeeded)
+      .length;
 
-  int get activeCount => _history.records.where((record) => record.isActive).length;
+  int get activeCount =>
+      _history.records.where((record) => record.isActive).length;
 
   DownloadCoordinator get coordinator => _coordinator;
 
-  Future<DownloadRecord> enqueue(String albumId) => _coordinator.enqueue(albumId);
+  Future<DownloadRecord> enqueue(String albumId) =>
+      _coordinator.enqueue(albumId);
+
+  /// 阅读器结束页的页面级导出：复用阅读缓存 + 缺页补齐，任务落在同一个下载记录里。
+  ///
+  /// 返回 `reused == true` 表示这一本已有进行中的任务，调用方应提示「已在队列中」。
+  Future<({DownloadRecord record, bool reused})> enqueueReaderExport(
+    ReaderExportJob job,
+  ) =>
+      _coordinator.enqueueReaderExport(job);
 
   /// 批量输入文本 -> 去重保序 -> 逐条入队；返回新入队数量与去重数量。
+  ///
+  /// 这里的「已在队列」只认整本任务（`chapterId` 为空）：阅读器结束页的章节导出
+  /// 任务用的是同一个 albumId，不能把它当成整本已在下载而跳过。
   Future<({int added, int skipped, String? alreadyRunning})> enqueueInput(String input) async {
     final ids = parseJmIds(input);
     if (ids.isEmpty) return (added: 0, skipped: 0, alreadyRunning: null);
@@ -53,7 +68,10 @@ class DownloadRepository {
     String? running;
     for (final id in ids) {
       final existing = _history.records.where(
-        (record) => record.albumId == id && record.isActive,
+        (record) =>
+            record.albumId == id &&
+            record.chapterId.isEmpty &&
+            record.isActive,
       );
       if (existing.isNotEmpty) {
         skipped++;

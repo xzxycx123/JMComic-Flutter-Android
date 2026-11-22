@@ -58,6 +58,9 @@ class InterfaceStyleSelector extends ConsumerWidget {
               ],
               selected: current,
               onChanged: ref.read(settingsProvider.notifier).setInterfaceStyle,
+              // Dock 同款抬起透镜：玻璃分支按下/拖动才有放大 + 色散；Metal
+              // 分支仍走上面的 metalStyle，外观与行为不变。
+              interactiveLens: true,
               metalStyle: SegmentedButton.styleFrom(
                 foregroundColor: scheme.onSurfaceVariant,
                 selectedForegroundColor: scheme.primary,

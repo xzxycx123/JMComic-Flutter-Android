@@ -108,4 +108,44 @@ void main() {
       endsWith('/media/photos/350234/00001.webp'),
     );
   });
+
+  test('fetchAlbumLikes：读 /album.likes 的精确值（列表接口没有计数）', () async {
+    adapter.onGet(
+      RegExp(r'/album'),
+      (server) => server.reply(
+        200,
+        _envelope(<String, dynamic>{
+          'id': '1191867',
+          'name': '我身体里的那个家伙',
+          'likes': 21456,
+        }),
+      ),
+    );
+
+    expect(await client.fetchAlbumLikes('1191867'), 21456);
+  });
+
+  test('fetchAlbumLikes：字符串计数也能解析', () async {
+    adapter.onGet(
+      RegExp(r'/album'),
+      (server) => server.reply(
+        200,
+        _envelope(<String, dynamic>{'id': '7', 'name': 'A', 'likes': '355'}),
+      ),
+    );
+
+    expect(await client.fetchAlbumLikes('7'), 355);
+  });
+
+  test('fetchAlbumLikes：缺字段 / 负数按 0', () async {
+    adapter.onGet(
+      RegExp(r'/album'),
+      (server) => server.reply(
+        200,
+        _envelope(<String, dynamic>{'id': '7', 'name': 'A'}),
+      ),
+    );
+
+    expect(await client.fetchAlbumLikes('7'), 0);
+  });
 }

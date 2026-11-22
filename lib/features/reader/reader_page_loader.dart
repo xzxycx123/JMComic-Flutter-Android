@@ -53,6 +53,12 @@ class ReaderPageLoader {
 
   Uint8List? bytesOf(int page) => _bytes[page];
 
+  /// 当前已解码页的快照（结束页导出用）。
+  ///
+  /// 导出可能比 LRU 存活更久：先把此刻命中的页复制一份，之后即使被 [evict] 淘汰，
+  /// 导出仍能复用这些字节，只有真正没加载过的页才回落到网络。
+  Map<int, Uint8List> snapshot() => Map<int, Uint8List>.of(_bytes);
+
   bool isFailed(int page) => _failed.contains(page);
 
   bool isLoading(int page) =>

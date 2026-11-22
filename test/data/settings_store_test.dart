@@ -45,4 +45,33 @@ void main() {
     expect(restored.interfaceStyle, AppInterfaceStyle.liquidGlass);
     expect(restored.themeMode, AppThemeMode.light);
   });
+
+  test('保存图片目录默认 Pictures/JMComicDownloader，可改且自动归一化', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    expect(
+      container.read(settingsProvider).saveImagePath,
+      'Pictures/JMComicDownloader',
+    );
+
+    await container
+        .read(settingsProvider.notifier)
+        .setSaveImagePath('/Download/JMComic/');
+    expect(container.read(settingsProvider).saveImagePath, 'Download/JMComic');
+
+    final restored = SettingsStore(Hive.box<dynamic>(HiveBoxes.settings)).read();
+    expect(restored.saveImagePath, 'Download/JMComic');
+
+    // 清空回落默认目录。
+    await container.read(settingsProvider.notifier).setSaveImagePath('   ');
+    expect(
+      restoredDefault(),
+      'Pictures/JMComicDownloader',
+      reason: '空白目录必须回落到默认 Pictures/JMComicDownloader',
+    );
+  });
 }
+
+String restoredDefault() =>
+    SettingsStore(Hive.box<dynamic>(HiveBoxes.settings)).read().saveImagePath;

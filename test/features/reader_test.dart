@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jm_comic/core/theme/app_colors.dart';
+import 'package:jm_comic/core/icons/app_icons.dart';
 import 'package:jm_comic/core/ui/glass/app_glass.dart';
 import 'package:jm_comic/data/local/settings_store.dart';
 import 'package:jm_comic/features/reader/reader_mode.dart';
@@ -362,8 +363,8 @@ void main() {
       expect(switched, 1);
     });
 
-    /// 顶 / 底两条浮动条的灰底（圆角矩形，两套皮肤一致）。
-    Finder greyBars() => find.byWidgetPredicate(
+    /// 底栏的圆角矩形灰底。
+    Finder greyBar() => find.byWidgetPredicate(
           (widget) =>
               widget is DecoratedBox &&
               widget.decoration is BoxDecoration &&
@@ -372,6 +373,210 @@ void main() {
               (widget.decoration as BoxDecoration).borderRadius ==
                   BorderRadius.circular(ReaderHud.barRadius),
         );
+
+    /// 顶部底板：从屏幕顶边铺下来，顶边直角、只有底边圆角。
+    Finder topPlate() => find.byWidgetPredicate(
+          (widget) =>
+              widget is DecoratedBox &&
+              widget.decoration is BoxDecoration &&
+              (widget.decoration as BoxDecoration).color ==
+                  ReaderHud.barColor &&
+              (widget.decoration as BoxDecoration).borderRadius ==
+                  ReaderHud.topPlateRadius,
+        );
+
+    testWidgets('顶部底板铺到状态栏后面：顶边贴屏幕顶边、顶边直角、控件在 inset 下、不吃点击', (tester) async {
+      var underlyingTaps = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              padding: EdgeInsets.only(top: 24),
+              viewPadding: EdgeInsets.only(top: 24),
+            ),
+            child: Scaffold(
+              body: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => underlyingTaps++,
+                  ),
+                  ReaderHud(
+                    title: '阅读器',
+                    page: 1,
+                    total: 10,
+                    mode: ReaderMode.paged,
+                    visible: true,
+                    onExit: () {},
+                    onToggleMode: () {},
+                    onJump: (_) {},
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final plateRect = tester.getRect(topPlate());
+      expect(plateRect.top, 0, reason: '底板必须从屏幕顶边延伸，不能留 6px 缝');
+      expect(plateRect.left, 0);
+      expect(
+        plateRect.right,
+        tester.view.physicalSize.width / tester.view.devicePixelRatio,
+      );
+      expect(
+        plateRect.height,
+        ReaderHud.topPlateHeightOf(
+          const MediaQueryData(
+            padding: EdgeInsets.only(top: 24),
+            viewPadding: EdgeInsets.only(top: 24),
+          ),
+        ),
+      );
+      final radius =
+          (tester.widget<DecoratedBox>(topPlate()).decoration as BoxDecoration)
+              .borderRadius! as BorderRadius;
+      expect(radius.topLeft, Radius.zero, reason: '顶边直角，不再顶一块 18px 圆角灰板');
+      expect(radius.bottomLeft, const Radius.circular(ReaderHud.barRadius));
+
+      // 控件落在状态栏（top inset）以下，不会压住系统时间 / 电量。
+      expect(
+        tester.getRect(find.text('阅读器 · 第 1/10 页')).top,
+        greaterThanOrEqualTo(24),
+      );
+
+      // 状态栏那条带子只是背景：底板不拦截触摸，点击漏给阅读区。
+      final size = tester.view.physicalSize / tester.view.devicePixelRatio;
+      await tester.tapAt(Offset(size.width / 2, 10));
+      expect(underlyingTaps, 1, reason: '状态栏背景必须让点击穿透');
+    });
+
+    testWidgets('沉浸式（padding=0、viewPadding 有额头）时控件照样落在额头之下', (tester) async {
+      var underlyingTaps = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              viewPadding: EdgeInsets.only(top: 28),
+            ),
+            child: Scaffold(
+              body: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => underlyingTaps++,
+                  ),
+                  ReaderHud(
+                    title: '阅读器',
+                    page: 1,
+                    total: 10,
+                    mode: ReaderMode.paged,
+                    visible: true,
+                    onExit: () {},
+                    onToggleMode: () {},
+                    onJump: (_) {},
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(
+        tester.getRect(topPlate()).height,
+        28 + ReaderHud.topRowHeight + ReaderHud.topPlateLip,
+        reason: '沉浸式下 viewPadding 才是屏幕真实额头',
+      );
+      expect(
+        tester.getRect(find.text('阅读器 · 第 1/10 页')).top,
+        greaterThanOrEqualTo(28),
+      );
+      final size = tester.view.physicalSize / tester.view.devicePixelRatio;
+      await tester.tapAt(Offset(size.width / 2, 10));
+      expect(underlyingTaps, 1);
+    });
+
+    testWidgets('没有状态栏 inset 时顶部底板只有控件行高度，不会顶出一条空条', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 400,
+              child: ReaderHud(
+                title: '测试',
+                page: 1,
+                total: 2,
+                mode: ReaderMode.paged,
+                visible: true,
+                onExit: () {},
+                onToggleMode: () {},
+                onJump: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final plateRect = tester.getRect(topPlate());
+      expect(plateRect.top, 0);
+      expect(
+        plateRect.height,
+        ReaderHud.topRowHeight + ReaderHud.topPlateLip,
+        reason: 'inset 为 0 时底板只到控件行下面的 6px 底边',
+      );
+      final titleRect = tester.getRect(find.text('测试 · 第 1/2 页'));
+      expect(titleRect.top, greaterThanOrEqualTo(0));
+      expect(
+        titleRect.bottom,
+        lessThanOrEqualTo(ReaderHud.topRowHeight),
+        reason: '控件行紧贴屏幕顶边，底板不会多出一条空带',
+      );
+      expect(find.textContaining('已读 1/2'), findsOneWidget);
+    });
+
+    testWidgets('给了 onMore 就只留一个「更多」按钮（翻页方式 + 节点都收进去）', (tester) async {
+      var moreTaps = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 400,
+              child: ReaderHud(
+                title: '测试',
+                page: 1,
+                total: 10,
+                mode: ReaderMode.paged,
+                visible: true,
+                lineLabel: '线路2',
+                onMore: () => moreTaps++,
+                onExit: () {},
+                onToggleMode: () {},
+                onJump: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // 只剩「退出」和「更多」两个图标按钮，节点药丸与模式按钮都不再单独出现。
+      expect(find.byType(AppIconButton), findsNWidgets(2));
+      expect(find.text('线路2'), findsNothing);
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is SvgIcon && widget.asset == AppIcons.more,
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byType(AppIconButton).last);
+      expect(moreTaps, 1);
+    });
 
     testWidgets('顶栏 / 底栏是圆角矩形灰底，不再铺玻璃板或模糊遮罩', (tester) async {
       await tester.pumpWidget(
@@ -394,7 +599,8 @@ void main() {
         ),
       );
 
-      expect(greyBars(), findsNWidgets(2), reason: '上、下各一条圆角灰底');
+      expect(topPlate(), findsOneWidget, reason: '顶部是一块从屏幕顶边铺下来的底板');
+      expect(greyBar(), findsOneWidget, reason: '下面只剩底栏一条圆角灰底');
       expect(
         find.byType(BackdropFilter),
         findsNothing,
@@ -427,7 +633,8 @@ void main() {
         ),
       );
 
-      expect(greyBars(), findsNWidgets(2), reason: '玻璃皮肤同样用圆角灰底');
+      expect(topPlate(), findsOneWidget, reason: '玻璃皮肤同样用同一块顶部底板');
+      expect(greyBar(), findsOneWidget, reason: '底栏仍是圆角灰底');
       expect(find.byType(AppGlassChrome), findsNothing, reason: 'HUD 条不铺玻璃板');
       expect(find.text('已读 1/10'), findsOneWidget);
     });

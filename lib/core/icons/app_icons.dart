@@ -29,6 +29,9 @@ abstract final class AppIcons {
   static const String scrollMode = 'assets/icons/scroll-mode.svg';
   static const String pageMode = 'assets/icons/page-mode.svg';
 
+  /// 更多（三个点）：阅读器把翻页方式 / 节点 / 下载收进这个二级菜单。
+  static const String more = 'assets/icons/more.svg';
+
   /// 收藏：五角星（描边 = 未收藏，实心 = 已收藏）。
   static const String star = 'assets/icons/star.svg';
   static const String starFilled = 'assets/icons/star-filled.svg';

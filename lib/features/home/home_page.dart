@@ -160,17 +160,9 @@ class _HomePageState extends ConsumerState<HomePage> {
   List<Widget> _buildContent(BuildContext context, HomeFeed feed) {
     final categories = _categoriesOf(feed);
     final selectedCategory = ref.watch(selectedCategoryProvider);
-    final order = ref.watch(albumOrderProvider);
     final scheme = Theme.of(context).colorScheme;
     final loadingMore = ref.watch(loadingMoreProvider);
     final loadMoreError = ref.watch(loadMoreErrorProvider);
-    final likes = ref.watch(albumLikesProvider).likes;
-    // 列表接口没有喜欢数：按当前排序抓一次官方网页（同一页只抓一次，异步补齐）。
-    ref.read(albumLikesProvider.notifier).ensurePage(
-          page: feed.gridPage,
-          order: order.code,
-          category: selectedCategory,
-        );
 
     return <Widget>[
       if (feed.fromCache && feed.updatedAt != null)
@@ -227,7 +219,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             ),
           ),
         ),
-      ..._buildModules(feed.modules, likes),
+      ..._buildModules(feed.modules),
       SliverToBoxAdapter(
         child: SortChips(
           selected: ref.watch(albumOrderProvider),
@@ -258,8 +250,8 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
           delegate: SliverChildBuilderDelegate(
             (context, index) {
-              final album = withScrapedLikes(feed.grid[index], likes);
-              return AlbumCard(
+              final album = feed.grid[index];
+              return LikesAlbumCard(
                 album: album,
                 onTap: () => _openAlbum(album.id),
               );
@@ -279,10 +271,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     ];
   }
 
-  List<Widget> _buildModules(
-    List<JmPromoteModule> modules,
-    Map<String, int> likes,
-  ) {
+  List<Widget> _buildModules(List<JmPromoteModule> modules) {
     if (modules.isEmpty) return const <Widget>[];
     final result = <Widget>[];
     for (final module in modules) {
@@ -301,8 +290,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                   separatorBuilder: (context, index) =>
                       const SizedBox(width: 12),
                   itemBuilder: (context, index) {
-                    final album = withScrapedLikes(module.items[index], likes);
-                    return AlbumCard(
+                    final album = module.items[index];
+                    return LikesAlbumCard(
                       album: album,
                       layout: AlbumCardLayout.rail,
                       onTap: () => _openAlbum(album.id),

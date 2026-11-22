@@ -17,6 +17,8 @@ analyzer:
     - "**/*.g.dart"
     - android/**
     - ios/**
+    - web/**
+    - windows/**
 
 linter:
   rules:

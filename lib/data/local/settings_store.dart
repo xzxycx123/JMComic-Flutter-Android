@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce/hive.dart';
 
+import '../../core/utils/file_names.dart';
 import 'hive_init.dart';
 
 /// 外观模式（默认浅色，不是跟随系统）。
@@ -57,6 +58,7 @@ class AppSettings {
     this.pageTurnAnimation = true,
     this.autoSwitchHost = true,
     this.rememberPassword = true,
+    this.saveImagePath = defaultSaveImageDir,
   });
 
   final AppThemeMode themeMode;
@@ -70,6 +72,9 @@ class AppSettings {
   /// 记住密码（系统密钥库）+ cookie 失效时自动重登。默认开：不然退出 App 就掉登录。
   final bool rememberPassword;
 
+  /// 阅读器「下载当页图片」的保存目录（相对公共存储，默认 `Pictures/JMComicDownloader/`）。
+  final String saveImagePath;
+
   AppSettings copyWith({
     AppThemeMode? themeMode,
     AppInterfaceStyle? interfaceStyle,
@@ -77,6 +82,7 @@ class AppSettings {
     bool? pageTurnAnimation,
     bool? autoSwitchHost,
     bool? rememberPassword,
+    String? saveImagePath,
   }) =>
       AppSettings(
         themeMode: themeMode ?? this.themeMode,
@@ -85,6 +91,7 @@ class AppSettings {
         pageTurnAnimation: pageTurnAnimation ?? this.pageTurnAnimation,
         autoSwitchHost: autoSwitchHost ?? this.autoSwitchHost,
         rememberPassword: rememberPassword ?? this.rememberPassword,
+        saveImagePath: saveImagePath ?? this.saveImagePath,
       );
 }
 
@@ -98,6 +105,7 @@ class SettingsStore {
   static const String _keyPageTurnAnimation = 'pageTurnAnimation';
   static const String _keyAutoSwitchHost = 'autoSwitchHost';
   static const String _keyRememberPassword = 'rememberPassword';
+  static const String _keySaveImagePath = 'saveImagePath';
 
   final Box<dynamic> _box;
 
@@ -109,6 +117,9 @@ class SettingsStore {
         pageTurnAnimation: (_box.get(_keyPageTurnAnimation) as bool?) ?? true,
         autoSwitchHost: (_box.get(_keyAutoSwitchHost) as bool?) ?? true,
         rememberPassword: (_box.get(_keyRememberPassword) as bool?) ?? true,
+        saveImagePath: normalizeSaveDir(
+          (_box.get(_keySaveImagePath) as String?) ?? defaultSaveImageDir,
+        ),
       );
 
   Future<void> write(AppSettings settings) async {
@@ -118,6 +129,7 @@ class SettingsStore {
     await _box.put(_keyPageTurnAnimation, settings.pageTurnAnimation);
     await _box.put(_keyAutoSwitchHost, settings.autoSwitchHost);
     await _box.put(_keyRememberPassword, settings.rememberPassword);
+    await _box.put(_keySaveImagePath, settings.saveImagePath);
   }
 }
 
@@ -154,6 +166,10 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   Future<void> setRememberPassword(bool enabled) =>
       _commit(state.copyWith(rememberPassword: enabled));
+
+  /// 保存图片目录（自动去掉首尾斜杠，空值回落默认目录）。
+  Future<void> setSaveImagePath(String path) =>
+      _commit(state.copyWith(saveImagePath: normalizeSaveDir(path)));
 }
 
 /// 便捷派生：MaterialApp 的 ThemeMode。

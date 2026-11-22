@@ -52,6 +52,7 @@ void main() {
     AppIcons.alert,
     AppIcons.scrollMode,
     AppIcons.pageMode,
+    AppIcons.more,
     AppIcons.star,
     AppIcons.starFilled,
     AppIcons.heart,

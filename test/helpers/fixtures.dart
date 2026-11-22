@@ -366,6 +366,44 @@ class FakeJmApi implements JmApi {
     likedAlbums.add(albumId);
   }
 
+  // ---------------------------------------------------------------- 喜欢数（JmAPI）
+  /// `/album.likes` 的逐本返回值；没配置的走 [fallbackLikes]。
+  final Map<String, int> likesByAlbum = <String, int>{};
+
+  /// 未显式配置时的点赞数。
+  int fallbackLikes = 0;
+
+  /// 这些 id 的取数请求直接抛网络异常（验证重试 / 放弃）。
+  final Set<String> likesErrors = <String>{};
+
+  /// 每个 id 只失败前 N 次（验证「失败后下次 build 再试一次」）。
+  final Map<String, int> likesTransientFailures = <String, int>{};
+
+  /// 人为延迟（验证并发上限）。
+  Duration likesDelay = Duration.zero;
+
+  int likesCalls = 0;
+  final List<String> likesRequests = <String>[];
+
+  @override
+  Future<int> fetchAlbumLikes(String albumId) async {
+    likesCalls++;
+    likesRequests.add(albumId);
+    if (likesDelay > Duration.zero) {
+      await Future<void>.delayed(likesDelay);
+    }
+    _throwIfFailing();
+    final remainingFailures = likesTransientFailures[albumId] ?? 0;
+    if (remainingFailures > 0) {
+      likesTransientFailures[albumId] = remainingFailures - 1;
+      throw const JmApiException('喜欢数取数失败（模拟）', network: true);
+    }
+    if (likesErrors.contains(albumId)) {
+      throw const JmApiException('喜欢数取数失败（模拟）', network: true);
+    }
+    return likesByAlbum[albumId] ?? fallbackLikes;
+  }
+
   @override
   Future<JmCommentPage> fetchComments({
     required String albumId,

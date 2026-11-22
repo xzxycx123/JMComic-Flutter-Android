@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Subagent model allowlist",
+    "description": "Tick any model you can already see, right under the composer, to decide which routes a subagent may run on and keep delegated work on a cheap model."
+  }
+}

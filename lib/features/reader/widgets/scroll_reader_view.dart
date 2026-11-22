@@ -11,10 +11,24 @@ class ScrollReaderView extends StatelessWidget {
     required this.onPageChanged,
     super.key,
     this.physics,
+    this.itemCount,
+    this.footerExtent = 0,
   });
 
   final ScrollController controller;
   final int total;
+
+  /// 列表项数量：默认等于 [total]；阅读器会在末尾多挂一个「结束页」。
+  ///
+  /// 页码估算始终按 [total] 算，多出来的末尾项不会被当成正文页。
+  final int? itemCount;
+
+  /// 末尾结束页的固定高度（逻辑像素）。
+  ///
+  /// 页码比例按「正文可滚动高度 = maxScrollExtent - footerExtent」计算，
+  /// 这样结束页不会被折算成一个额外的正文页；滚到结束页时页码稳定停在 total。
+  final double footerExtent;
+
   final IndexedWidgetBuilder itemBuilder;
   final ValueChanged<int> onPageChanged;
 
@@ -23,9 +37,13 @@ class ScrollReaderView extends StatelessWidget {
 
   bool _onScroll(ScrollNotification notification) {
     if (notification.metrics.axis != Axis.vertical || total <= 1) return false;
-    final max = notification.metrics.maxScrollExtent;
-    if (max <= 0) return false;
-    final ratio = (notification.metrics.pixels / max).clamp(0.0, 1.0);
+    final contentExtent = math.max(
+      0.0,
+      notification.metrics.maxScrollExtent - footerExtent,
+    );
+    if (contentExtent <= 0) return false;
+    final ratio =
+        (notification.metrics.pixels / contentExtent).clamp(0.0, 1.0);
     final page = (ratio * (total - 1)).round() + 1;
     onPageChanged(math.min(math.max(page, 1), total));
     return false;
@@ -37,7 +55,7 @@ class ScrollReaderView extends StatelessWidget {
       onNotification: _onScroll,
       child: ListView.builder(
         controller: controller,
-        itemCount: total,
+        itemCount: itemCount ?? total,
         physics: physics ?? const ClampingScrollPhysics(),
         itemBuilder: (context, index) => itemBuilder(context, index),
       ),

@@ -252,6 +252,8 @@ class DownloadFilterBar extends StatelessWidget {
               selected: selected,
               // 固定模式（等宽分段）才是「居中」的；滑动由外层承担。
               onChanged: onChanged,
+              // 与 Dock 同一套抬起透镜：按下/拖动才挂玻璃层，带放大与色散。
+              interactiveLens: true,
               metalStyle: SegmentedButton.styleFrom(
                 textStyle: AppTypography.caption,
                 side: BorderSide(color: scheme.outline),

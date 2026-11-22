@@ -12,6 +12,31 @@ class AppGlassTheme {
   static const controlQuality = GlassQuality.standard;
   static const overlayQuality = GlassQuality.premium;
 
+  /// Dock（`GlassTabBar`）指示器的官方标定值：抬起的指示器透镜用 premium
+  /// 档才有真实折射与色散，pinch / 外扩 / glow 决定「放大 + 果冻」的手感。
+  /// 只给需要与 Dock 对齐的分段控件复用，其余控件仍用 [controlQuality]。
+  static const dockIndicatorQuality = GlassQuality.premium;
+  static const double dockIndicatorPinch = .4;
+  static const double dockIndicatorGlowRadius = 1.5;
+  static const EdgeInsets dockIndicatorExpansion =
+      EdgeInsets.symmetric(horizontal: 12, vertical: 8);
+
+  /// 指示器透镜色散强度。
+  ///
+  /// 包内 [LiquidGlassSettings.ios27Indicator]（Dock 实际解析到的预设）是
+  /// `thickness: 28, refractiveIndex: 1.17, paraxial, rimShade: 1,
+  /// rimLight: 1, chromaticAberration: 0`——只有折射和果冻，没有色散；
+  /// 旧实现用的 `control()` 平铺玻璃也只有 .10，肉眼几乎看不出。
+  /// 取 .22：约等于 Figma dispersion 5.5%（4 × 5.5%），比经典指示器预设的
+  /// .3 收敛，又明显高于 .10，拖动时能看清边缘的彩色分离。
+  static const double dockIndicatorDispersion = .22;
+
+  /// Dock 解析出的 ios27 指示器透镜 + 明确色散；其余光学参数（厚度、
+  /// 折射率、paraxial 透镜、rimShade / rimLight）与 Dock 完全一致。
+  static final LiquidGlassSettings dockIndicatorLens = LiquidGlassSettings
+      .ios27Indicator
+      .copyWith(chromaticAberration: dockIndicatorDispersion);
+
   factory AppGlassTheme.of(BuildContext context, {bool reader = false}) =>
       AppGlassTheme._(
         reader ? AppColors.darkScheme : Theme.of(context).colorScheme,

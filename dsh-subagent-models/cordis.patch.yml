@@ -1,0 +1,7 @@
+# dsh-subagent-models bundle patch
+#
+# 一行即可：Host 半边提供 /subagent-models/api + subagent_models 工具，
+# Client 半边在输入框下方的 dock 里注册「子 Agent 模型」选择面板。
+- insert:
+    - id: dsh-subagent-models
+      name: 'dsh-subagent-models'

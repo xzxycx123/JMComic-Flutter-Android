@@ -160,11 +160,8 @@ class _CollectPageState extends ConsumerState<CollectPage> {
                       final item = visible[index];
                       return Stack(
                         children: <Widget>[
-                          AlbumCard(
-                            album: withScrapedLikes(
-                              item.toSummary(),
-                              ref.watch(albumLikesProvider).likes,
-                            ),
+                          LikesAlbumCard(
+                            album: item.toSummary(),
                             onTap: () => context.push('/album/${item.albumId}'),
                             onLongPress: () => _showItemMenu(item),
                           ),

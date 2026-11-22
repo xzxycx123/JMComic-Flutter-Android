@@ -29,4 +29,42 @@ void main() {
       );
     });
   });
+
+  group('章节 / 当页图片命名', () {
+    test('章节号能解析时统一成「第N章」', () {
+      expect(chapterFileLabel('第 1 话'), '第1章');
+      expect(chapterFileLabel('第12話'), '第12章');
+      expect(chapterFileLabel('ch. 3'), 'ch.3');
+      expect(chapterFileLabel(''), '第1章');
+    });
+
+    test('JMComic-[jm编号]-第几章-第几页.png', () {
+      expect(
+        readerImageName(
+          albumId: '350234',
+          chapterTitle: '第 1 话',
+          page: 7,
+        ),
+        'JMComic-350234-第1章-第7页.png',
+      );
+      expect(
+        readerImageName(
+          albumId: '350234',
+          chapterTitle: '全一话',
+          page: 1,
+        ),
+        'JMComic-350234-全一话-第1页.png',
+      );
+    });
+
+    test('保存目录归一化：斜杠 / 空值', () {
+      expect(normalizeSaveDir(''), defaultSaveImageDir);
+      expect(normalizeSaveDir('  '), defaultSaveImageDir);
+      expect(normalizeSaveDir('/Pictures/JMComicDownloader/'),
+          'Pictures/JMComicDownloader',);
+      expect(normalizeSaveDir(r'Pictures\JMComicDownloader'),
+          'Pictures/JMComicDownloader',);
+      expect(normalizeSaveDir('//a//b//'), 'a/b');
+    });
+  });
 }

@@ -108,6 +108,12 @@ abstract class JmApi {
   /// `POST /like {id}`：点赞。返回体是明文 `{code,msg,status}`，无计数。
   Future<void> likeAlbum(String albumId);
 
+  /// `GET /album?id=`：只要「喜歡」数的精确值（列表接口不带计数）。
+  ///
+  /// 与 [getAlbum] 同一个端点，但不解析整本详情、不做章节重定向 ——
+  /// 首页卡片批量补数时单本只花一次轻量请求。
+  Future<int> fetchAlbumLikes(String albumId);
+
   /// `GET /forum?page&aid&mode`：评论列表（未登录也可读）。
   Future<JmCommentPage> fetchComments({
     required String albumId,
@@ -140,6 +146,7 @@ class JmApiClient implements JmApi {
     bool Function()? autoSwitchHost,
     this.timestampProvider,
     this.onCookiesChanged,
+    this.attemptTimeout = JmConstants.requestAttemptTimeout,
   })  : _store = store,
         _dio = dio,
         _jar = cookieJar ?? JmCookieJar(),
@@ -158,6 +165,11 @@ class JmApiClient implements JmApi {
 
   /// 「自动切换线路」开关（设置页）：关掉后只试首条线路，不再轮换。
   final bool Function() _autoSwitchHost;
+
+  /// 单次尝试的收发预算；默认 [JmConstants.requestAttemptTimeout]。
+  ///
+  /// 实网用例在慢线路上放宽到 30~40s，App 内保持默认值（轮换线路比死等更快）。
+  final Duration attemptTimeout;
 
   /// 单测注入固定时间戳（服务端响应要用同一 ts 解密）。
   final String Function()? timestampProvider;
@@ -641,6 +653,21 @@ class JmApiClient implements JmApi {
   }
 
   @override
+  Future<int> fetchAlbumLikes(String albumId) async {
+    final root = await _requestApi(
+      '/album',
+      query: <String, String>{'id': albumId},
+    );
+    final map = asMap(root);
+    if (map == null) {
+      throw const JmApiException('专辑点赞数响应结构异常', network: true);
+    }
+    final likes = JmResponseParser.albumLikes(map);
+    Log.d('JmAPI 点赞数 $albumId = $likes');
+    return likes;
+  }
+
+  @override
   Future<JmCommentPage> fetchComments({
     required String albumId,
     int page = 1,
@@ -909,8 +936,8 @@ class JmApiClient implements JmApi {
         options: Options(
           method: method,
           responseType: ResponseType.plain,
-          receiveTimeout: JmConstants.requestAttemptTimeout,
-          sendTimeout: JmConstants.requestAttemptTimeout,
+          receiveTimeout: attemptTimeout,
+          sendTimeout: attemptTimeout,
           headers: <String, dynamic>{
             'User-Agent': JmConstants.userAgent,
             // 不手动设 Accept-Encoding：交给 HttpClient 自动 gzip。

@@ -3,6 +3,7 @@ import 'dart:ui' show SemanticsAction;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jm_comic/core/icons/app_icons.dart';
+import 'package:jm_comic/core/theme/app_glass_theme.dart';
 import 'package:jm_comic/core/theme/app_theme.dart';
 import 'package:jm_comic/core/theme/interface_style_scope.dart';
 import 'package:jm_comic/core/ui/glass/app_button.dart';
@@ -11,7 +12,12 @@ import 'package:jm_comic/core/ui/glass/app_segmented_control.dart';
 import 'package:jm_comic/data/local/settings_store.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
-Widget _host(Widget child, {AppInterfaceStyle? style, double textScale = 1}) =>
+Widget _host(
+  Widget child, {
+  AppInterfaceStyle? style,
+  double textScale = 1,
+  bool disableAnimations = true,
+}) =>
     LiquidGlassWidgets.wrap(
       theme: const GlassThemeData.ios27(),
       brightnessResolver: Theme.maybeBrightnessOf,
@@ -25,7 +31,7 @@ Widget _host(Widget child, {AppInterfaceStyle? style, double textScale = 1}) =>
           return MediaQuery(
             data: MediaQuery.of(context).copyWith(
               textScaler: TextScaler.linear(textScale),
-              disableAnimations: true,
+              disableAnimations: disableAnimations,
             ),
             child: tree,
           );
@@ -47,12 +53,13 @@ void main() {
     await tester.pumpWidget(_host(cta));
     expect(find.byType(FilledButton), findsOneWidget);
     expect(
-        tester
-            .widget<FilledButton>(find.byType(FilledButton))
-            .style
-            ?.shape
-            ?.resolve({}),
-        isA<LiquidRoundedSuperellipse>(),);
+      tester
+          .widget<FilledButton>(find.byType(FilledButton))
+          .style
+          ?.shape
+          ?.resolve({}),
+      isA<LiquidRoundedSuperellipse>(),
+    );
     await tester.tap(find.byType(FilledButton));
     expect(clicks, 1);
 
@@ -150,6 +157,12 @@ void main() {
     await tester.tap(find.text('下载完成'));
     await tester.pump();
     expect(changes, [24, 24]);
+    // 未开启 interactiveLens 的分段控件保持轻档：不走 premium 透镜。
+    final plain = tester.widget<GlassSegmentedControl>(
+      find.byType(GlassSegmentedControl),
+    );
+    expect(plain.quality, GlassQuality.standard);
+    expect(plain.indicatorSettings, isNotNull);
 
     await tester.pumpWidget(
       _host(
@@ -165,5 +178,42 @@ void main() {
       isTrue,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('scrollable 分段同样走 Dock 透镜（该分支没有 glow 参数）', (tester) async {
+    await tester.pumpWidget(
+      _host(
+        SizedBox(
+          width: 180,
+          child: AppSegmentedControl<int>(
+            segments: const [
+              AppSegment(value: 11, label: Text('全部记录')),
+              AppSegment(value: 24, label: Text('下载完成')),
+              AppSegment(value: 39, label: Text('下载失败')),
+            ],
+            selected: 11,
+            onChanged: (_) {},
+            interactiveLens: true,
+          ),
+        ),
+        style: AppInterfaceStyle.liquidGlass,
+        textScale: 1.3,
+        disableAnimations: false,
+      ),
+    );
+    final control = tester.widget<GlassSegmentedControl>(
+      find.byType(GlassSegmentedControl),
+    );
+    expect(control.isScrollable, isTrue);
+    expect(control.quality, GlassQuality.premium);
+    expect(
+      control.indicatorSettings?.chromaticAberration,
+      AppGlassTheme.dockIndicatorDispersion,
+    );
+    expect(control.indicatorPinchStrength, .4);
+    expect(
+      control.indicatorExpansion,
+      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    );
   });
 }

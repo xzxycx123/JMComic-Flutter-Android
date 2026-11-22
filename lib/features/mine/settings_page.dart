@@ -13,6 +13,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/theme/interface_style_selector.dart';
 import '../../core/ui/app_toast.dart';
 import '../../core/ui/glass/app_glass.dart';
+import '../../core/utils/file_names.dart';
 import '../../core/utils/host_normalizer.dart';
 import '../../data/local/settings_store.dart';
 import '../../data/models/jm_host_entry.dart';
@@ -153,6 +154,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SectionHeader(title: '存储'),
           _SettingsTile(
             icon: AppIcons.folder,
+            title: '保存图片目录',
+            value: settings.saveImagePath,
+            onTap: () => _editSaveImagePath(settings.saveImagePath),
+          ),
+          _SettingsTile(
+            icon: AppIcons.folder,
             title: '默认下载目录',
             value: 'Documents/JMComics',
             onTap: _showLocation,
@@ -268,6 +275,30 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     await ref.read(sessionRepositoryProvider).setManualHost(value);
     container.invalidate(jmBootstrapProvider);
     _showToast(value.isEmpty ? '已清除手动域名' : '已保存：$value');
+  }
+
+  /// 阅读器「下载当页图片」的保存目录：默认 `Pictures/JMComicDownloader/`，清空即回落默认。
+  Future<void> _editSaveImagePath(String current) async {
+    var text = current;
+    final value = await AppDialog.show<String>(
+      context: context,
+      title: '保存图片目录',
+      contentBuilder: (_) => _SavePathField(
+        initialValue: current,
+        onChanged: (value) => text = value,
+      ),
+      actions: <AppDialogAction<String>>[
+        const AppDialogAction(label: '取消'),
+        AppDialogAction(
+          label: '保存',
+          primary: true,
+          resultBuilder: () => normalizeSaveDir(text),
+        ),
+      ],
+    );
+    if (value == null || !mounted) return;
+    await ref.read(settingsProvider.notifier).setSaveImagePath(value);
+    _showToast('保存目录：$value');
   }
 
   Future<void> _pickTheme(AppThemeMode current) async {
@@ -398,6 +429,35 @@ class _ManualHostFieldState extends State<_ManualHostField> {
         controller: _controller,
         autofocus: true,
         decoration: const InputDecoration(hintText: '如 www.cdnutc.cc'),
+        onChanged: widget.onChanged,
+      );
+}
+
+/// 保存图片目录输入框（对话框内容）。
+class _SavePathField extends StatefulWidget {
+  const _SavePathField({required this.initialValue, required this.onChanged});
+
+  final String initialValue;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<_SavePathField> createState() => _SavePathFieldState();
+}
+
+class _SavePathFieldState extends State<_SavePathField> {
+  late final _controller = TextEditingController(text: widget.initialValue);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AppTextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(hintText: defaultSaveImageDir),
         onChanged: widget.onChanged,
       );
 }

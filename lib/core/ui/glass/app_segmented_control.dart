@@ -31,6 +31,7 @@ class AppSegmentedControl<T> extends StatelessWidget {
     this.scrollable = false,
     this.metalStyle,
     this.showSelectedIcon = false,
+    this.interactiveLens = false,
   }) : assert(segments.length > 0);
 
   final List<AppSegment<T>> segments;
@@ -39,6 +40,15 @@ class AppSegmentedControl<T> extends StatelessWidget {
   final bool scrollable;
   final ButtonStyle? metalStyle;
   final bool showSelectedIcon;
+
+  /// 选中透镜按 Dock（`GlassTabBar`）标准抬升：premium 档折射/色散 + 果冻外扩。
+  ///
+  /// 包内 `AnimatedGlassIndicator` 的 premium 路径在 `activeIntensity > 0`
+  /// （按下 / 拖动 / 回弹途中）才挂 `LiquidGlass.withOwnLayer`，静止时完全
+  /// 不挂层，所以这里不需要（也不能再加）一个常驻的 own layer。只给下载页
+  /// 筛选条与材质切换这两个需要与 Dock 一致的控件开启，其余分段控件保持
+  /// [AppGlassTheme.controlQuality] 的轻档。
+  final bool interactiveLens;
 
   @override
   Widget build(BuildContext context) {
@@ -105,6 +115,26 @@ class AppSegmentedControl<T> extends StatelessWidget {
                       26)
                   .clamp(44.0, 64.0);
           final indicator = theme.control(tint: theme.scheme.primary);
+          // Dock 对齐：显式使用 Dock 解析出的 ios27 指示器透镜（thickness
+          // 28 / refractiveIndex 1.17 / paraxial / rimShade 1 / rimLight 1）
+          // 并把 chromaticAberration 提到 .22；静止时它没有色散，传 null
+          // 只能拿到折射和果冻。control() 的平铺玻璃（CA .10、半实色底）
+          // 会盖住透镜，拖动时只剩一块浅色方块。
+          final indicatorSettings =
+              interactiveLens ? AppGlassTheme.dockIndicatorLens : indicator;
+          final indicatorQuality = interactiveLens
+              ? AppGlassTheme.dockIndicatorQuality
+              : AppGlassTheme.controlQuality;
+          // Reduce Motion 只关运动（pinch 收缩、glow、jelly 回弹），透镜的
+          // 折射与色散属于光学效果：交给 LiquidGlassWidgets.wrap 的
+          // respectSystemAccessibility 在 Reduce Transparency 下整体降级，
+          // 不在这里擅自把 chromaticAberration 归零。
+          final pinchStrength = theme.reduceMotion
+              ? 0.0
+              : (interactiveLens ? AppGlassTheme.dockIndicatorPinch : .25);
+          final expansion = interactiveLens
+              ? AppGlassTheme.dockIndicatorExpansion
+              : const EdgeInsets.symmetric(horizontal: 5, vertical: 4);
           if (useScrollable) {
             return GlassSegmentedControl.scrollable(
               segments: items,
@@ -121,11 +151,10 @@ class AppSegmentedControl<T> extends StatelessWidget {
               unselectedTextStyle:
                   labelStyle.copyWith(color: theme.scheme.onSurfaceVariant),
               indicatorColor: theme.selection,
-              indicatorSettings: indicator,
-              indicatorPinchStrength: theme.reduceMotion ? 0 : .25,
-              indicatorExpansion:
-                  const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
-              quality: AppGlassTheme.controlQuality,
+              indicatorSettings: indicatorSettings,
+              indicatorPinchStrength: pinchStrength,
+              indicatorExpansion: expansion,
+              quality: indicatorQuality,
             );
           }
           return GlassSegmentedControl(
@@ -144,13 +173,17 @@ class AppSegmentedControl<T> extends StatelessWidget {
             unselectedTextStyle:
                 labelStyle.copyWith(color: theme.scheme.onSurfaceVariant),
             indicatorColor: theme.selection,
-            indicatorSettings: indicator,
-            indicatorPinchStrength: theme.reduceMotion ? 0 : .25,
-            indicatorExpansion:
-                const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+            indicatorSettings: indicatorSettings,
+            indicatorPinchStrength: pinchStrength,
+            indicatorExpansion: expansion,
             glowColor: theme.scheme.primary,
-            glowRadius: theme.reduceMotion ? 0 : 1,
-            quality: AppGlassTheme.controlQuality,
+            glowRadius: theme.reduceMotion
+                ? 0
+                : (interactiveLens ? AppGlassTheme.dockIndicatorGlowRadius : 1),
+            quality: indicatorQuality,
+            interactionBehavior: theme.reduceMotion
+                ? GlassInteractionBehavior.none
+                : GlassInteractionBehavior.full,
           );
         },
       ),
