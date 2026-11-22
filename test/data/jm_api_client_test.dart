@@ -109,6 +109,27 @@ void main() {
     );
   });
 
+  test('fetchAlbumMeta：一次 /album 拿 likes + 作品 tags', () async {
+    adapter.onGet(
+      RegExp(r'/album'),
+      (server) => server.reply(
+        200,
+        _envelope(<String, dynamic>{
+          'id': '1492403',
+          'name': 'Deathclaws',
+          'likes': 21456,
+          'tags': <String>['美漫', '全彩', '扶他', '中文'],
+        }),
+      ),
+    );
+
+    final meta = await client.fetchAlbumMeta('1492403');
+    expect(meta.likes, 21456);
+    expect(meta.tags, <String>['美漫', '全彩', '扶他', '中文']);
+    // 只要计数时走同一个端点。
+    expect(await client.fetchAlbumLikes('1492403'), 21456);
+  });
+
   test('fetchAlbumLikes：读 /album.likes 的精确值（列表接口没有计数）', () async {
     adapter.onGet(
       RegExp(r'/album'),

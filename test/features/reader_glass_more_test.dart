@@ -136,10 +136,15 @@ class _SlowProgressStore extends _MemoryProgressStore {
 }
 
 class _GlassHarness {
-  _GlassHarness({required this.api, required this.store});
+  _GlassHarness({
+    required this.api,
+    required this.store,
+    required this.container,
+  });
 
   final _CountingJmApi api;
   final ProgressStore store;
+  final ProviderContainer container;
 
   ReaderProgress? read([String chapterId = '7999']) =>
       store.read('7000', chapterId);
@@ -250,7 +255,7 @@ Future<_GlassHarness> _pumpGlassReader(
   );
   await tester.tap(find.text('打开阅读器'));
   await tester.pumpAndSettle();
-  return _GlassHarness(api: counting, store: store);
+  return _GlassHarness(api: counting, store: store, container: container);
 }
 
 Future<void> _openMore(WidgetTester tester) async {
@@ -326,6 +331,32 @@ void main() {
 
     await _dismissMenu(tester);
     expect(find.text('翻页方式'), findsNothing);
+    unawaited(tester.binding.handlePopRoute());
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('玻璃更多：二级气泡里有翻页动画开关，切换后写回设置', (tester) async {
+    final harness = await _pumpGlassReader(tester);
+    await _openMore(tester);
+
+    final toggle = find.byType(AppSwitch);
+    expect(find.text('翻页动画'), findsOneWidget);
+    expect(toggle, findsOneWidget, reason: '菜单里只有一个开关');
+    expect(tester.widget<AppSwitch>(toggle).value, isTrue, reason: '默认开启');
+
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    expect(
+      harness.container.read(settingsProvider).pageTurnAnimation,
+      isFalse,
+      reason: '切开关写回 settingsProvider（和「我的 - 翻页动画」同一项）',
+    );
+    expect(find.text('选择节点'), findsOneWidget, reason: '切开关不会关菜单');
+    expect(tester.widget<AppSwitch>(toggle).value, isFalse);
+
+    await _dismissMenu(tester);
+    await tester.pump(const Duration(seconds: 4));
     unawaited(tester.binding.handlePopRoute());
     await tester.pumpAndSettle();
   });
@@ -673,7 +704,7 @@ void main() {
 
     await _openMore(tester);
     expect(tester.takeException(), isNull);
-    for (final label in <String>['翻页方式', '选择节点', '下载当页图片']) {
+    for (final label in <String>['翻页方式', '翻页动画', '选择节点', '下载当页图片']) {
       expect(
         screen.contains(tester.getRect(find.text(label)).center),
         isTrue,

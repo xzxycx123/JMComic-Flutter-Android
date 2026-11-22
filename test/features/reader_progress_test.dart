@@ -662,6 +662,32 @@ void main() {
       expect(subtitleY, greaterThan(titleY), reason: '副标题另起一行，不再和取值挤在一起');
     });
 
+    testWidgets('「更多」菜单：翻页动画开关直接写进设置，菜单不关', (tester) async {
+      final harness = await _pumpReader(tester);
+      await openMore(tester);
+
+      final toggle = find.byType(AppSwitch);
+      expect(find.text('翻页动画'), findsOneWidget);
+      expect(toggle, findsOneWidget, reason: '更多菜单里只有一个开关');
+      expect(tester.widget<AppSwitch>(toggle).value, isTrue, reason: '默认有翻页动画');
+      expect(harness.container.read(settingsProvider).pageTurnAnimation, isTrue);
+
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.widget<AppSwitch>(toggle).value,
+        isFalse,
+        reason: '开关按 provider 里的新值重建',
+      );
+      expect(
+        harness.container.read(settingsProvider).pageTurnAnimation,
+        isFalse,
+        reason: '和「我的 - 翻页动画」同一个设置项',
+      );
+      expect(find.text('选择节点'), findsOneWidget, reason: '切开关不会关菜单');
+    });
+
     testWidgets('二级菜单里切换翻页方式', (tester) async {
       await _pumpReader(tester);
 

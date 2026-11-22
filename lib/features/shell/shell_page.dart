@@ -22,6 +22,10 @@ class _ShellPageState extends State<ShellPage> {
   // Reparent the navigator subtree instead of disposing the branch pages.
   final GlobalKey _bodyKey = GlobalKey();
 
+  /// 设置页是「我的」分支里的二级页（返回靠 AppBar），底部 Dock 在那儿只挡内容：
+  /// 命中这些路径就收起 Dock，返回即恢复。
+  static bool _hidesDock(String path) => path == '/mine/settings';
+
   @override
   Widget build(BuildContext context) {
     final navigationShell = widget.navigationShell;
@@ -36,27 +40,42 @@ class _ShellPageState extends State<ShellPage> {
       );
     }
 
-    if (context.isLiquidGlass) {
-      return GlassScaffold(
-        extendBody: true,
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        background: const AppGlassBackground(),
-        statusBarStyle: GlassStatusBarStyle.auto,
-        body: body,
-        bottomBar: LiquidGlassNavBar(
-          currentIndex: navigationShell.currentIndex,
-          onSelect: selectBranch,
-        ),
-      );
-    }
+    // 分支内的二级页切换不会重建 ShellPage，这里直接盯 delegate，跳转即重算。
+    final router = GoRouter.of(context);
+    return AnimatedBuilder(
+      animation: router.routerDelegate,
+      builder: (context, _) {
+        final hideDock = _hidesDock(
+          router.routerDelegate.currentConfiguration.uri.path,
+        );
 
-    return Scaffold(
-      extendBody: true,
-      body: body,
-      bottomNavigationBar: GlassNavBar(
-        currentIndex: navigationShell.currentIndex,
-        onSelect: selectBranch,
-      ),
+        if (context.isLiquidGlass) {
+          return GlassScaffold(
+            extendBody: true,
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            background: const AppGlassBackground(),
+            statusBarStyle: GlassStatusBarStyle.auto,
+            body: body,
+            bottomBar: hideDock
+                ? null
+                : LiquidGlassNavBar(
+                    currentIndex: navigationShell.currentIndex,
+                    onSelect: selectBranch,
+                  ),
+          );
+        }
+
+        return Scaffold(
+          extendBody: true,
+          body: body,
+          bottomNavigationBar: hideDock
+              ? null
+              : GlassNavBar(
+                  currentIndex: navigationShell.currentIndex,
+                  onSelect: selectBranch,
+                ),
+        );
+      },
     );
   }
 }

@@ -718,6 +718,7 @@ abstract final class AppColors {
 | 分节头 | 标题 16 w700 + 「更多 ›」12 `onSurfaceVariant` |
 | 横滑分节 | 每模块 `SizedBox(height: 232)` + `ListView.horizontal`，卡片宽 148，封面 3:4，标题 2 行 |
 | 瀑布流 | 双列 `SliverGrid`，`childAspectRatio: 0.58`（封面 3:4 + 2 行标题），`crossAxisSpacing 12`、`mainAxisSpacing 16` |
+| 卡片角标 | **分类名**（`同人` / `單本` / `English Manga` …）打封面左上角；**作品标签**（`伪娘` / `扶她` / `百合` …）打在作者名下方，最多 2 个。标签来源是 `/album.tags`（列表接口不带 tags），与点赞数共用同一次 `/album` 补数；语言类标签（`中文` / `漢化` / `日語`）不展示；药丸宽度按内容走，**不截断、不出省略号**；分类不拿标签位、标签不拿分类位 |
 | 骨架 | 首屏未就绪时渲染 shimmer（轮播 1 + 横滑 1 + 网格 6） |
 | 刷新 | `RefreshIndicator`（`edgeOffset: 56`，避免与 AppBar 冲突） |
 

@@ -584,7 +584,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   }
 
   // ---------------------------------------------------------------- 更多菜单
-  /// 二级菜单：翻页方式 / 选择节点（三级菜单）/ 下载当页图片。
+  /// 二级菜单：翻页方式 / 翻页动画开关 / 选择节点（三级菜单）/ 下载当页图片。
   Future<void> _openMoreMenu() async {
     _hudTimer?.cancel();
     final action = await AppSheet.show<String>(
@@ -637,6 +637,17 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
           subtitleStyle: subStyle(),
           onTap: () => Navigator.of(sheetContext).pop('mode'),
         ),
+        // 翻页动画开关：和「我的 - 翻页动画」同一个设置项，改了立刻生效
+        //（[_goToPage] 里 `animate == null` 时就按它决定瞬切还是滑动）。
+        _MoreMenuRow(
+          icon: const SvgIcon(AppIcons.pageMode, size: 20),
+          title: '翻页动画',
+          subtitle: '关闭后翻页瞬切，不做滑动过渡',
+          titleStyle: titleStyle(),
+          subtitleStyle: subStyle(),
+          trailing: const _PageTurnSwitch(),
+          onTap: _togglePageTurnAnimation,
+        ),
         _MoreMenuRow(
           icon: const SvgIcon(AppIcons.refresh, size: 20),
           title: '选择节点',
@@ -659,6 +670,17 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
         const SizedBox(height: 8),
       ],
     );
+  }
+
+  /// 切换「翻页动画」（两套皮肤的更多菜单共用）。
+  ///
+  /// 立即落盘到 `settingsStore`，`_goToPage` 下一次翻页就按新值走；菜单不用关。
+  void _togglePageTurnAnimation() {
+    final enabled = ref.read(settingsProvider).pageTurnAnimation;
+    unawaited(
+      ref.read(settingsProvider.notifier).setPageTurnAnimation(!enabled),
+    );
+    _restartHudTimer();
   }
 
   // ---------------------------------------------------------------- 玻璃更多菜单
@@ -710,6 +732,13 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
             trailing: Text('切换到${_mode.toggled.label}', style: subStyle),
             enablePressScale: !accessibility.reduceMotion,
             onTap: _toggleMode,
+          ),
+          // 翻页动画开关：与「我的 - 翻页动画」同一设置项。开关行不是 GlassMenuItem
+          //（见 [_PageTurnGlassRow]），点开关只切设置，气泡不会顺带收起。
+          _PageTurnGlassRow(
+            icon: iconOf(AppIcons.pageMode),
+            titleStyle: titleStyle,
+            onTap: _togglePageTurnAnimation,
           ),
           GlassMenuItem(
             title: '选择节点',
@@ -1528,12 +1557,16 @@ class _MoreMenuRow extends StatelessWidget {
     required this.onTap,
     this.value,
     this.subtitle,
+    this.trailing,
   });
 
   final Widget icon;
   final String title;
   final String? value;
   final String? subtitle;
+
+  /// 标题行右侧控件（例如开关）；给了它就不再画 [value] 文本。
+  final Widget? trailing;
   final TextStyle titleStyle;
   final TextStyle subtitleStyle;
   final VoidCallback onTap;
@@ -1544,7 +1577,9 @@ class _MoreMenuRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const ink = AppColors.readerInk;
-    final trailing = value;
+    // 标题行右侧的取值文本（和标题同一中线）；开关这类高控件走外层 trailing，
+    // 按整行垂直居中，不塞进 21 高的标题行里撑破布局。
+    final valueText = value == null ? null : Text(value!, style: subtitleStyle);
     return Material(
       type: MaterialType.transparency,
       child: InkWell(
@@ -1556,65 +1591,152 @@ class _MoreMenuRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              // 图标按标题行的中线对齐，而不是两行文字块的中线。
-              SizedBox(
-                width: 20,
-                height: _titleRowHeight,
-                child: Center(
-                  child: IconTheme(
-                    data: const IconThemeData(color: ink),
-                    child: icon,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
               Expanded(
-                child: Column(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
+                    // 图标按标题行的中线对齐，而不是两行文字块的中线。
                     SizedBox(
+                      width: 20,
                       height: _titleRowHeight,
-                      child: Row(
+                      child: Center(
+                        child: IconTheme(
+                          data: const IconThemeData(color: ink),
+                          child: icon,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Expanded(
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: titleStyle,
+                          SizedBox(
+                            height: _titleRowHeight,
+                            child: Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: Text(
+                                    title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: titleStyle,
+                                  ),
+                                ),
+                                if (valueText != null) ...<Widget>[
+                                  const SizedBox(width: 10),
+                                  Flexible(child: valueText),
+                                ],
+                              ],
                             ),
                           ),
-                          if (trailing != null) ...<Widget>[
-                            const SizedBox(width: 10),
-                            Flexible(
-                              child: Text(
-                                trailing,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: subtitleStyle,
-                              ),
+                          if (subtitle != null) ...<Widget>[
+                            const SizedBox(height: 1),
+                            Text(
+                              subtitle!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: subtitleStyle,
                             ),
                           ],
                         ],
                       ),
                     ),
-                    if (subtitle != null) ...<Widget>[
-                      const SizedBox(height: 1),
-                      Text(
-                        subtitle!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: subtitleStyle,
-                      ),
-                    ],
                   ],
                 ),
               ),
+              if (trailing != null) ...<Widget>[
+                const SizedBox(width: 10),
+                trailing!,
+              ],
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 玻璃「更多」菜单里的「翻页动画」开关行。
+///
+/// 不能塞进 [GlassMenuItem]：包内菜单把菜单体上任何一次点击都当「激活命中的菜单项」，
+/// 先切开关再收起气泡，极端情况下开关与整行还会各触发一次（净结果不变）。
+/// 非 `GlassMenuItem` 的自定义行不参与激活，所以开关自己吃掉点击、气泡保持打开，
+/// 点整行（开关以外的地方）也能切。
+class _PageTurnGlassRow extends StatelessWidget implements PreferredSizeWidget {
+  const _PageTurnGlassRow({
+    required this.icon,
+    required this.titleStyle,
+    required this.onTap,
+  });
+
+  final Widget icon;
+  final TextStyle titleStyle;
+  final VoidCallback onTap;
+
+  /// 单行布局：标题 21 + 上下各 10 内边距，52 也容得下 1.3 倍字号与 28 高的开关。
+  @override
+  Size get preferredSize => const Size.fromHeight(52);
+
+  @override
+  Widget build(BuildContext context) {
+    const ink = AppColors.readerInk;
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+        ),
+        child: SizedBox(
+          height: preferredSize.height,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: <Widget>[
+                IconTheme(data: const IconThemeData(color: ink), child: icon),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '翻页动画',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: titleStyle,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const _PageTurnSwitch(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 「更多」菜单里的「翻页动画」开关（两套皮肤共用）。
+///
+/// 值直接来自 `settingsProvider`（和「我的 - 翻页动画」同一项），改成开关后
+/// 阅读器下一次翻页立刻按新值走；颜色用阅读器墨色，浅色 App 主题下也可读。
+class _PageTurnSwitch extends ConsumerWidget {
+  const _PageTurnSwitch();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final enabled =
+        ref.watch(settingsProvider.select((settings) => settings.pageTurnAnimation));
+    return AppSwitch.adaptive(
+      value: enabled,
+      semanticLabel: '翻页动画',
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      activeTrackColor: AppColors.darkPrimary,
+      activeThumbColor: AppColors.readerInk,
+      inactiveTrackColor: AppColors.readerInk.withValues(alpha: .22),
+      inactiveThumbColor: AppColors.readerInk,
+      onChanged: (value) => unawaited(
+        ref.read(settingsProvider.notifier).setPageTurnAnimation(value),
       ),
     );
   }

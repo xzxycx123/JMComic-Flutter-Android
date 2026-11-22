@@ -25,7 +25,7 @@ double albumGridAspectRatio(BuildContext context) {
   return 0.52 / (1 + 0.3 * extra);
 }
 
-/// 本子卡片：封面 + 2 行标题 + 作者/分类。
+/// 本子卡片：封面（左上角分类）+ 2 行标题 + 作者 + 作品标签。
 class AlbumCard extends StatelessWidget {
   const AlbumCard({
     required this.album,
@@ -49,6 +49,14 @@ class AlbumCard extends StatelessWidget {
       fit: StackFit.expand,
       children: <Widget>[
         CoverImage(albumId: album.id),
+        // 左上角：分类名（`同人` / `單本` …）。作品标签不在这里，画在作者名下面。
+        if (album.cardCategory != null)
+          Positioned(
+            left: 6,
+            top: 6,
+            right: album.isNew ? 42 : 6,
+            child: _CoverCategory(label: album.cardCategory!),
+          ),
         Positioned(
           left: 8,
           bottom: 8,
@@ -108,9 +116,6 @@ class _CardCaption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    // 标签来自模型的 displayTags（已过滤空值 / N/A / 超长 / 重复，最多 2 个），
-    // 和搜索结果卡的标签行同款：封面下方一行小药丸。
-    final tags = album.displayTags;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -128,30 +133,63 @@ class _CardCaption extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: AppTypography.micro.copyWith(color: scheme.onSurfaceVariant),
         ),
-        if (tags.isNotEmpty) ...<Widget>[
+        // 作品标签放在作者名下面；药丸按内容宽度排版，不截断、不出省略号。
+        if (album.cardTags.isNotEmpty) ...<Widget>[
           const SizedBox(height: 4),
-          Row(
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
             children: <Widget>[
-              for (var index = 0; index < tags.length; index++) ...<Widget>[
-                if (index > 0) const SizedBox(width: 4),
-                Flexible(
-                  child: AppChip(
-                    label: Text(
-                      tags[index],
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.micro
-                          .copyWith(color: scheme.onSurfaceVariant),
-                    ),
-                    cornerRadius: 5,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              for (final tag in album.cardTags)
+                AppChip(
+                  label: Text(
+                    tag,
+                    style: AppTypography.micro
+                        .copyWith(color: scheme.onSurfaceVariant),
                   ),
+                  cornerRadius: 5,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 ),
-              ],
             ],
           ),
         ],
+      ],
+    );
+  }
+}
+
+/// 封面左上角的分类药丸（`同人` / `單本` / `English Manga` …），单行不截断。
+class _CoverCategory extends StatelessWidget {
+  const _CoverCategory({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        ExcludeSemantics(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: scheme.surface.withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.visible,
+              softWrap: false,
+              style: AppTypography.micro.copyWith(
+                color: scheme.onSurfaceVariant,
+                height: 1.1,
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }

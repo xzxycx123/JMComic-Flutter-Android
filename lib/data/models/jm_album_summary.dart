@@ -49,10 +49,12 @@ class JmAlbumSummary {
 
   String get displayAuthor => hasKnownAuthor ? authorName : '未知作者';
 
-  /// 卡片左上角标签：`tags` 优先，其次子分类，最后一级分类。
+  /// 通用标签兜底：`tags` 优先，其次子分类，最后一级分类。
   ///
+  /// **卡片封面左上角不使用它**（那边走 [cardTags]，分类名不做兜底）；这里留给
+  /// 没有 `/album` 补数机会、又需要一个可读标签的列表场景。
   /// 过滤空串 / `N/A` / `null` 之类的占位值、超过 [_maxTagRunes] 个字的异常长文本
-  /// 与重复项，最多保留 [_maxCardTags] 个，避免遮挡封面。
+  /// 与重复项，最多保留 [_maxCardTags] 个。
   List<String> get displayTags {
     final result = <String>[];
     for (final raw in <String>[...tags, subCategoryTitle, categoryTitle]) {
@@ -78,8 +80,55 @@ class JmAlbumSummary {
   /// 没有喜欢数时的统一占位（首页卡片 / 后续复用方都用这个常量）。
   static const String noLikeCount = '--';
 
+  /// 封面左上角的分类名（`同人` / `單本` / `English Manga` …）。
+  ///
+  /// 只过滤空串 / `N/A` 这类占位值；长度上限比标签宽松（`English Manga` 有 13 个字）。
+  /// 拿不到分类就不画角标。
+  String? get cardCategory {
+    final label = categoryTitle.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (label.isEmpty) return null;
+    if (_placeholderTags.contains(label.toLowerCase())) return null;
+    if (label.runes.length > _maxCategoryRunes) return null;
+    return label;
+  }
+
+  /// 作者名下方的作品标签：来自 `/album.tags`（列表接口没有 tags）。
+  ///
+  /// 语言 / 翻译类标签（`中文` / `漢化` / `日語` …）直接跳过，让 `伪娘` / `扶她` /
+  /// `百合` 这类内容标签优先露出；最多 [_maxCardTags] 个。**拿不到 tags 时为空**，
+  /// 不拿分类名兜底 —— 「同人」是分类，画在封面左上角。
+  List<String> get cardTags {
+    final result = <String>[];
+    for (final raw in tags) {
+      final label = _normalizeTag(raw);
+      if (label == null) continue;
+      if (_languageTags.contains(label.toLowerCase())) continue;
+      if (result.contains(label)) continue;
+      result.add(label);
+      if (result.length >= _maxCardTags) break;
+    }
+    return List<String>.unmodifiable(result);
+  }
+
+  /// 卡片标签的原始来源（用于判断是否已从 `/album` 补过数）。
+  bool get hasTags => tags.isNotEmpty;
+
   static const int _maxCardTags = 2;
+  static const int _maxCategoryRunes = 20;
   static const int _maxTagRunes = 8;
+
+  /// 语言 / 翻译类标签：不是作品内容，排在内容标签之后。
+  static const Set<String> _languageTags = <String>{
+    '中文',
+    '漢化',
+    '汉化',
+    '日語',
+    '日语',
+    '英文',
+    'english',
+    '翻譯',
+    '翻译',
+  };
 
   static const Set<String> _placeholderTags = <String>{
     'n/a',
@@ -151,12 +200,17 @@ class JmAlbumSummary {
         'likes': likes,
       };
 
-  JmAlbumSummary copyWith({bool? liked, bool? isFavorite, int? likes}) =>
+  JmAlbumSummary copyWith({
+    bool? liked,
+    bool? isFavorite,
+    int? likes,
+    List<String>? tags,
+  }) =>
       JmAlbumSummary(
         id: id,
         title: title,
         author: author,
-        tags: tags,
+        tags: tags ?? this.tags,
         categoryId: categoryId,
         categoryTitle: categoryTitle,
         subCategoryTitle: subCategoryTitle,

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jm_comic/core/di/providers.dart';
 import 'package:jm_comic/data/local/progress_store.dart';
+import 'package:jm_comic/data/models/jm_album_meta.dart';
 import 'package:jm_comic/data/repositories/search_repository.dart';
 import 'package:jm_comic/features/home/home_likes.dart';
 import 'package:jm_comic/features/search/search_page.dart';
@@ -53,9 +54,9 @@ void main() {
           searchRepositoryProvider.overrideWith(
             (ref) async => SearchRepository(api: api, history: history),
           ),
-          albumLikesFetcherProvider.overrideWithValue((String id) async {
+          albumMetaFetcherProvider.overrideWithValue((String id) async {
             requested.add(id);
-            return api.likesByAlbum[id] ?? 0;
+            return JmAlbumMeta(likes: api.likesByAlbum[id] ?? 0);
           }),
         ],
         child: const MaterialApp(

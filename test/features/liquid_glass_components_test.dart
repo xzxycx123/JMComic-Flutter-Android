@@ -166,17 +166,26 @@ void main() {
     await tester.tap(find.text('打开评论表单'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
-    // 输入井固定高度（约 3 行半正文），不再随 minLines 越撑越高。
+    // 输入井固定高度（约 3 行正文），不再随 minLines 越撑越高。
     final field = find.byType(TextField);
     expect(field, findsOneWidget);
     final fieldRect = tester.getRect(field);
     expect(fieldRect.height, lessThan(150));
-    // 占位文案贴左上角，和正文的 contentPadding 对齐。
+    // 占位文案离上边框留出空间（不是贴着边框画）。
     final hint = tester.getRect(find.text('友善发言，剧透请勾选下方选项'));
-    expect(hint.top - fieldRect.top, lessThan(30));
-    expect(hint.left - fieldRect.left, lessThan(30));
+    expect(hint.top - fieldRect.top, inInclusiveRange(14, 30));
+    expect(hint.left - fieldRect.left, inInclusiveRange(14, 30));
+    // 抽屉只有内容高度（不是整屏 92%），无键盘时贴着屏底。
+    final panel = find.byType(AppSurface);
+    expect(panel, findsOneWidget);
+    expect(tester.getRect(panel).height, lessThan(260));
+    expect(tester.getRect(panel).bottom, greaterThan(600));
     tester.view.viewInsets = const FakeViewPadding(bottom: 310);
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    // 键盘弹出后抽屉整体上移，上沿贴着输入法（640 - 310 = 330）。
+    expect(tester.getRect(panel).bottom, lessThanOrEqualTo(330));
+    expect(tester.getRect(panel).height, lessThan(260));
     final send = find.text('发送');
     expect(tester.getBottomRight(send).dy, lessThan(330));
     await tester.enterText(find.byType(EditableText), '  评论草稿  ');
@@ -227,11 +236,12 @@ void main() {
 
     final field = find.byType(TextField);
     final fieldRect = tester.getRect(field);
-    // 约 3.4 行正文 + 上下 12dp 内边距，不再按 minLines 堆到 4 行以上。
-    expect(fieldRect.height, inInclusiveRange(96, 130));
+    // 约 3 行正文 + 上下 16/14 内边距，不再按 minLines 堆到 4 行以上。
+    expect(fieldRect.height, inInclusiveRange(90, 130));
+    // 文字离上边框留出空间（不是贴着边画）。
     final hint = tester.getRect(find.text('友善发言，剧透请勾选下方选项'));
-    expect(hint.top - fieldRect.top, lessThan(30));
-    expect(hint.left - fieldRect.left, lessThan(30));
+    expect(hint.top - fieldRect.top, inInclusiveRange(14, 30));
+    expect(hint.left - fieldRect.left, inInclusiveRange(14, 30));
 
     await tester.enterText(find.byType(EditableText), '金属皮肤草稿');
     await tester.pump();

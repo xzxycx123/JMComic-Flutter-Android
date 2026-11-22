@@ -1,5 +1,6 @@
 import '../../core/network/api_exception.dart';
 import '../models/jm_album_detail.dart';
+import '../models/jm_album_meta.dart';
 import '../models/jm_album_summary.dart';
 import '../models/jm_category.dart';
 import '../models/jm_chapter.dart';
@@ -78,6 +79,12 @@ abstract final class JmResponseParser {
     final value = asInt(root['likes']);
     return value < 0 ? 0 : value;
   }
+
+  /// `/album` 的轻量元数据：点赞数 + 作品标签（卡片批量补数一次拿全）。
+  static JmAlbumMeta albumMeta(Map<String, dynamic> root) => JmAlbumMeta(
+        likes: albumLikes(root),
+        tags: asTagList(root['tags']),
+      );
 
   // ---------------------------------------------------------------- 章节
   static JmChapter chapter(Map<String, dynamic> root, JmChapterRef fallback) {

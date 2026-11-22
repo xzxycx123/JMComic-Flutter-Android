@@ -35,30 +35,59 @@ Widget _host(Widget child) => ProviderScope(
     );
 
 void main() {
-  testWidgets('卡片显示本地标签 + 喜欢数', (tester) async {
+  testWidgets('分类打封面左上角，作品标签在作者名下面', (tester) async {
     const album = JmAlbumSummary(
       id: '350234',
       title: '測試本子',
       author: '測試作者',
-      tags: <String>['同人', '漢化'],
+      tags: <String>['伪娘', '扶她', '中文'],
       categoryTitle: '單本',
       likes: 4321,
     );
     await tester.pumpWidget(_host(const AlbumCard(album: album)));
     await tester.pump();
 
-    expect(find.text('同人'), findsOneWidget);
-    expect(find.text('漢化'), findsOneWidget);
-    // tags 已占用 2 个名额，一级分类不再重复出现。
-    expect(find.text('單本'), findsNothing);
+    final cover = tester.getRect(find.byType(CoverImage));
+
+    // 分类角标：封面内、贴左上角。
+    final category = tester.getRect(find.text('單本'));
+    expect(category.top - cover.top, lessThan(24));
+    expect(category.left - cover.left, lessThan(24));
+
+    // 标签：作者名下方，正文里（封面之外）。
+    final author = tester.getRect(find.text('測試作者'));
+    final tag = tester.getRect(find.text('伪娘'));
+    expect(tag.top, greaterThan(author.bottom));
+    expect(find.text('扶她'), findsOneWidget);
+    expect(
+      find.ancestor(of: find.text('伪娘'), matching: find.byType(AppChip)),
+      findsOneWidget,
+      reason: '标签是正文里的药丸',
+    );
+
+    // 语言类标签不占名额。
+    expect(find.text('中文'), findsNothing);
 
     expect(find.text('4321'), findsOneWidget);
-    final hearts = tester.widgetList<SvgIcon>(find.byType(SvgIcon)).toList();
-    expect(
-      hearts.any((icon) => icon.asset == AppIcons.heart),
-      isTrue,
-      reason: '未点赞卡片用心形描边图标',
+  });
+
+  testWidgets('标签药丸不截断文字（无省略号）', (tester) async {
+    const album = JmAlbumSummary(
+      id: '9',
+      title: '長標籤',
+      author: '作者',
+      tags: <String>['AI繪圖', '女性向'],
+      categoryTitle: '短篇',
     );
+    await tester.pumpWidget(_host(const AlbumCard(album: album)));
+    await tester.pump();
+
+    for (final label in <String>['AI繪圖', '女性向']) {
+      final text = tester.widget<Text>(find.text(label));
+      expect(text.overflow, isNot(TextOverflow.ellipsis));
+      expect(text.maxLines, isNull);
+      expect(text.softWrap, isNot(false));
+    }
   });
 
   testWidgets('无计数时统一显示 --，不显示 N/A / 超长标签', (tester) async {
@@ -77,18 +106,17 @@ void main() {
     expect(find.text('--'), findsOneWidget);
   });
 
-  testWidgets('已点赞用实心爱心；分类兜底成唯一标签', (tester) async {
+  testWidgets('已点赞用实心爱心；没有分类就不画角标', (tester) async {
     const album = JmAlbumSummary(
       id: '2',
       title: '已赞条目',
-      categoryTitle: '同人',
       liked: true,
       likes: 12000,
     );
     await tester.pumpWidget(_host(const AlbumCard(album: album)));
     await tester.pump();
 
-    expect(find.text('同人'), findsOneWidget);
+    expect(find.text('同人'), findsNothing);
     expect(find.text('1.2万'), findsOneWidget);
     final hearts = tester.widgetList<SvgIcon>(find.byType(SvgIcon)).toList();
     expect(hearts.any((icon) => icon.asset == AppIcons.heartFilled), isTrue);
@@ -101,39 +129,13 @@ void main() {
     expect(find.byType(AppSurface), findsNothing);
   });
 
-  testWidgets('标签渲染在卡片正文（标题下方），和搜索页一致', (tester) async {
-    const album = JmAlbumSummary(
-      id: '350234',
-      title: '測試本子',
-      author: '測試作者',
-      tags: <String>['同人'],
-      likes: 12,
-    );
-    await tester.pumpWidget(_host(const AlbumCard(album: album)));
-    await tester.pump();
-
-    // 标签是正文里的 chip（AppChip），不是封面上的角标。
-    final tagChip = find.ancestor(
-      of: find.text('同人'),
-      matching: find.byType(AppChip),
-    );
-    expect(tagChip, findsOneWidget);
-    final cover = tester.getRect(find.byType(CoverImage));
-    final tag = tester.getRect(find.text('同人'));
-    expect(tag.top, greaterThanOrEqualTo(cover.bottom));
-    // 标题在标签上方。
-    expect(
-      tester.getRect(find.text('測試本子')).bottom,
-      lessThanOrEqualTo(tag.top),
-    );
-  });
-
-  testWidgets('调用方自带 caption 时不重复渲染标签', (tester) async {
+  testWidgets('调用方自带 caption 时：分类角标保留，标签不重复', (tester) async {
     const album = JmAlbumSummary(
       id: '4',
       title: '搜索结果',
       author: '測試作者',
       tags: <String>['服务端标签'],
+      categoryTitle: '同人',
       likes: 9,
     );
     await tester.pumpWidget(
@@ -146,9 +148,10 @@ void main() {
     );
     await tester.pump();
 
-    // 标签只出现在调用方的 caption 里，封面上不重复；喜欢数照常显示。
-    expect(find.text('服务端标签'), findsOneWidget);
+    // 调用方 caption 自己画标签，卡片不再重复画；分类角标与喜欢数照常。
     expect(find.byKey(const ValueKey<String>('caption-tag')), findsOneWidget);
+    expect(find.text('服务端标签'), findsOneWidget);
+    expect(find.text('同人'), findsOneWidget);
     expect(find.text('9'), findsOneWidget);
   });
 
@@ -184,7 +187,7 @@ void main() {
     await tester.pump();
 
     // 标题区不再包一层 Stack/底衬：标题不是任何 Stack 的后代，只剩封面自己
-    // 的 Stack（封面 + 喜欢数 + 新上架角标）。
+    // 的 Stack（封面 + 分类角标 + 喜欢数 + 新上架角标）。
     expect(
       find.ancestor(
         of: find.text('玻璃标题'),

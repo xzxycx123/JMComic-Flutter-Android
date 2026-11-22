@@ -7,6 +7,7 @@ import 'package:image/image.dart' as img;
 import 'package:jm_comic/core/constants/jm_constants.dart';
 import 'package:jm_comic/core/network/api_exception.dart';
 import 'package:jm_comic/data/models/jm_album_detail.dart';
+import 'package:jm_comic/data/models/jm_album_meta.dart';
 import 'package:jm_comic/data/models/jm_album_summary.dart';
 import 'package:jm_comic/data/models/jm_category.dart';
 import 'package:jm_comic/data/models/jm_chapter.dart';
@@ -406,8 +407,11 @@ class FakeJmApi implements JmApi {
   int likesCalls = 0;
   final List<String> likesRequests = <String>[];
 
+  /// albumId -> 作品标签（`/album.tags`；列表接口不带）。
+  final Map<String, List<String>> tagsByAlbum = <String, List<String>>{};
+
   @override
-  Future<int> fetchAlbumLikes(String albumId) async {
+  Future<JmAlbumMeta> fetchAlbumMeta(String albumId) async {
     likesCalls++;
     likesRequests.add(albumId);
     if (likesDelay > Duration.zero) {
@@ -422,8 +426,15 @@ class FakeJmApi implements JmApi {
     if (likesErrors.contains(albumId)) {
       throw const JmApiException('喜欢数取数失败（模拟）', network: true);
     }
-    return likesByAlbum[albumId] ?? fallbackLikes;
+    return JmAlbumMeta(
+      likes: likesByAlbum[albumId] ?? fallbackLikes,
+      tags: tagsByAlbum[albumId] ?? const <String>[],
+    );
   }
+
+  @override
+  Future<int> fetchAlbumLikes(String albumId) async =>
+      (await fetchAlbumMeta(albumId)).likes;
 
   @override
   Future<JmCommentPage> fetchComments({

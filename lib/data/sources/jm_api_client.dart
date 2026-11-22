@@ -10,6 +10,7 @@ import '../../core/network/dio_factory.dart';
 import '../../core/utils/logger.dart';
 import '../local/endpoint_store.dart';
 import '../models/jm_album_detail.dart';
+import '../models/jm_album_meta.dart';
 import '../models/jm_album_summary.dart';
 import '../models/jm_category.dart';
 import '../models/jm_chapter.dart';
@@ -112,10 +113,13 @@ abstract class JmApi {
   /// `POST /like {id}`：点赞。返回体是明文 `{code,msg,status}`，无计数。
   Future<void> likeAlbum(String albumId);
 
-  /// `GET /album?id=`：只要「喜歡」数的精确值（列表接口不带计数）。
+  /// `GET /album?id=`：卡片补数用的轻量元数据（`likes` + 作品 `tags`）。
   ///
   /// 与 [getAlbum] 同一个端点，但不解析整本详情、不做章节重定向 ——
   /// 首页卡片批量补数时单本只花一次轻量请求。
+  Future<JmAlbumMeta> fetchAlbumMeta(String albumId);
+
+  /// 只要「喜歡」数的精确值（[fetchAlbumMeta] 的便捷包装）。
   Future<int> fetchAlbumLikes(String albumId);
 
   /// `GET /forum?page&aid&mode`：评论列表（未登录也可读）。
@@ -658,19 +662,23 @@ class JmApiClient implements JmApi {
   }
 
   @override
-  Future<int> fetchAlbumLikes(String albumId) async {
+  Future<JmAlbumMeta> fetchAlbumMeta(String albumId) async {
     final root = await _requestApi(
       '/album',
       query: <String, String>{'id': albumId},
     );
     final map = asMap(root);
     if (map == null) {
-      throw const JmApiException('专辑点赞数响应结构异常', network: true);
+      throw const JmApiException('专辑元数据响应结构异常', network: true);
     }
-    final likes = JmResponseParser.albumLikes(map);
-    Log.d('JmAPI 点赞数 $albumId = $likes');
-    return likes;
+    final meta = JmResponseParser.albumMeta(map);
+    Log.d('JmAPI 元数据 $albumId：likes=${meta.likes} tags=${meta.tags.length}');
+    return meta;
   }
+
+  @override
+  Future<int> fetchAlbumLikes(String albumId) async =>
+      (await fetchAlbumMeta(albumId)).likes;
 
   @override
   Future<JmCommentPage> fetchComments({
