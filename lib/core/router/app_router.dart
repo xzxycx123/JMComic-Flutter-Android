@@ -18,6 +18,7 @@ import '../../features/reader/reader_page.dart';
 import '../../features/search/search_page.dart';
 import '../../features/search/search_providers.dart' as search;
 import '../../features/shell/shell_page.dart';
+import 'app_exit_guard.dart';
 
 /// 全局路由表：两 tab 壳（首页 / 我的）+ 顶层详情 / 搜索 / 阅读器 / 下载 / 历史。
 ///
@@ -27,8 +28,9 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: '/',
     routes: <RouteBase>[
       StatefulShellRoute.indexedStack(
-        builder: (context, state, navigationShell) =>
-            ShellPage(navigationShell: navigationShell),
+        builder: (context, state, navigationShell) => AppExitGuard(
+          child: ShellPage(navigationShell: navigationShell),
+        ),
         branches: <StatefulShellBranch>[
           StatefulShellBranch(
             routes: <RouteBase>[
@@ -64,7 +66,7 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/download',
-        builder: (context, state) => const DownloadPage(),
+        builder: (context, state) => const AppExitGuard(child: DownloadPage()),
       ),
       GoRoute(
         path: '/history',

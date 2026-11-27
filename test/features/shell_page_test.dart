@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jm_comic/app.dart';
@@ -114,12 +115,76 @@ void main() {
     expect(find.text('加入队列'), findsOneWidget);
 
     // 回「我的」再切回首页
-    await tester.tap(find.byTooltip('返回'));
+    expect(await tester.binding.handlePopRoute(), isTrue);
     await _pumpFrames(tester, frames: 12);
+    expect(find.byType(MinePage), findsOneWidget);
+    expect(find.text('再滑一次退出'), findsNothing);
     await tester
         .tapAt(Offset(barRect.left + barRect.width * 0.25, barRect.center.dy));
     await _pumpFrames(tester, frames: 12);
     expect(find.text('JMComic'), findsWidgets);
+  });
+
+  testWidgets('下载页没有上一页时，两秒内返回两次才退出', (tester) async {
+    final platformCalls = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async => platformCalls.add(call),
+    );
+
+    final prefs = await testPreferences();
+    final api = FakeJmApi();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          settingsStoreProvider.overrideWith((_) => _MemorySettingsStore()),
+          downloadHistoryProvider.overrideWithValue(MemoryDownloadHistory()),
+          jmApiProvider.overrideWithValue(api),
+          jmBootstrapProvider.overrideWith((_) async => api),
+          homeRepositoryProvider
+              .overrideWith((_) async => HomeRepository(api: api)),
+        ],
+        child: const JmComicApp(),
+      ),
+    );
+    await _pumpFrames(tester);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(JmComicApp)));
+    final router = container.read(goRouterProvider);
+    router.go('/download');
+    await _pumpFrames(tester);
+
+    expect(router.canPop(), isFalse);
+    expect(
+      platformCalls
+          .lastWhere(
+            (call) => call.method == 'SystemNavigator.setFrameworkHandlesBack',
+          )
+          .arguments,
+      isTrue,
+    );
+    final exits =
+        platformCalls.where((call) => call.method == 'SystemNavigator.pop');
+    final toast = find.text('再滑一次退出');
+    expect(await tester.binding.handlePopRoute(), isTrue);
+    await tester.pump();
+    expect(toast, findsOneWidget);
+    expect(find.text('加入队列'), findsOneWidget);
+    expect(exits, isEmpty);
+
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(toast, findsNothing);
+    expect(await tester.binding.handlePopRoute(), isTrue);
+    await tester.pump();
+    expect(toast, findsOneWidget);
+    expect(exits, isEmpty);
+
+    expect(await tester.binding.handlePopRoute(), isTrue);
+    await tester.pumpAndSettle();
+    expect(exits, hasLength(1));
   });
 
   testWidgets('「我的」可切换 LiquidGlass / Metal，Dock 即时更新', (

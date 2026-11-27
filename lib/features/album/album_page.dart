@@ -188,7 +188,7 @@ class _AlbumContentState extends ConsumerState<_AlbumContent> {
           await ref.read(downloadRepositoryProvider).enqueue(album.id);
       if (context.mounted) {
         AppToast.show(context, '已加入队列：${record.displayTitle}');
-        context.go('/download');
+        unawaited(context.push<void>('/download'));
       }
     } catch (error) {
       if (context.mounted) AppToast.show(context, '加入队列失败：$error');

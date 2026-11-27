@@ -9,9 +9,11 @@ import 'package:jm_comic/core/theme/app_theme.dart';
 import 'package:jm_comic/core/ui/glass/app_glass.dart';
 import 'package:jm_comic/data/local/progress_store.dart';
 import 'package:jm_comic/data/local/settings_store.dart';
+import 'package:jm_comic/data/models/download_record.dart';
 import 'package:jm_comic/data/models/jm_album_detail.dart';
 import 'package:jm_comic/data/models/jm_chapter.dart';
 import 'package:jm_comic/data/models/jm_comment.dart';
+import 'package:jm_comic/data/repositories/download_repository.dart';
 import 'package:jm_comic/data/sources/jm_api_client.dart';
 import 'package:jm_comic/features/album/album_page.dart';
 import 'package:jm_comic/features/album/album_providers.dart';
@@ -32,6 +34,12 @@ Uri? _readerUri;
 class _StubComments extends AlbumCommentsNotifier {
   @override
   Future<AlbumCommentsState> build(String albumId) async => _commentsState;
+}
+
+class _StubDownloadRepository extends Fake implements DownloadRepository {
+  @override
+  Future<DownloadRecord> enqueue(String albumId) async =>
+      DownloadRecord(workId: albumId, albumId: albumId);
 }
 
 JmAlbumDetail _album({
@@ -84,6 +92,7 @@ void main() {
     ReaderProgress? progress,
     String? progressChapterId,
     AppInterfaceStyle style = AppInterfaceStyle.metal,
+    DownloadRepository? downloadRepository,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(420, 900);
@@ -110,6 +119,10 @@ void main() {
             return const Scaffold(body: Text('阅读器目标页'));
           },
         ),
+        GoRoute(
+          path: '/download',
+          builder: (context, state) => const Scaffold(body: Text('下载页')),
+        ),
       ],
     );
     addTearDown(router.dispose);
@@ -121,11 +134,15 @@ void main() {
     );
     await tester.pumpWidget(
       ProviderScope(
-        overrides: _overrides(
-          album,
-          progress: progress,
-          progressChapterId: progressChapterId,
-        ),
+        overrides: [
+          ..._overrides(
+            album,
+            progress: progress,
+            progressChapterId: progressChapterId,
+          ),
+          if (downloadRepository != null)
+            downloadRepositoryProvider.overrideWithValue(downloadRepository),
+        ],
         child: style == AppInterfaceStyle.liquidGlass
             ? LiquidGlassWidgets.wrap(
                 theme: AppGlassTheme.preset,
@@ -137,6 +154,26 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('从详情进入下载页后，系统返回回到详情', (tester) async {
+    await pumpAlbum(
+      tester,
+      album: _album(),
+      downloadRepository: _StubDownloadRepository(),
+    );
+
+    final download = find.text('下载');
+    await tester.ensureVisible(download);
+    await tester.tap(download);
+    await tester.pumpAndSettle();
+    expect(find.text('下载页'), findsOneWidget);
+
+    expect(await tester.binding.handlePopRoute(), isTrue);
+    await tester.pumpAndSettle();
+    expect(find.byType(AlbumPage), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+  });
 
   testWidgets('data 状态顶部显示 JM{id}，且不遮挡返回/收藏/分享', (tester) async {
     await pumpAlbum(tester, album: _album());
