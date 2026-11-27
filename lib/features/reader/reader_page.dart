@@ -855,9 +855,10 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
       );
     } catch (error) {
       if (!mounted) return;
+      final message = error is PlatformException ? error.message : null;
       AppToast.show(
         context,
-        '保存失败：$error',
+        '保存失败：${message ?? error}',
         duration: const Duration(seconds: 4),
       );
     }

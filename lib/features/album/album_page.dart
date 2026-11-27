@@ -128,6 +128,60 @@ class _AlbumContentState extends ConsumerState<_AlbumContent> {
     context.push('/reader?${Uri(queryParameters: query).query}');
   }
 
+  Widget _chapterTile(
+    JmAlbumDetail detail,
+    int index, {
+    required void Function(JmChapterRef chapter, int page) onSelected,
+  }) {
+    final chapter = detail.chapters[index];
+    return Consumer(
+      builder: (context, ref, _) {
+        final progress = ref.watch(
+          chapterProgressProvider((albumId: detail.id, chapterId: chapter.id)),
+        );
+        return ChapterTile(
+          chapter: chapter,
+          index: index + 1,
+          trailingLabel:
+              progress == null ? null : '读到 ${progress.page}/${progress.total}',
+          onTap: () => onSelected(chapter, progress?.page ?? 1),
+        );
+      },
+    );
+  }
+
+  Future<void> _showChapters() async {
+    final detail = album;
+    final selected = await AppSheet.show<({JmChapterRef chapter, int page})>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (sheetContext) => SizedBox(
+        height: MediaQuery.sizeOf(sheetContext).height * .72,
+        child: ListView.builder(
+          primary: false,
+          padding: EdgeInsets.only(
+            top: sheetContext.isLiquidGlass ? 40 : 0,
+            bottom: MediaQuery.paddingOf(sheetContext).bottom + 12,
+          ),
+          itemCount: detail.chapters.length + 1,
+          itemBuilder: (context, index) {
+            if (index == 0) return const SectionHeader(title: '全部章节');
+            return _chapterTile(
+              detail,
+              index - 1,
+              onSelected: (chapter, page) => Navigator.of(sheetContext)
+                  .pop((chapter: chapter, page: page)),
+            );
+          },
+        ),
+      ),
+    );
+    if (!mounted || selected == null || album.id != detail.id) return;
+    _openReader(context, selected.chapter, page: selected.page);
+  }
+
   Future<void> _download(BuildContext context, WidgetRef ref) async {
     try {
       final record =
@@ -193,6 +247,11 @@ class _AlbumContentState extends ConsumerState<_AlbumContent> {
     final resumePage =
         progress == null || progress.page <= 0 ? 1 : progress.page;
     final ctaLabel = progress == null ? '开始阅读' : '继续阅读 · 第 $resumePage 页';
+    const previewEdgeCount = 2;
+    final chapterCount = album.chapters.length;
+    final hasHiddenChapters = chapterCount > previewEdgeCount * 2;
+    final chapterItemCount =
+        hasHiddenChapters ? previewEdgeCount * 2 + 1 : chapterCount;
 
     return AppGlassPage(
       body: Stack(
@@ -261,27 +320,31 @@ class _AlbumContentState extends ConsumerState<_AlbumContent> {
                 ),
                 SliverList(
                   delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final chapter = album.chapters[index];
-                      final chapterProgress = ref.watch(
-                        chapterProgressProvider(
-                          (albumId: album.id, chapterId: chapter.id),
-                        ),
-                      );
-                      return ChapterTile(
-                        chapter: chapter,
-                        index: index + 1,
-                        trailingLabel: chapterProgress == null
-                            ? null
-                            : '读到 ${chapterProgress.page}/${chapterProgress.total}',
-                        onTap: () => _openReader(
-                          context,
-                          chapter,
-                          page: chapterProgress?.page ?? 1,
-                        ),
+                    (context, itemIndex) {
+                      if (hasHiddenChapters && itemIndex == previewEdgeCount) {
+                        return Center(
+                          child: AppButton.text(
+                            label: '展开全部章节',
+                            semanticLabel: '展开全部章节',
+                            leadingIcon: const SvgIcon(AppIcons.list, size: 18),
+                            onPressed: _showChapters,
+                            height: 44,
+                            solid: true,
+                          ),
+                        );
+                      }
+                      final chapterIndex =
+                          hasHiddenChapters && itemIndex > previewEdgeCount
+                              ? chapterCount - (chapterItemCount - itemIndex)
+                              : itemIndex;
+                      return _chapterTile(
+                        album,
+                        chapterIndex,
+                        onSelected: (chapter, page) =>
+                            _openReader(context, chapter, page: page),
                       );
                     },
-                    childCount: album.chapters.length,
+                    childCount: chapterItemCount,
                   ),
                 ),
                 SliverToBoxAdapter(

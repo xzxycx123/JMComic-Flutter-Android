@@ -9,7 +9,7 @@ import '../ui/glass/app_surface.dart';
 import 'app_colors.dart';
 import 'app_typography.dart';
 
-/// Metal / LiquidGlass 材质选择器，在「我的」与完整设置页共用。
+/// 界面材质选择器，在「我的」与完整设置页共用。
 class InterfaceStyleSelector extends ConsumerWidget {
   const InterfaceStyleSelector({super.key});
 
@@ -46,15 +46,9 @@ class InterfaceStyleSelector extends ConsumerWidget {
           SizedBox(
             width: double.infinity,
             child: AppSegmentedControl<AppInterfaceStyle>(
-              segments: const [
-                AppSegment(
-                  value: AppInterfaceStyle.metal,
-                  label: Text('Metal'),
-                ),
-                AppSegment(
-                  value: AppInterfaceStyle.liquidGlass,
-                  label: Text('LiquidGlass'),
-                ),
+              segments: [
+                for (final style in AppInterfaceStyle.values)
+                  AppSegment(value: style, label: Text(style.label)),
               ],
               selected: current,
               onChanged: ref.read(settingsProvider.notifier).setInterfaceStyle,

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/utils/file_names.dart';
+import '../../data/sources/reader_image_store_channel.dart';
 
 /// 一张已经落盘的当页图片。
 class SavedReaderImage {
@@ -11,22 +12,17 @@ class SavedReaderImage {
 
   final String name;
 
-  /// 绝对路径（展示 / 调试用）。
+  /// Android 公共存储的相对路径，或其他平台的绝对路径。
   final String path;
 
-  /// 相对存储根的展示路径（`Pictures/JMComicDownloader/xxx.png`）。
-  String get displayPath {
-    final marker = normalizeSaveDir('');
-    final index = path.lastIndexOf(marker);
-    return index >= 0 ? path.substring(index) : path;
-  }
+  String get displayPath => path;
 }
 
 /// 阅读器「下载当页图片」的落盘器。
 ///
 /// 目录来自设置（默认 `Pictures/JMComicDownloader/`）：
-/// - Android：先试公共 `/storage/emulated/0/<dir>`，权限不足自动降级到 App 外部目录；
-/// - 其它平台：App 文档目录。
+/// - Android：通过 MediaStore 保存到公共存储。
+/// - 其他平台：保存到应用文档目录。
 class ReaderImageSaver {
   ReaderImageSaver({required this.directory, Directory? root}) : _root = root;
 
@@ -37,41 +33,23 @@ class ReaderImageSaver {
   final Directory? _root;
 
   Future<SavedReaderImage> save(String fileName, Uint8List bytes) async {
-    final dir = await targetDirectory();
+    final relative = normalizeSaveDir(directory());
+    if (_root == null && Platform.isAndroid) {
+      final saved = await const ReaderImageStoreChannel().savePng(
+        name: fileName,
+        directory: relative,
+        bytes: bytes,
+      );
+      return SavedReaderImage(name: saved.name, path: saved.path);
+    }
+
+    final root = _root ?? await getApplicationDocumentsDirectory();
+    final dir = await Directory(
+      '${root.path}${Platform.pathSeparator}$relative',
+    ).create(recursive: true);
     final file = File('${dir.path}${Platform.pathSeparator}$fileName');
     await file.writeAsBytes(bytes, flush: true);
     return SavedReaderImage(name: fileName, path: file.path);
-  }
-
-  /// 解析并创建目标目录。
-  Future<Directory> targetDirectory() async {
-    final relative = normalizeSaveDir(directory());
-    final root = _root;
-    if (root != null) {
-      return _ensure(
-        Directory('${root.path}${Platform.pathSeparator}$relative'),
-      );
-    }
-    if (Platform.isAndroid) {
-      final public = Directory('/storage/emulated/0');
-      if (public.existsSync()) {
-        try {
-          return await _ensure(
-            Directory('${public.path}${Platform.pathSeparator}$relative'),
-          );
-        } catch (_) {
-          // 没有存储权限：降级到 App 外部目录，不让保存直接失败。
-        }
-      }
-    }
-    final base = await getExternalStorageDirectory() ??
-        await getApplicationDocumentsDirectory();
-    return _ensure(Directory('${base.path}${Platform.pathSeparator}$relative'));
-  }
-
-  static Future<Directory> _ensure(Directory dir) async {
-    if (!dir.existsSync()) await dir.create(recursive: true);
-    return dir;
   }
 }
 

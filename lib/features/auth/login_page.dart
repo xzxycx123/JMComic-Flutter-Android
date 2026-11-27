@@ -31,7 +31,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   bool _syncing = false;
   bool _showPassword = false;
   bool? _remember;
-  String? _error;
 
   static final List<TextInputFormatter> _asciiOnly = <TextInputFormatter>[
     FilteringTextInputFormatter.allow(RegExp(r'[\x20-\x7E]')),
@@ -52,15 +51,19 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     if (_busy) return;
     final username = _username.text.trim();
     final password = _password.text;
+    FocusScope.of(context).unfocus();
     if (username.isEmpty || password.isEmpty) {
-      setState(() => _error = '请输入用户名和密码');
+      await AppDialog.show<void>(
+        context: context,
+        title: '请填写登录信息',
+        message: '请输入用户名和密码',
+        actions: const <AppDialogAction<void>>[
+          AppDialogAction(label: '知道了', primary: true),
+        ],
+      );
       return;
     }
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+    setState(() => _busy = true);
 
     try {
       await ref.read(accountSessionProvider.notifier).login(
@@ -69,19 +72,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             remember: _rememberPassword,
           );
     } catch (_) {
-      // 原因统一从 provider 里取，下面给出「像样的」提示框。
+      // 从 Provider 统一读取登录结果。
     }
     if (!mounted) return;
 
     final async = ref.read(accountSessionProvider);
     final session = async.valueOrNull;
     if (session == null || !session.isLoggedIn) {
-      final message = _failureMessage(async);
-      setState(() {
-        _busy = false;
-        _error = message;
-      });
-      await _showFailureDialog(message);
+      setState(() => _busy = false);
+      await _showFailureDialog(_failureMessage(async));
       return;
     }
 
@@ -310,13 +309,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             ),
             onSubmitted: (_) => _submit(),
           ),
-          if (_error != null) ...<Widget>[
-            const SizedBox(height: 12),
-            Text(
-              _error!,
-              style: AppTypography.caption.copyWith(color: scheme.error),
-            ),
-          ],
           const SizedBox(height: 8),
           _rememberTile(context),
           const SizedBox(height: 14),

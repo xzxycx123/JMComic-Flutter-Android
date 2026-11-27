@@ -50,14 +50,13 @@ abstract final class AppDialog {
     }
 
     final materialTheme = Theme.of(context);
-    final theme = AppGlassTheme.of(context);
     BuildContext? dialogContext;
     bool closing = false;
+    // 弹窗使用原生预设，保留面板的玻璃透明度。
     return GlassDialog.show<T>(
       context: context,
       title: title,
       message: message,
-      settings: theme.overlay,
       quality: AppGlassTheme.overlayQuality,
       barrierDismissible: barrierDismissible,
       content: Builder(

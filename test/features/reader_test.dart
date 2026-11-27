@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jm_comic/core/theme/app_colors.dart';
 import 'package:jm_comic/core/icons/app_icons.dart';
@@ -203,6 +204,15 @@ void main() {
       final slider = find.byType(GlassSlider);
       expect(slider, findsOneWidget);
       expect(Theme.of(tester.element(slider)).brightness, Brightness.dark);
+      for (final label in ['已读 12/20', '60%']) {
+        final paragraph =
+            tester.renderObject<RenderParagraph>(find.text(label));
+        expect(paragraph.didExceedMaxLines, isFalse);
+        expect(
+          paragraph.size.width,
+          greaterThanOrEqualTo(paragraph.getMaxIntrinsicWidth(double.infinity)),
+        );
+      }
       final track = tester.getRect(slider);
       final confinement =
           find.ancestor(of: slider, matching: find.byType(ClipRect));

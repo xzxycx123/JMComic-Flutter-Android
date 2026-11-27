@@ -8,13 +8,16 @@ import 'package:jm_comic/core/di/providers.dart';
 import 'package:jm_comic/core/theme/app_theme.dart';
 import 'package:jm_comic/core/ui/glass/app_glass.dart';
 import 'package:jm_comic/data/local/progress_store.dart';
+import 'package:jm_comic/data/local/settings_store.dart';
 import 'package:jm_comic/data/models/jm_album_detail.dart';
 import 'package:jm_comic/data/models/jm_chapter.dart';
 import 'package:jm_comic/data/models/jm_comment.dart';
 import 'package:jm_comic/data/sources/jm_api_client.dart';
 import 'package:jm_comic/features/album/album_page.dart';
 import 'package:jm_comic/features/album/album_providers.dart';
+import 'package:jm_comic/features/album/widgets/chapter_tile.dart';
 import 'package:jm_comic/features/album/widgets/comment_section.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../helpers/fixtures.dart';
 import '../helpers/test_env.dart';
@@ -24,6 +27,7 @@ AlbumCommentsState _commentsState = const AlbumCommentsState();
 
 /// 作者搜索跳转时 `/search` 收到的 uri。
 Uri? _searchUri;
+Uri? _readerUri;
 
 class _StubComments extends AlbumCommentsNotifier {
   @override
@@ -33,18 +37,23 @@ class _StubComments extends AlbumCommentsNotifier {
 JmAlbumDetail _album({
   String author = '作者甲',
   List<String> tags = const <String>['详情标签'],
+  List<JmChapterRef> chapters = const [
+    JmChapterRef(id: '101', sort: 1, title: '第一话'),
+  ],
 }) =>
     JmAlbumDetail(
       id: '100',
       title: '测试本子',
-      chapters: const <JmChapterRef>[
-        JmChapterRef(id: '101', sort: 1, title: '第一话'),
-      ],
+      chapters: chapters,
       author: author,
       tags: tags,
     );
 
-List<Override> _overrides(JmAlbumDetail album, {ReaderProgress? progress}) =>
+List<Override> _overrides(
+  JmAlbumDetail album, {
+  ReaderProgress? progress,
+  String? progressChapterId,
+}) =>
     <Override>[
       jmApiProvider.overrideWithValue(FakeJmApi()),
       jmBootstrapProvider.overrideWith((ref) => Completer<JmApi>().future),
@@ -52,7 +61,10 @@ List<Override> _overrides(JmAlbumDetail album, {ReaderProgress? progress}) =>
       albumCommentsProvider.overrideWith(_StubComments.new),
       if (progress != null)
         chapterProgressProvider(
-          (albumId: album.id, chapterId: album.primaryChapter.id),
+          (
+            albumId: album.id,
+            chapterId: progressChapterId ?? album.primaryChapter.id
+          ),
         ).overrideWithValue(progress),
     ];
 
@@ -63,12 +75,15 @@ void main() {
     await clearTestBoxes();
     _commentsState = const AlbumCommentsState();
     _searchUri = null;
+    _readerUri = null;
   });
 
   Future<void> pumpAlbum(
     WidgetTester tester, {
     required JmAlbumDetail album,
     ReaderProgress? progress,
+    String? progressChapterId,
+    AppInterfaceStyle style = AppInterfaceStyle.metal,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(420, 900);
@@ -88,16 +103,36 @@ void main() {
             return Scaffold(body: Text('搜索目标页 ${state.uri.query}'));
           },
         ),
+        GoRoute(
+          path: '/reader',
+          builder: (context, state) {
+            _readerUri = state.uri;
+            return const Scaffold(body: Text('阅读器目标页'));
+          },
+        ),
       ],
     );
     addTearDown(router.dispose);
+    final app = MaterialApp.router(
+      routerConfig: router,
+      theme: AppTheme.light(),
+      builder: (context, child) =>
+          InterfaceStyleScope(style: style, child: child!),
+    );
     await tester.pumpWidget(
       ProviderScope(
-        overrides: _overrides(album, progress: progress),
-        child: MaterialApp.router(
-          routerConfig: router,
-          theme: AppTheme.light(),
+        overrides: _overrides(
+          album,
+          progress: progress,
+          progressChapterId: progressChapterId,
         ),
+        child: style == AppInterfaceStyle.liquidGlass
+            ? LiquidGlassWidgets.wrap(
+                theme: AppGlassTheme.preset,
+                brightnessResolver: Theme.maybeBrightnessOf,
+                child: app,
+              )
+            : app,
       ),
     );
     await tester.pumpAndSettle();
@@ -207,6 +242,61 @@ void main() {
     expect(find.text('继续阅读 · 第 1 页'), findsOneWidget);
     expect(find.text('开始阅读'), findsNothing);
   });
+
+  List<JmChapterRef> chapters(int count) => List.generate(
+        count,
+        (index) => JmChapterRef(id: '${101 + index}', sort: index + 1),
+      );
+
+  Iterable<int?> chapterNumbers(WidgetTester tester) => tester
+      .widgetList<ChapterTile>(find.byType(ChapterTile))
+      .map((tile) => tile.index);
+
+  testWidgets('四章以内直接显示所有章节', (tester) async {
+    await pumpAlbum(tester, album: _album(chapters: chapters(4)));
+
+    expect(chapterNumbers(tester), [1, 2, 3, 4]);
+    expect(find.text('展开全部章节'), findsNothing);
+  });
+
+  for (final style in AppInterfaceStyle.values) {
+    testWidgets('$style 折叠中间章节，展开后可滚动选章并继续阅读', (tester) async {
+      await pumpAlbum(
+        tester,
+        album: _album(chapters: chapters(32)),
+        progress: const ReaderProgress(page: 7, total: 12, updatedAt: 0),
+        progressChapterId: '118',
+        style: style,
+      );
+
+      expect(chapterNumbers(tester), [1, 2, 31, 32]);
+      final expand = find.text('展开全部章节');
+      await tester.ensureVisible(expand);
+      await tester.tap(expand);
+      await tester.pumpAndSettle();
+
+      final sheet = find.byType(
+        style == AppInterfaceStyle.liquidGlass ? GlassModalSheet : BottomSheet,
+      );
+      expect(sheet, findsOneWidget);
+      expect(find.text('全部章节'), findsOneWidget);
+      final middleChapter = find.text('第 18 话');
+      await tester.scrollUntilVisible(
+        middleChapter,
+        250,
+        scrollable:
+            find.descendant(of: sheet, matching: find.byType(Scrollable)),
+      );
+      expect(find.text('读到 7/12'), findsOneWidget);
+      await tester.tap(middleChapter);
+      await tester.pumpAndSettle();
+
+      expect(sheet, findsNothing);
+      expect(_readerUri?.queryParameters['chapter'], '118');
+      expect(_readerUri?.queryParameters['page'], '7');
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   Future<void> pumpSection(
     WidgetTester tester, {

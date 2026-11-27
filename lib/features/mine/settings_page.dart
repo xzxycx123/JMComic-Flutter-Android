@@ -488,7 +488,13 @@ class _SavePathFieldState extends State<_SavePathField> {
   Widget build(BuildContext context) => AppTextField(
         controller: _controller,
         autofocus: true,
-        decoration: const InputDecoration(hintText: defaultSaveImageDir),
+        decoration: InputDecoration(
+          hintText: defaultSaveImageDir,
+          helperText: Platform.isAndroid
+              ? '输入以 Pictures、DCIM、Download 或 Documents 开头的路径'
+              : null,
+          helperMaxLines: 2,
+        ),
         onChanged: widget.onChanged,
       );
 }

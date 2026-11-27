@@ -3,7 +3,7 @@ abstract final class AppConfig {
   /// 应用展示名 / 关于页版本前缀，实际版本号来自 pubspec（运行时优先读
   /// `PackageManager.versionName`，见 `UpdateRepository.resolveInstalledVersion`）。
   static const String appName = 'JMComic';
-  static const String appVersion = '0.4.5';
+  static const String appVersion = '0.4.6';
 
   /// 自动更新：发布页与取数地址（只用这一个仓库，见 docs/AUTO_UPDATE.md）。
   static const String releaseOwner = 'xzxycx123';

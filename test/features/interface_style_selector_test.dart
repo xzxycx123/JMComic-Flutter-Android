@@ -113,15 +113,15 @@ void main() {
     );
   });
 
-  testWidgets('Metal 分支保持原 SegmentedButton', (tester) async {
+  testWidgets('material 分支显示两个材质名称', (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
     await _pumpSelector(tester, container, style: AppInterfaceStyle.metal);
 
     expect(find.byType(GlassSegmentedControl), findsNothing);
     expect(find.byType(SegmentedButton<AppInterfaceStyle>), findsOneWidget);
-    expect(find.text('Metal'), findsOneWidget);
-    expect(find.text('LiquidGlass'), findsOneWidget);
+    expect(find.text('material'), findsOneWidget);
+    expect(find.text('Liquid Glass'), findsOneWidget);
   });
 
   test('材质设置写回 Hive，重启后仍读回 LiquidGlass', () async {
@@ -143,7 +143,7 @@ void main() {
     );
   });
 
-  testWidgets('滑杆点选仍切回 Metal（与写库行为一致）', (tester) async {
+  testWidgets('滑杆点选仍切回 material（与写库行为一致）', (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
     await _pumpSelector(
@@ -157,7 +157,7 @@ void main() {
       AppInterfaceStyle.liquidGlass,
     );
 
-    await tester.tap(find.text('Metal'));
+    await tester.tap(find.text('material'));
     await tester.pump();
     expect(container.read(interfaceStyleProvider), AppInterfaceStyle.metal);
   });

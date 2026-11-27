@@ -11,6 +11,7 @@ import android.provider.MediaStore
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.StandardMethodCodec
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -27,6 +28,7 @@ class MainActivity : FlutterActivity() {
     private val channelName = "jm_comic/pdf_store"
     private val pdfReaderChannelName = "jm_comic/pdf_reader"
     private val appChannelName = "jm_comic/app"
+    private val readerImageChannelName = "jm_comic/reader_image_store"
     private val relativePath = "${Environment.DIRECTORY_DOCUMENTS}/JMComics/"
 
     /** 内置 PDF 阅读器：同一时刻只保留一份打开的 PdfRenderer（Dart 侧也只读一个文件）。 */
@@ -155,6 +157,31 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        val messenger = flutterEngine.dartExecutor.binaryMessenger
+        MethodChannel(
+            messenger,
+            readerImageChannelName,
+            StandardMethodCodec.INSTANCE,
+            messenger.makeBackgroundTaskQueue(),
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "savePng") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            val name = call.argument<String>("name")
+            val directory = call.argument<String>("directory")
+            val bytes = call.argument<ByteArray>("bytes")
+            if (name.isNullOrBlank() || directory.isNullOrBlank() || bytes == null || bytes.isEmpty()) {
+                result.error("bad_args", "缺少图片名称、保存目录或图片内容", null)
+                return@setMethodCallHandler
+            }
+            try {
+                result.success(saveReaderImage(name, directory, bytes))
+            } catch (error: Exception) {
+                result.error("save_failed", error.message, null)
+            }
+        }
     }
 
     /** 用系统默认应用打开链接（发布页 / 应用商店）。 */
@@ -231,6 +258,56 @@ class MainActivity : FlutterActivity() {
         pdfRenderer = null
         pdfDescriptor = null
         pdfUri = null
+    }
+
+    private fun saveReaderImage(
+        name: String,
+        directory: String,
+        bytes: ByteArray,
+    ): Map<String, String> {
+        val segments = directory.split('/')
+        require(segments.none { it.isBlank() || it == "." || it == ".." }) { "图片保存目录无效" }
+        val root = listOf(
+            Environment.DIRECTORY_PICTURES,
+            Environment.DIRECTORY_DCIM,
+            Environment.DIRECTORY_DOWNLOADS,
+            Environment.DIRECTORY_DOCUMENTS,
+        ).firstOrNull { it.equals(segments.first(), ignoreCase = true) }
+            ?: throw IOException("保存目录须以 Pictures、DCIM、Download 或 Documents 开头")
+        val volume = MediaStore.VOLUME_EXTERNAL_PRIMARY
+        val collection = when (root) {
+            Environment.DIRECTORY_DOWNLOADS -> MediaStore.Downloads.getContentUri(volume)
+            Environment.DIRECTORY_DOCUMENTS -> MediaStore.Files.getContentUri(volume)
+            else -> MediaStore.Images.Media.getContentUri(volume)
+        }
+        val relativeDirectory = (listOf(root) + segments.drop(1)).joinToString("/", postfix = "/")
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, relativeDirectory)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val resolver = contentResolver
+        val uri = resolver.insert(collection, values) ?: throw IOException("无法创建图片文件")
+        try {
+            resolver.openOutputStream(uri, "w")?.use { it.write(bytes) }
+                ?: throw IOException("无法打开图片输出流")
+            val ready = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+            if (resolver.update(uri, ready, null, null) <= 0) {
+                throw IOException("无法发布图片到公共存储")
+            }
+            // MediaStore 可能会调整目录或为同名文件追加编号，按实际位置提示。
+            val columns = arrayOf(MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.RELATIVE_PATH)
+            return resolver.query(uri, columns, null, null, null)?.use { cursor ->
+                if (!cursor.moveToFirst()) throw IOException("无法读取图片保存位置")
+                val savedName = cursor.getString(0)
+                val savedDirectory = cursor.getString(1)
+                mapOf("name" to savedName, "path" to "${savedDirectory.trimEnd('/')}/$savedName")
+            } ?: throw IOException("无法读取图片保存位置")
+        } catch (error: Exception) {
+            runCatching { resolver.delete(uri, null, null) }
+            throw error
+        }
     }
 
     private fun savePdf(requestedName: String, bytes: ByteArray): Map<String, Any?> {

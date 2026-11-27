@@ -286,18 +286,26 @@ class ReaderHud extends StatelessWidget {
       fontFeatures: const [FontFeature.tabularFigures()],
     );
     if (!context.isLiquidGlass) return Text(value, style: ink);
+    final inheritedInk = DefaultTextStyle.of(context).style.merge(ink);
+    final measuredInk = MediaQuery.boldTextOf(context)
+        ? inheritedInk.copyWith(fontWeight: FontWeight.bold)
+        : inheritedInk;
     final painter = TextPainter(
-      text: TextSpan(text: widest, style: ink),
+      text: TextSpan(text: widest, style: measuredInk),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
+      locale: Localizations.maybeLocaleOf(context),
       maxLines: 1,
     )..layout();
-    final width = painter.width.ceilToDouble();
+    final reservedWidth = painter.width;
+    painter
+      ..text = TextSpan(text: value, style: measuredInk)
+      ..layout();
+    final width = math.max(reservedWidth, painter.width).ceilToDouble();
     painter.dispose();
     return SizedBox(
       width: width,
-      child:
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: ink),
+      child: Text(value, maxLines: 1, softWrap: false, style: ink),
     );
   }
 
