@@ -53,37 +53,59 @@ class ReaderPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(readerDataProvider(args));
-
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: readerSystemUiStyle,
-      child: Scaffold(
-        backgroundColor: AppColors.readerBg,
-        body: ReaderControlsTheme(
-          child: data.when(
-            loading: () => Center(
-              child: AppSurface(
-                kind: AppSurfaceKind.controlGroup,
-                padding: const EdgeInsets.all(10),
-                borderRadius: BorderRadius.circular(16),
-                metalDecoration: BoxDecoration(
-                  color: AppColors.darkSurfaceContainer,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.darkOutline),
-                ),
-                child: const MascotLoading(compact: true, size: 72),
-              ),
-            ),
-            error: (error, stackTrace) => _ReaderError(
-              message: '$error',
-              onRetry: () => ref.invalidate(readerDataProvider(args)),
-              onExit: () => _safePop(context),
-            ),
-            data: (value) => _ReaderScaffold(data: value),
-          ),
+    return ReaderPageFrame(
+      child: data.when(
+        loading: ReaderPageLoading.new,
+        error: (error, stackTrace) => ReaderPageError(
+          message: '$error',
+          onRetry: () => ref.invalidate(readerDataProvider(args)),
+          onExit: () => _safePop(context),
+        ),
+        data: (value) => ReaderView(
+          title: value.title,
+          total: value.total,
+          initialPage: value.initialPage,
+          mode: value.mode,
+          onlineData: value,
+          onExit: () => _safePop(context),
         ),
       ),
     );
   }
+}
+
+class ReaderPageFrame extends StatelessWidget {
+  const ReaderPageFrame({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
+        value: readerSystemUiStyle,
+        child: Scaffold(
+          backgroundColor: AppColors.readerBg,
+          body: ReaderControlsTheme(child: child),
+        ),
+      );
+}
+
+class ReaderPageLoading extends StatelessWidget {
+  const ReaderPageLoading({super.key});
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: AppSurface(
+          kind: AppSurfaceKind.controlGroup,
+          padding: const EdgeInsets.all(10),
+          borderRadius: BorderRadius.circular(16),
+          metalDecoration: BoxDecoration(
+            color: AppColors.darkSurfaceContainer,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.darkOutline),
+          ),
+          child: const MascotLoading(compact: true, size: 72),
+        ),
+      );
 }
 
 void _safePop(BuildContext context) {
@@ -94,16 +116,19 @@ void _safePop(BuildContext context) {
   }
 }
 
-class _ReaderError extends StatelessWidget {
-  const _ReaderError({
+class ReaderPageError extends StatelessWidget {
+  const ReaderPageError({
     required this.message,
     required this.onRetry,
     required this.onExit,
+    this.onOpenExternally,
+    super.key,
   });
 
   final String message;
   final VoidCallback onRetry;
   final VoidCallback onExit;
+  final VoidCallback? onOpenExternally;
 
   @override
   Widget build(BuildContext context) {
@@ -152,6 +177,13 @@ class _ReaderError extends StatelessWidget {
                       cornerRadius: AppColors.radiusPill,
                       child: const Text('重试'),
                     ),
+                    if (onOpenExternally != null) ...[
+                      const SizedBox(height: 10),
+                      AppButton.text(
+                        onPressed: onOpenExternally,
+                        child: const Text('用其它应用打开'),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -163,16 +195,34 @@ class _ReaderError extends StatelessWidget {
   }
 }
 
-class _ReaderScaffold extends ConsumerStatefulWidget {
-  const _ReaderScaffold({required this.data});
+/// 共享的阅读界面。在线章节提供 [onlineData]，本地文档提供 [loadPage]。
+class ReaderView extends ConsumerStatefulWidget {
+  const ReaderView({
+    required this.title,
+    required this.total,
+    required this.initialPage,
+    required this.mode,
+    required this.onExit,
+    this.onlineData,
+    this.loadPage,
+    this.onProgress,
+    super.key,
+  }) : assert((onlineData != null) != (loadPage != null));
 
-  final ReaderData data;
+  final String title;
+  final int total;
+  final int initialPage;
+  final ReaderMode mode;
+  final VoidCallback onExit;
+  final ReaderData? onlineData;
+  final Future<Uint8List?> Function(int page)? loadPage;
+  final Future<void> Function(int page)? onProgress;
 
   @override
-  ConsumerState<_ReaderScaffold> createState() => _ReaderScaffoldState();
+  ConsumerState<ReaderView> createState() => _ReaderViewState();
 }
 
-class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
+class _ReaderViewState extends ConsumerState<ReaderView>
     with SingleTickerProviderStateMixin {
   late final PageController _pageController;
   late final ScrollController _scrollController;
@@ -184,7 +234,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   late final ReaderPageLoader _loader;
 
   /// 进度落盘器（串行化 + 最后一次写入优先）。initState 里取好，dispose 也能直接用。
-  late final ProgressRecorder _recorder;
+  ProgressRecorder? _recorder;
   AlbumRepository? _repository;
   late ReaderMode _mode;
   late int _page;
@@ -235,16 +285,18 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   Offset _pinchBaseOffset = Offset.zero;
   Offset _pinchBaseFocal = Offset.zero;
 
-  int get _total => widget.data.total;
+  int get _total => widget.total;
+  bool get _isOnline => widget.onlineData != null;
+  ReaderData get _onlineData => widget.onlineData!;
 
   /// 正文页数 + 末尾的结束页。
   ///
   /// `_page` 只在这 `1.._pageCount` 之间取值，但**进度、HUD、预取永远按 [_total] 算**，
   /// 结束页不会被记成「第 total+1 页」，也不会拿越界页号去取图。
-  int get _pageCount => _total + 1;
+  int get _pageCount => _isOnline ? _total + 1 : _total;
 
   /// 当前停在结束页（左右翻页模式）。
-  bool get _atEndPage => _page >= _pageCount;
+  bool get _atEndPage => _page > _total;
 
   /// 竖读时结束页的固定高度（占屏高比例）。
   ///
@@ -253,7 +305,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   static const double _endPageExtentRatio = 0.72;
 
   double get _endPageExtent =>
-      MediaQuery.sizeOf(context).height * _endPageExtentRatio;
+      _isOnline ? MediaQuery.sizeOf(context).height * _endPageExtentRatio : 0;
 
   /// 竖读正文可滚动高度（不含末尾结束页）。
   double get _verticalContentExtent {
@@ -265,9 +317,9 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   @override
   void initState() {
     super.initState();
-    _mode = widget.data.mode;
-    _page = widget.data.initialPage;
-    _recorder = ref.read(readerProgressRecorderProvider);
+    _mode = widget.mode;
+    _page = clampReaderPage(widget.initialPage, _total);
+    if (_isOnline) _recorder = ref.read(readerProgressRecorderProvider);
     _pageController = PageController(initialPage: _page - 1);
     _scrollController = ScrollController();
     _loader = ReaderPageLoader(
@@ -288,6 +340,14 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
     unawaited(_applySystemUi(false));
     // 进入阅读器就排队：当前页 + 后续 5 页 + 回看 2 页，槽位空出来自动补位。
     _loader.setFocus(_page);
+    if (_mode == ReaderMode.vertical && _page > 1) {
+      final ratio = (_page - 1) / (_total - 1);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _mode == ReaderMode.vertical) {
+          _scrollToVerticalRatio(ratio);
+        }
+      });
+    }
     _restartHudTimer();
   }
 
@@ -305,7 +365,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
     // 任何退出路径（HUD 退出 / 系统返回 / 菜单关闭 / 路由被替换）都在这里兜一次：
     // 同步取快照入队，再尽力 flush 落盘，不依赖 widget 树还活着。
     unawaited(_persistProgress());
-    unawaited(_recorder.flush());
+    unawaited(_recorder?.flush());
     unawaited(_applySystemUi(false));
     super.dispose();
   }
@@ -327,11 +387,14 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   // ---------------------------------------------------------------- 页面加载
   /// 单页加载入口（下载 + 切片还原），由 [ReaderPageLoader] 统一调度并发与重试。
   Future<Uint8List?> _fetchPage(int page) async {
+    final loadPage = widget.loadPage;
+    if (loadPage != null) return loadPage(page);
+    final data = _onlineData;
     final repository = await _repositoryInstance();
     return repository.loadPage(
-      photoId: widget.data.args.chapterId,
-      filename: widget.data.chapter.images[page - 1],
-      scrambleIdOverride: widget.data.scrambleId,
+      photoId: data.args.chapterId,
+      filename: data.chapter.images[page - 1],
+      scrambleIdOverride: data.scrambleId,
     );
   }
 
@@ -415,7 +478,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   }
 
   void _nextPage() {
-    if (_atEndPage) {
+    if (_page >= _pageCount) {
       _bounceController.forward(from: 0);
       HapticFeedback.lightImpact();
       return;
@@ -461,37 +524,34 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
     }
   }
 
-  /// 当前阅读位置的快照：同步取值，不依赖 widget 树 / 仓储是否就绪。
-  ///
-  /// `total == 0`（空章节，没有任何可读页）时返回 null：不写脏进度。
-  ProgressSnapshot? _progressSnapshot() {
-    final total = _total;
-    if (total <= 0) return null;
-    return ProgressSnapshot(
-      albumId: widget.data.args.albumId,
-      chapterId: widget.data.args.chapterId,
-      page: clampReaderPage(_page, total),
-      total: total,
-      // 阅读历史页直接用这里记下的标题，不再逐条请求详情。
-      albumTitle: widget.data.args.albumTitle,
-      chapterTitle: widget.data.title,
-    );
-  }
-
   /// 落盘当前进度。
   ///
   /// 不再走 `_repository`（仓储还没初始化的退出路径会把进度直接丢掉）：
   /// 直接交给 [ProgressRecorder]，由它串行化 + 最后一次写入优先地写进 ProgressStore。
   Future<void> _persistProgress({bool throttle = false}) async {
-    final snapshot = _progressSnapshot();
-    if (snapshot == null) return;
+    if (_total <= 0) return;
     if (throttle &&
         DateTime.now().difference(_lastProgressWrite) <
             AppConfig.progressWriteThrottle) {
       return;
     }
     _lastProgressWrite = DateTime.now();
-    await _recorder.record(snapshot);
+    final page = clampReaderPage(_page, _total);
+    final data = widget.onlineData;
+    if (data == null) {
+      await widget.onProgress?.call(page);
+      return;
+    }
+    await _recorder!.record(
+      ProgressSnapshot(
+        albumId: data.args.albumId,
+        chapterId: data.args.chapterId,
+        page: page,
+        total: _total,
+        albumTitle: data.args.albumTitle,
+        chapterTitle: data.title,
+      ),
+    );
   }
 
   // ---------------------------------------------------------------- HUD
@@ -543,9 +603,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
       _verticalOffset = Offset.zero;
     });
     unawaited(
-      ref
-          .read(readerDataProvider(widget.data.args).notifier)
-          .rememberMode(next),
+      ref.read(settingsProvider.notifier).setDefaultReaderMode(next.code),
     );
     _restartHudTimer();
 
@@ -569,9 +627,9 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
     if (_exiting) return;
     _exiting = true;
     await _persistProgress();
-    await _recorder.flush();
+    await _recorder?.flush();
     if (!mounted) return;
-    _safePop(context);
+    widget.onExit();
   }
 
   /// 系统 / 外部发起的真实弹栈（`didPop == true`）：先同步取快照入队，再尽力 flush。
@@ -580,7 +638,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   /// 串行化 + 最后一次写入优先消解，和改动前语义一致。
   void _handleSystemPop(bool didPop) {
     unawaited(_persistProgress());
-    if (didPop) unawaited(_recorder.flush());
+    if (didPop) unawaited(_recorder?.flush());
   }
 
   // ---------------------------------------------------------------- 更多菜单
@@ -648,20 +706,21 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
           trailing: const _PageTurnSwitch(),
           onTap: _togglePageTurnAnimation,
         ),
-        _MoreMenuRow(
-          icon: const SvgIcon(AppIcons.refresh, size: 20),
-          title: '选择节点',
-          value: _lineLabel,
-          subtitle: '点击换一条分流线路',
-          titleStyle: titleStyle(),
-          subtitleStyle: subStyle(),
-          onTap: () => Navigator.of(sheetContext).pop('line'),
-        ),
+        if (_isOnline)
+          _MoreMenuRow(
+            icon: const SvgIcon(AppIcons.refresh, size: 20),
+            title: '选择节点',
+            value: _lineLabel,
+            subtitle: '点击换一条分流线路',
+            titleStyle: titleStyle(),
+            subtitleStyle: subStyle(),
+            onTap: () => Navigator.of(sheetContext).pop('line'),
+          ),
         _MoreMenuRow(
           icon: const SvgIcon(AppIcons.download, size: 20),
           title: '下载当页图片',
           subtitle: _mode == ReaderMode.paged
-              ? '保存为 ${readerImageName(albumId: widget.data.args.albumId, chapterTitle: widget.data.title, page: math.min(_page, _total))}'
+              ? '保存为 ${_imageName(math.min(_page, _total))}'
               : '仅左右翻页模式可用',
           titleStyle: titleStyle(),
           subtitleStyle: subStyle(),
@@ -740,20 +799,21 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
             titleStyle: titleStyle,
             onTap: _togglePageTurnAnimation,
           ),
-          GlassMenuItem(
-            title: '选择节点',
-            icon: iconOf(AppIcons.refresh),
-            titleStyle: titleStyle,
-            iconColor: ink,
-            enablePressScale: !accessibility.reduceMotion,
-            // 带 submenu 的父行 onTap 必需但不会被调用：激活它是展开三级气泡。
-            onTap: () {},
-            submenu: _glassLineItems(
+          if (_isOnline)
+            GlassMenuItem(
+              title: '选择节点',
+              icon: iconOf(AppIcons.refresh),
               titleStyle: titleStyle,
-              subStyle: subStyle,
-              ink: ink,
+              iconColor: ink,
+              enablePressScale: !accessibility.reduceMotion,
+              // 带 submenu 的父行 onTap 必需但不会被调用：激活它是展开三级气泡。
+              onTap: () {},
+              submenu: _glassLineItems(
+                titleStyle: titleStyle,
+                subStyle: subStyle,
+                ink: ink,
+              ),
             ),
-          ),
           GlassMenuItem(
             title: '下载当页图片',
             icon: iconOf(AppIcons.download),
@@ -803,7 +863,23 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
     ];
   }
 
-  /// 下载当前页图片：只在左右翻页模式可用，命名 `JMComic-{jm编号}-{第几章}-{第几页}.png`。
+  String _imageName(int page) {
+    final data = widget.onlineData;
+    if (data == null) {
+      final title = widget.title.replaceFirst(
+        RegExp(r'\.pdf$', caseSensitive: false),
+        '',
+      );
+      return '${safeSegment(title)}-第$page页.png';
+    }
+    return readerImageName(
+      albumId: data.args.albumId,
+      chapterTitle: widget.title,
+      page: page,
+    );
+  }
+
+  /// 下载当前页图片：只在左右翻页模式可用。
   Future<void> _saveCurrentPage() async {
     if (_mode != ReaderMode.paged) {
       AppToast.show(
@@ -840,13 +916,10 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
       );
       return;
     }
-    final name = readerImageName(
-      albumId: widget.data.args.albumId,
-      chapterTitle: widget.data.title,
-      page: page,
-    );
     try {
-      final saved = await ref.read(readerImageSaverProvider).save(name, bytes);
+      final saved = await ref
+          .read(readerImageSaverProvider)
+          .save(_imageName(page), bytes);
       if (!mounted) return;
       AppToast.show(
         context,
@@ -869,11 +942,11 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   ///
   /// [extent] 非空时（竖读）用它给结束页一个固定高度，保证页码比例可扣掉它。
   Widget _endPageView({double? extent}) => ReaderEndPage(
-        albumId: widget.data.args.albumId,
-        chapterId: widget.data.args.chapterId,
+        albumId: _onlineData.args.albumId,
+        chapterId: _onlineData.args.chapterId,
         // 存原始专辑标题：为空时文件名只写 JM 号，不回落成章节名。
-        albumTitle: widget.data.args.albumTitle,
-        chapterTitle: widget.data.title,
+        albumTitle: _onlineData.args.albumTitle,
+        chapterTitle: widget.title,
         total: _total,
         cachedPages: math.min(_loader.cachedCount, _total),
         busyDownload: _exporting,
@@ -888,8 +961,9 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   /// 不在结果未知时先报成功；按钮在等待期间进入 loading 态作为即时反馈。
   Future<void> _exportToDownloadQueue() async {
     if (_exporting) return;
-    final albumId = widget.data.args.albumId;
-    final chapterId = widget.data.args.chapterId;
+    final data = _onlineData;
+    final albumId = data.args.albumId;
+    final chapterId = data.args.chapterId;
     final total = _total;
     if (!canDownloadReaderUnit(
       albumId: albumId,
@@ -913,8 +987,8 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
       final loader = _loader;
       // 快照只用于本任务：每取走一页就从快照里删掉，闭包不长期持有整章字节。
       final snapshot = loader.snapshot();
-      final images = widget.data.chapter.images;
-      final scramble = widget.data.scrambleId;
+      final images = data.chapter.images;
+      final scramble = data.scrambleId;
       final cachedPages = snapshot.entries
           .where(
             (entry) =>
@@ -924,8 +998,8 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
       final job = ReaderExportJob(
         albumId: albumId,
         chapterId: chapterId,
-        albumTitle: widget.data.args.albumTitle,
-        chapterTitle: widget.data.title,
+        albumTitle: data.args.albumTitle,
+        chapterTitle: widget.title,
         total: total,
         cachedPages: cachedPages,
         fetchPage: (page) async {
@@ -1119,7 +1193,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
             right: 0,
             bottom: 0,
             child: ReaderHud(
-              title: widget.data.title,
+              title: widget.title,
               // 拖动进度条时显示预览页，松手才真正翻页。
               page: math.min(_dragPage ?? _page, _total),
               total: _total,
@@ -1202,6 +1276,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
             // 末尾多挂一个结束页；页码估算只按正文页（扣掉结束页高度）。
             itemCount: _pageCount,
             footerExtent: _endPageExtent,
+            itemExtent: _isOnline ? null : MediaQuery.sizeOf(context).height,
             // 双指按下 / 放大中锁住纵向滚动；单指仍是正常滚动。
             physics: _locked ? const NeverScrollableScrollPhysics() : null,
             onPageChanged: (page) {
@@ -1225,7 +1300,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
   /// 左右翻页的单页：正文页可缩放，结束页不套缩放（按钮手势优先）。
   Widget _pagedItem(BuildContext context, int index) {
     final page = index + 1;
-    if (page >= _pageCount) return _endPageView();
+    if (page > _total) return _endPageView();
     return _ZoomablePage(
       controller: _zoomControllerOf(page),
       onInteractionChanged: _setLocked,
@@ -1333,7 +1408,7 @@ class _ReaderScaffoldState extends ConsumerState<_ReaderScaffold>
       _pageImage(page, endExtent: endExtent);
 
   Widget _pageImage(int page, {double? endExtent}) {
-    if (page >= _pageCount) return _endPageView(extent: endExtent);
+    if (page > _total) return _endPageView(extent: endExtent);
     final bytes = _loader.bytesOf(page);
     if (bytes != null) {
       return Center(
@@ -1726,8 +1801,9 @@ class _PageTurnSwitch extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final enabled =
-        ref.watch(settingsProvider.select((settings) => settings.pageTurnAnimation));
+    final enabled = ref.watch(
+      settingsProvider.select((settings) => settings.pageTurnAnimation),
+    );
     return AppSwitch.adaptive(
       value: enabled,
       semanticLabel: '翻页动画',

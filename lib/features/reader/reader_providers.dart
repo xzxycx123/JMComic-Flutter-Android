@@ -73,9 +73,4 @@ class ReaderController extends FamilyAsyncNotifier<ReaderData, ReaderArgs> {
       mode: ReaderMode.fromCode(settings.defaultReaderMode),
     );
   }
-
-  /// 记住默认阅读模式（切换后下次沿用）。
-  Future<void> rememberMode(ReaderMode mode) async {
-    await ref.read(settingsProvider.notifier).setDefaultReaderMode(mode.code);
-  }
 }

@@ -66,4 +66,15 @@ void main() {
     await Hive.box<dynamic>(HiveBoxes.readerProgress).put('junk', <String, dynamic>{});
     expect(buildStore().entries(), isEmpty);
   });
+
+  test('本地 PDF 页码按 URI 保存，清空漫画历史后仍可续读', () async {
+    final store = buildStore();
+    await store.writePdfPage('content://pdf/1', 8);
+    await store.writePdfPage('content://pdf/2', 3);
+    expect(store.historyCount, 0);
+    expect(store.entries(), isEmpty);
+    await store.clear();
+    expect(buildStore().readPdfPage('content://pdf/1'), 8);
+    expect(buildStore().readPdfPage('content://pdf/2'), 3);
+  });
 }

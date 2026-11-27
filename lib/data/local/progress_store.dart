@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:hive_ce/hive.dart';
 
 import '../models/json_field.dart';
@@ -93,6 +95,20 @@ class ProgressStore {
   static String keyFor(String albumId, String chapterId) =>
       'progress:$albumId:$chapterId';
 
+  static String _pdfKey(String uri) =>
+      'pdf:${sha256.convert(utf8.encode(uri))}';
+
+  int? readPdfPage(String uri) {
+    final value = _box.get(_pdfKey(uri));
+    return value is int ? value : null;
+  }
+
+  Future<void> writePdfPage(String uri, int page) =>
+      _box.put(_pdfKey(uri), page);
+
+  Iterable<dynamic> get _onlineKeys =>
+      _box.keys.where((key) => key is String && key.startsWith('progress:'));
+
   /// 落盘版本号：每次 write / remove / clear 之后 +1。
   ///
   /// 普通 `Provider<ProgressStore>` 不会因为 Hive `put` 自动失效，
@@ -141,12 +157,12 @@ class ProgressStore {
   }
 
   /// 阅读历史条数（我的页统计）。
-  int get historyCount => _box.keys.length;
+  int get historyCount => _onlineKeys.length;
 
   /// 全部阅读进度，按最近阅读时间倒序（阅读历史页用）。
   List<ReadingHistoryEntry> entries() {
     final result = <ReadingHistoryEntry>[];
-    for (final key in _box.keys) {
+    for (final key in _onlineKeys) {
       final name = '$key';
       final parts = name.split(':');
       if (parts.length != 3 || parts.first != 'progress') continue;
@@ -167,7 +183,7 @@ class ProgressStore {
   }
 
   Future<void> clear() async {
-    await _box.clear();
+    await _box.deleteAll(_onlineKeys.toList(growable: false));
     _markChanged();
   }
 }

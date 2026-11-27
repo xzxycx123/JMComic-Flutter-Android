@@ -13,6 +13,7 @@ class ScrollReaderView extends StatelessWidget {
     this.physics,
     this.itemCount,
     this.footerExtent = 0,
+    this.itemExtent,
   });
 
   final ScrollController controller;
@@ -28,6 +29,9 @@ class ScrollReaderView extends StatelessWidget {
   /// 页码比例按「正文可滚动高度 = maxScrollExtent - footerExtent」计算，
   /// 这样结束页不会被折算成一个额外的正文页；滚到结束页时页码稳定停在 total。
   final double footerExtent;
+
+  /// PDF 每页占一个视口，使尚未渲染的页面也有确定的滚动位置。
+  final double? itemExtent;
 
   final IndexedWidgetBuilder itemBuilder;
   final ValueChanged<int> onPageChanged;
@@ -55,6 +59,7 @@ class ScrollReaderView extends StatelessWidget {
       child: ListView.builder(
         controller: controller,
         itemCount: itemCount ?? total,
+        itemExtent: itemExtent,
         physics: physics ?? const ClampingScrollPhysics(),
         itemBuilder: (context, index) => itemBuilder(context, index),
       ),
